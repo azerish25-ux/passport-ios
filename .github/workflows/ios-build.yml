@@ -113,7 +113,14 @@ jobs:
 
       - name: Run unit tests
         run: |
-          set -o pipefail
+          # Not -quiet: the summary line ("Executed N tests, with 0 failures") is
+          # the evidence that this run proved something, and it is worth the log
+          # volume.
+          #
+          # The exit status is captured explicitly rather than piped into grep,
+          # because a filtered pipeline reports grep's status and would let a
+          # failing test suite finish green.
+          set +e
           xcodebuild test \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
@@ -123,7 +130,21 @@ jobs:
             -resultBundlePath build/TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            -quiet
+            2>&1 | tee build/test.log
+          STATUS=${PIPESTATUS[0]}
+          set -e
+
+          echo "xcodebuild test exit status: $STATUS"
+          echo "### Unit tests" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "Executed [0-9]+ test|Test Suite 'All tests'" build/test.log >> "$GITHUB_STEP_SUMMARY" || echo "no summary line found" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::Unit tests failed (exit $STATUS)"
+            grep -E "error:|failed" build/test.log | head -40 || true
+            exit "$STATUS"
+          fi
 
       - name: Upload test results
         if: always()

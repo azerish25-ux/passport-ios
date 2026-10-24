@@ -1,5 +1,7 @@
 # PassportProof — iOS prototype
 
+[![iOS Build](https://github.com/azerish25-ux/passport-ios/actions/workflows/ios-build.yml/badge.svg)](https://github.com/azerish25-ux/passport-ios/actions/workflows/ios-build.yml)
+
 A working SwiftUI prototype of **PassportProof**, built to the engineering
 specification extracted from the research report in the parent workspace
 (`PassportProof-iOS-App-Research-Report.md` v2.0).
