@@ -81,98 +81,106 @@ struct UnlockView: View {
     @ViewBuilder
     private var action: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-
-            if entitlements.isUnlocked {
+            if entitlements.isUnlocked || entitlements.state == .purchased {
                 unlockedBlock
             } else {
-                switch entitlements.state {
-
-                case .loading:
-                    Typography.findingLabel.text("Checking the store")
-                        .foregroundStyle(Theme.inkTertiary)
-
-                case .available:
-                    PrimaryButton(title: "Unlock for \(price)", isEnabled: !isWorking) {
-                        purchase()
-                    }
-
-                    SecondaryAction(title: "Restore purchase") {
-                        restore()
-                    }
-
-                case .purchased:
-                    unlockedBlock
-
-                case .unavailable(let reason):
-                    notice(reason)
-                    prototypeBlock
-
-                case .failed(let reason):
-                    notice(reason)
-
-                    PrimaryButton(title: "Try again", isEnabled: !isWorking) {
-                        purchase()
-                    }
-
-                    SecondaryAction(title: "Restore purchase") {
-                        restore()
-                    }
-                }
+                storeState
             }
         }
         .padding(.horizontal, Theme.Spacing.margin)
         .padding(.top, Theme.Spacing.xxl)
     }
 
+    /// Kept in its own `@ViewBuilder` so the switch is type-checked separately
+    /// from the surrounding layout.
+    @ViewBuilder
+    private var storeState: some View {
+        switch entitlements.state {
+
+        case .loading:
+            Typography.findingLabel.text("Checking the store")
+                .foregroundStyle(Theme.inkTertiary)
+
+        case .available:
+            PrimaryButton(title: "Unlock for \(price)", isEnabled: !isWorking) {
+                purchase()
+            }
+
+            SecondaryAction(title: "Restore purchase") {
+                restore()
+            }
+
+        case .purchased:
+            unlockedBlock
+
+        case .unavailable(let reason):
+            notice(reason)
+            prototypeBlock
+
+        case .failed(let reason):
+            notice(reason)
+
+            PrimaryButton(title: "Try again", isEnabled: !isWorking) {
+                purchase()
+            }
+
+            SecondaryAction(title: "Restore purchase") {
+                restore()
+            }
+        }
+    }
+
     private var unlockedBlock: some View {
-        HStack(alignment: .top, spacing: 0) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            Typography.findingLabel.text(entitlements.isPrototypeUnlock ? "Prototype unlock" : "Unlocked")
+                .foregroundStyle(Theme.signalPass)
+
+            Text(entitlements.isPrototypeUnlock
+                 ? "The print sheet and the digital file are available. No purchase was made and nothing was charged."
+                 : "The print sheet and the digital file are available.")
+                .typeStyle(Typography.bodySmall)
+                .foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, Theme.Stroke.statusRail + Theme.Spacing.m)
+        .padding(.trailing, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.m)
+        .background(Theme.paper)
+        .overlay(alignment: .leading) {
             Rectangle()
                 .fill(Theme.signalPass)
                 .frame(width: Theme.Stroke.statusRail)
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Typography.findingLabel.text(entitlements.isPrototypeUnlock ? "Prototype unlock" : "Unlocked")
-                    .foregroundStyle(Theme.signalPass)
-
-                Text(entitlements.isPrototypeUnlock
-                     ? "The print sheet and the digital file are available. No purchase was made and nothing was charged."
-                     : "The print sheet and the digital file are available.")
-                    .typeStyle(Typography.bodySmall)
-                    .foregroundStyle(Theme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, Theme.Spacing.m)
-            .padding(.vertical, Theme.Spacing.m)
         }
-        .background(Theme.paper)
     }
 
     /// The store's own words, unedited. If it says there is no product, that is
     /// what the screen says.
     private func notice(_ reason: String) -> some View {
-        HStack(alignment: .top, spacing: 0) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Typography.findingLabel.text("Store unavailable")
+                .foregroundStyle(Theme.signalVerify)
+
+            Text(reason)
+                .typeStyle(Typography.tabular)
+                .foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("No purchase can complete in this build. Nothing is charged, and no receipt is created.")
+                .typeStyle(Typography.meta)
+                .foregroundStyle(Theme.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, Theme.Stroke.statusRail + Theme.Spacing.m)
+        .padding(.trailing, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.m)
+        .background(Theme.verifyWash)
+        .overlay(alignment: .leading) {
             Rectangle()
                 .fill(Theme.signalVerify)
                 .frame(width: Theme.Stroke.statusRail)
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Typography.findingLabel.text("Store unavailable")
-                    .foregroundStyle(Theme.signalVerify)
-
-                Text(reason)
-                    .typeStyle(Typography.tabular)
-                    .foregroundStyle(Theme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("No purchase can complete in this build. Nothing is charged, and no receipt is created.")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, Theme.Spacing.m)
-            .padding(.vertical, Theme.Spacing.m)
         }
-        .background(Theme.verifyWash)
     }
 
     private var prototypeBlock: some View {

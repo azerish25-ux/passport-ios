@@ -172,29 +172,30 @@ struct ExportView: View {
     // MARK: Lock
 
     private var lockedNote: some View {
-        HStack(alignment: .top, spacing: 0) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            Text("Locked")
+                .typeStyle(Typography.sectionLabel)
+                .foregroundStyle(Theme.inkSecondary)
+
+            Text("The print sheet and the digital file need the one-time unlock. The calibration sheet above does not.")
+                .typeStyle(Typography.meta)
+                .foregroundStyle(Theme.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            SecondaryAction(title: "Unlock") {
+                goToUnlock = true
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, Theme.Stroke.emphasis + Theme.Spacing.m)
+        .padding(.trailing, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.m)
+        .background(Theme.paperSunk)
+        .overlay(alignment: .leading) {
             Rectangle()
                 .fill(Theme.accent)
                 .frame(width: Theme.Stroke.emphasis)
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                Text("Locked")
-                    .typeStyle(Typography.sectionLabel)
-                    .foregroundStyle(Theme.inkSecondary)
-
-                Text("The print sheet and the digital file need the one-time unlock. The calibration sheet above does not.")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                SecondaryAction(title: "Unlock") {
-                    goToUnlock = true
-                }
-            }
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.m)
         }
-        .background(Theme.paperSunk)
         .padding(.horizontal, Theme.Spacing.margin)
         .padding(.top, Theme.Spacing.l)
     }

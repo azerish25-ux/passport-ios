@@ -144,7 +144,7 @@ struct AnalysisView: View {
         case .fail:
             return "At least one rule is outside tolerance. This is a diagnosis of the photograph, not a finding about the document."
         case .cannotVerify:
-            return "At least one rule could not be resolved from this photograph. The app reports that rather than guessing."
+            return "At least one rule could not be resolved. Some rules exist only for documents that publish them; others need a cleaner background or a better-lit frame. The app reports that rather than guessing."
         }
     }
 
@@ -159,30 +159,30 @@ struct AnalysisView: View {
     // MARK: Retake banner
 
     private func retakeBanner(_ failure: Finding) -> some View {
-        HStack(alignment: .top, spacing: 0) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            Typography.findingLabel.text("Retake required")
+                .foregroundStyle(Theme.signalFail)
 
+            Text("\(failure.title) — \(failure.detail)")
+                .typeStyle(Typography.bodySmall)
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            PrimaryButton(title: "Retake photo") {
+                dismiss()
+            }
+            .padding(.top, Theme.Spacing.xs)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, Theme.Stroke.statusRail + Theme.Spacing.margin)
+        .padding(.trailing, Theme.Spacing.margin)
+        .padding(.vertical, Theme.Spacing.l)
+        .background(Theme.failWash)
+        .overlay(alignment: .leading) {
             Rectangle()
                 .fill(Theme.signalFail)
                 .frame(width: Theme.Stroke.statusRail)
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                Typography.findingLabel.text("Retake required")
-                    .foregroundStyle(Theme.signalFail)
-
-                Text("\(failure.title) — \(failure.detail)")
-                    .typeStyle(Typography.bodySmall)
-                    .foregroundStyle(Theme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                PrimaryButton(title: "Retake photo") {
-                    dismiss()
-                }
-                .padding(.top, Theme.Spacing.xs)
-            }
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.l)
         }
-        .background(Theme.failWash)
         .padding(.top, Theme.Spacing.m)
     }
 

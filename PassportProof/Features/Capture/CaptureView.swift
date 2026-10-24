@@ -28,6 +28,22 @@ struct CaptureView: View {
     @State private var pendingImage: UIImage?
     @State private var gate: CaptureGateResult?
     @State private var isEvaluating = false
+    @State private var pendingSource: FrameSource = .library
+
+    /// Where the pending frame came from. The gate governs the shutter, and a
+    /// library import has no shutter: it is a frame that already exists. So the
+    /// gate blocks the camera path outright and is reported as information on
+    /// the import path — otherwise a photo with a busy background could never
+    /// reach the diagnosis at all, which is the only path the simulator has.
+    enum FrameSource {
+        case camera
+        case library
+    }
+
+    private var canProceed: Bool {
+        guard let gate else { return false }
+        return gate.canCapture || pendingSource == .library
+    }
 
     private var cameraAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
@@ -64,7 +80,7 @@ struct CaptureView: View {
                 cameraRow
                 Theme.Rule()
                 PhotoImporter(title: "Choose from library") { image in
-                    adopt(image)
+                    adopt(image, from: .library)
                 }
                 Theme.Rule()
 
@@ -87,7 +103,7 @@ struct CaptureView: View {
                 spec: spec,
                 onCapture: { image in
                     showCamera = false
-                    adopt(image)
+                    adopt(image, from: .camera)
                 },
                 onCancel: { showCamera = false }
             )
@@ -190,12 +206,21 @@ struct CaptureView: View {
 
             PrimaryButton(
                 title: "Use this photo",
-                isEnabled: gate?.canCapture == true
+                isEnabled: canProceed
             ) {
                 accept(image)
             }
             .padding(.horizontal, Theme.Spacing.margin)
             .padding(.top, Theme.Spacing.l)
+
+            if pendingSource == .library, gate?.canCapture == false {
+                Text("The shutter gate was not applied to this imported frame. Background and lighting are measured on the image exactly as imported, so a busy background will read as a FAIL on those rules.")
+                    .typeStyle(Typography.meta)
+                    .foregroundStyle(Theme.inkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.Spacing.margin)
+                    .padding(.top, Theme.Spacing.s)
+            }
 
             SecondaryAction(title: "Discard") {
                 discard()
@@ -213,7 +238,8 @@ struct CaptureView: View {
         let headline: String = {
             if isEvaluating { return "Evaluating the frame" }
             guard let gate else { return "Not evaluated" }
-            return gate.canCapture ? "Gate passed" : "Gate failed — retake required"
+            if gate.canCapture { return "Gate passed" }
+            return pendingSource == .camera ? "Gate failed — retake required" : "Gate failed"
         }()
         let message: String = {
             if isEvaluating {
@@ -222,30 +248,34 @@ struct CaptureView: View {
             return gate?.message ?? "No gate result."
         }()
 
-        return HStack(alignment: .top, spacing: 0) {
+        return VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Typography.findingLabel.text(headline)
+                .foregroundStyle(tint)
+
+            Text(message)
+                .typeStyle(Typography.bodySmall)
+                .foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, Theme.Stroke.statusRail + Theme.Spacing.m)
+        .padding(.trailing, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.m)
+        .background(wash)
+        // The rail is an overlay, not an HStack child: a flexible Rectangle in a
+        // vertical ScrollView takes its ideal height, not the row's.
+        .overlay(alignment: .leading) {
             Rectangle()
                 .fill(tint)
                 .frame(width: Theme.Stroke.statusRail)
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Typography.findingLabel.text(headline)
-                    .foregroundStyle(tint)
-
-                Text(message)
-                    .typeStyle(Typography.bodySmall)
-                    .foregroundStyle(Theme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, Theme.Spacing.m)
-            .padding(.vertical, Theme.Spacing.m)
         }
-        .background(wash)
     }
 
     // MARK: Actions
 
-    private func adopt(_ image: UIImage) {
+    private func adopt(_ image: UIImage, from source: FrameSource) {
         pendingImage = image
+        pendingSource = source
         gate = nil
         isEvaluating = true
 
@@ -267,7 +297,7 @@ struct CaptureView: View {
     }
 
     private func accept(_ image: UIImage) {
-        guard gate?.canCapture == true else { return }
+        guard canProceed else { return }
 
         session.adopt(image)
         session.gate = gate

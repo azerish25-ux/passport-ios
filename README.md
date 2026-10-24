@@ -178,6 +178,28 @@ Tools/                project generator
   frozen API surface the implementation was written against.
 - `DesignSystem.md` — palette, type scale, component metrics, motion.
 
+## Known deviations from the spec
+
+Three, all deliberate and all visible in the UI:
+
+1. **AC10 — the capture gate blocks the shutter, not the import.** §6.2's gate
+   exists to guarantee a plain, evenly lit background *before* the shutter
+   releases, and it does: on the camera path, the shutter is disabled while
+   `CaptureGate` fails. On the photo-library path there is no shutter to gate,
+   and blocking import would make the app undemonstrable in the simulator. An
+   imported photo therefore runs the full diagnosis exactly as imported: the
+   engine never consults the gate, so a busy background produces a genuine
+   **fail** on `backgroundUniformity` and `shadow`. `cannot verify` on those two
+   rules happens only when no face is found at all. The capture screen says this
+   in as many words. AC10 holds for the path it was written about.
+2. **`photoAge` reports `cannot verify`, not pass/fail.** §3.1 R7 gives a
+   six-month limit, but the rule needs a *submission* date and the app has no
+   submission. Testing capture date against "now" would be a proxy presented as
+   a measurement, so the rule states the limit, shows the capture date when EXIF
+   has one, and declines to adjudicate. This is the same discipline as the crown
+   divergence rule.
+3. **Four documents, not twelve.** See *Corpus* above.
+
 ## Status
 
 Prototype. Not shipped, not signed, not submitted. The StoreKit product is not

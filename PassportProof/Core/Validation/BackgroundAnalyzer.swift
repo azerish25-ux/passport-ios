@@ -143,7 +143,12 @@ enum BackgroundAnalyzer {
         let outerMinX = max(innerMinX - ringThickness, 0)
         let outerMaxX = min(innerMaxX + ringThickness, width - 1)
         let outerMinY = max(innerMinY - ringThickness, 0)
-        let outerMaxY = min(innerMaxY + ringThickness, height - 1)
+
+        // R5 is about residual background at the *hair* edge. The lower third of
+        // the head box runs over the neck and shoulders, where the subject is
+        // clothing rather than background, so the ring stops above it.
+        let ringBottom = innerMinY + Int(Double(innerMaxY - innerMinY) * 0.65)
+        let outerMaxY = min(ringBottom, height - 1)
 
         guard outerMinX <= outerMaxX, outerMinY <= outerMaxY else { return 0 }
 

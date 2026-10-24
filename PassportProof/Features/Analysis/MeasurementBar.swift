@@ -6,10 +6,20 @@
 //  varies. The band never changes colour — the band is the rule, the marker is
 //  the fact.
 //
-//  One deliberate omission: the "NO MEASUREMENT" caption is carried by the
-//  summary line rather than floated 4pt above the band, because 7pt of headroom
-//  above a 34pt gauge cannot hold an 11pt label without colliding with the row
-//  above. The dashed `signalVerify` band line is drawn as specified.
+//  Two cases the design system does not cover, both of which occur in the real
+//  corpus and would otherwise render as a broken row:
+//
+//  * A lower bound of 0 (`shadow`, `photoAge`, `centring`, `backgroundUniformity`)
+//    puts `domainLo == lower == 0`, so the axis-end label and the band-edge label
+//    land on the same point. The band-edge label is suppressed near an axis end.
+//  * A one-sided rule (`resolution`: ≥ 1200 px, no upper bound). The band is drawn
+//    open to the right edge, the synthetic right-hand domain value is not
+//    labelled because it means nothing, and the marker still reads against it.
+//
+//  Deliberate omission: the "NO MEASUREMENT" caption is carried by the summary
+//  line rather than floated 4pt above the band, because 7pt of headroom above a
+//  34pt gauge cannot hold an 11pt label without colliding with the row above.
+//  The dashed `signalVerify` band line is drawn as specified.
 //
 
 import SwiftUI
@@ -36,67 +46,69 @@ struct MeasurementBar: View {
         GeometryReader { proxy in
             let width = proxy.size.width
 
-            if let lower = measurement.lowerBound,
-               let upper = measurement.upperBound,
-               upper > lower {
-
+            if let lower = measurement.lowerBound {
                 let geometry = BarGeometry(
                     width: width,
                     lower: lower,
-                    upper: upper,
+                    upper: measurement.upperBound,
                     measured: measurement.value
                 )
 
                 ZStack(alignment: .topLeading) {
-
-                    // Allowed-range band: fill, then a 1pt rule on each edge.
-                    Rectangle()
-                        .fill(Theme.bandFill)
-                        .frame(
-                            width: geometry.bandWidth,
-                            height: Theme.Metrics.measurementBandHeight
-                        )
-                        .overlay(alignment: .top) {
-                            Theme.Rule(color: Theme.rule, weight: Theme.Stroke.rule)
-                        }
-                        .overlay(alignment: .bottom) {
-                            Theme.Rule(color: Theme.rule, weight: Theme.Stroke.rule)
-                        }
-                        .offset(x: geometry.bandX, y: 7)
-
-                    // Axis.
-                    Rectangle()
-                        .fill(Theme.ruleStrong)
-                        .frame(width: width, height: Theme.Stroke.rule)
-                        .offset(y: 10)
-
-                    // Ticks, five evenly spaced including both ends.
-                    ForEach(Array(0..<Theme.Metrics.measurementTickCount), id: \.self) { index in
-                        let step = Double(index) / Double(Theme.Metrics.measurementTickCount - 1)
-                        Rectangle()
-                            .fill(Theme.rule)
-                            .frame(
-                                width: Theme.Stroke.hairline,
-                                height: Theme.Metrics.measurementTickHeight
-                            )
-                            .offset(x: min(width - Theme.Stroke.hairline, width * CGFloat(step)), y: 10)
-                    }
-
+                    band(geometry)
+                    axis(width: width)
+                    ticks(width: width)
                     tickLabels(width: width, geometry: geometry)
                     marker(geometry: geometry)
                 }
             } else {
                 ZStack(alignment: .topLeading) {
-                    Rectangle()
-                        .fill(Theme.ruleStrong)
-                        .frame(width: width, height: Theme.Stroke.rule)
-                        .offset(y: 10)
+                    axis(width: width)
 
                     Typography.unit.text("no range published")
                         .foregroundStyle(Theme.inkTertiary)
-                        .offset(x: 0, y: 14)
+                        .offset(y: 14)
                 }
             }
+        }
+    }
+
+    /// Allowed-range band: fill, then a 1pt rule on each edge. Open to the right
+    /// edge when the rule has no upper bound.
+    private func band(_ geometry: BarGeometry) -> some View {
+        Rectangle()
+            .fill(Theme.bandFill)
+            .frame(
+                width: geometry.bandWidth,
+                height: Theme.Metrics.measurementBandHeight
+            )
+            .overlay(alignment: .top) {
+                Theme.Rule(color: Theme.rule, weight: Theme.Stroke.rule)
+            }
+            .overlay(alignment: .bottom) {
+                Theme.Rule(color: Theme.rule, weight: Theme.Stroke.rule)
+            }
+            .offset(x: geometry.bandX, y: 7)
+    }
+
+    private func axis(width: CGFloat) -> some View {
+        Rectangle()
+            .fill(Theme.ruleStrong)
+            .frame(width: width, height: Theme.Stroke.rule)
+            .offset(y: 10)
+    }
+
+    private func ticks(width: CGFloat) -> some View {
+        ForEach(Array(0..<Theme.Metrics.measurementTickCount), id: \.self) { index in
+            let step = Double(index) / Double(Theme.Metrics.measurementTickCount - 1)
+
+            Rectangle()
+                .fill(Theme.rule)
+                .frame(
+                    width: Theme.Stroke.hairline,
+                    height: Theme.Metrics.measurementTickHeight
+                )
+                .offset(x: min(width - Theme.Stroke.hairline, width * CGFloat(step)), y: 10)
         }
     }
 
@@ -125,7 +137,10 @@ struct MeasurementBar: View {
                     width: Theme.Metrics.measurementMarkerWidth,
                     height: Theme.Metrics.measurementMarkerHeight
                 )
-                .offset(x: geometry.markerX - Theme.Metrics.measurementMarkerWidth / 2, y: 2)
+                .offset(
+                    x: geometry.markerX - Theme.Metrics.measurementMarkerWidth / 2,
+                    y: 2
+                )
         }
     }
 
@@ -143,7 +158,9 @@ struct MeasurementBar: View {
 
     // MARK: Tick labels
 
-    /// Only `domainLo`, `lower`, `upper`, and `domainHi` are labelled.
+    /// Only `domainLo`, `lower`, `upper`, and `domainHi` are labelled. The
+    /// right-hand domain value is omitted for a one-sided rule, where it is an
+    /// artefact of the axis rather than a bound.
     private func tickLabels(width: CGFloat, geometry: BarGeometry) -> some View {
         ZStack(alignment: .topLeading) {
 
@@ -154,22 +171,32 @@ struct MeasurementBar: View {
 
                 Spacer(minLength: Theme.Spacing.s)
 
-                Text(Format.decimal(geometry.domainHi))
-                    .typeStyle(Typography.unit)
-                    .foregroundStyle(Theme.inkTertiary)
+                if !geometry.isOpenAbove {
+                    Text(Format.decimal(geometry.domainHi))
+                        .typeStyle(Typography.unit)
+                        .foregroundStyle(Theme.inkTertiary)
+                }
             }
             .frame(width: width, alignment: .leading)
             .offset(y: 15)
 
-            Text(Format.decimal(geometry.lower))
-                .typeStyle(Typography.unit)
-                .foregroundStyle(Theme.inkTertiary)
-                .position(x: geometry.bandX, y: 21)
+            // Suppressed when the band edge sits on an axis end, where the
+            // endpoint label above is already drawn.
+            if geometry.bandX > Theme.Spacing.l {
+                Text(Format.decimal(geometry.lower))
+                    .typeStyle(Typography.unit)
+                    .foregroundStyle(Theme.inkTertiary)
+                    .position(x: geometry.bandX, y: 21)
+            }
 
-            Text(Format.decimal(geometry.upper))
-                .typeStyle(Typography.unit)
-                .foregroundStyle(Theme.inkTertiary)
-                .position(x: geometry.bandX + geometry.bandWidth, y: 21)
+            if let upper = geometry.upper,
+               upper > geometry.lower,
+               geometry.bandX + geometry.bandWidth < width - Theme.Spacing.l {
+                Text(Format.decimal(upper))
+                    .typeStyle(Typography.unit)
+                    .foregroundStyle(Theme.inkTertiary)
+                    .position(x: geometry.bandX + geometry.bandWidth, y: 21)
+            }
         }
     }
 
@@ -208,13 +235,15 @@ struct MeasurementBar: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Mirrors the marker: out of range reads `signalFail`, in range reads `ink`.
+    /// A one-sided rule has no upper bound to exceed.
     private var valueColor: Color {
-        guard let lower = measurement.lowerBound,
-              let upper = measurement.upperBound else {
-            return Theme.ink
+        guard let lower = measurement.lowerBound else { return Theme.ink }
+        if measurement.value < lower { return Theme.signalFail }
+        if let upper = measurement.upperBound, upper > lower, measurement.value > upper {
+            return Theme.signalFail
         }
-        let inside = measurement.value >= lower && measurement.value <= upper
-        return inside ? Theme.ink : Theme.signalFail
+        return Theme.ink
     }
 }
 
@@ -223,14 +252,28 @@ struct MeasurementBar: View {
 private struct BarGeometry {
     let width: CGFloat
     let lower: Double
-    let upper: Double
+    /// nil for a one-sided rule such as `resolution` (≥ 1200 px).
+    let upper: Double?
     let measured: Double
 
-    var span: Double { upper - lower }
+    /// `span = upper − lower` for a bounded rule. For a one-sided rule there is
+    /// no span to speak of, so the axis is padded by 60% of the lower bound.
+    private var span: Double {
+        if let upper, upper > lower { return upper - lower }
+        return max(abs(lower) * 0.6, 0.000_1)
+    }
 
-    /// `domainLo = max(0, lower − 0.6 × span)`, `domainHi = upper + 0.6 × span`.
-    var domainLo: Double { max(0, lower - 0.6 * span) }
-    var domainHi: Double { upper + 0.6 * span }
+    private var ceiling: Double {
+        if let upper, upper > lower { return upper }
+        return max(lower, measured)
+    }
+
+    /// `max(0, lower − 0.6 × span)` per DesignSystem §4.2, widened only when the
+    /// measurement falls below the lower bound and would otherwise plot off the
+    /// axis. Widening is what the formula's author would have wanted; it is the
+    /// same formula for every value at or above the lower bound.
+    var domainLo: Double { max(0, min(lower, measured) - 0.6 * span) }
+    var domainHi: Double { max(ceiling, measured) + 0.6 * span }
 
     private var domainSpan: Double { max(0.000_1, domainHi - domainLo) }
 
@@ -239,8 +282,23 @@ private struct BarGeometry {
     }
 
     var bandX: CGFloat { x(lower) }
-    var bandWidth: CGFloat { max(1, x(upper) - x(lower)) }
-    var markerX: CGFloat { x(measured) }
 
-    var inRange: Bool { measured >= lower && measured <= upper }
+    var bandWidth: CGFloat {
+        if let upper, upper > lower { return max(1, x(upper) - bandX) }
+        return max(1, width - bandX)
+    }
+
+    var markerX: CGFloat { min(max(0, x(measured)), width) }
+
+    /// True when the band runs to the right edge, so no right-hand bound exists.
+    var isOpenAbove: Bool {
+        if let upper, upper > lower { return false }
+        return true
+    }
+
+    var inRange: Bool {
+        guard measured >= lower else { return false }
+        if let upper, upper > lower { return measured <= upper }
+        return true
+    }
 }
