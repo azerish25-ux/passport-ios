@@ -1,0 +1,719 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5AB34133BF728A17BA255232 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B246EA12E7B8157A7A2BF48 /* AppRoute.swift */; };
+		4BE0792189372DAC4D3ED32A /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6DA9F4CC04793E1F7F6450E /* Components.swift */; };
+		48AEF8CB640830315F830B07 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BEF4FF367D046025952EA47 /* Format.swift */; };
+		5D660FEB046E0CE42F272334 /* PassportProofApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F3947844B25370E90A5F31 /* PassportProofApp.swift */; };
+		BE32D8A408B7619089AB37BD /* PhotoSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */; };
+		31FFA1C8738E19C9C593A64E /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601A75661321235EC7FE87E5 /* RootView.swift */; };
+		9AEB923EB845E399E6255B04 /* DocumentCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73EA9B91B5AD944DE9669773 /* DocumentCorpus.swift */; };
+		A793E2AC6E87BE321F4F7C9B /* DigitalExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DFA605BD32A0390A1CDAAF9 /* DigitalExport.swift */; };
+		898C48E56B1CCB3285C67CFC /* DocumentSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */; };
+		61EAC08883745609FBA75664 /* Finding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9858B801B42B297EE1FE77E /* Finding.swift */; };
+		73020240678CAAC104BBFB96 /* PrintSheetLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011AC093578B2F487407BA85 /* PrintSheetLayout.swift */; };
+		81819337B46BB2B9A6486917 /* EntitlementStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 616447732891C1A8B5912FC1 /* EntitlementStore.swift */; };
+		6420A467B55CFD16DF46A545 /* BackgroundAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34F703F13AFCE26F8BCACC4 /* BackgroundAnalyzer.swift */; };
+		F832FEF6E47F5EE84E91AC23 /* CaptureGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30C2D347DE1FA7D4F94BE93A /* CaptureGate.swift */; };
+		2921FDAD4D163D0A8389E3DF /* FaceGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCE296C31DCAE213F57EE06B /* FaceGeometry.swift */; };
+		F481D601FD2C3A4CD0367C9F /* PixelSampling.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE173BE69F76C3C047D09D10 /* PixelSampling.swift */; };
+		D4383B570861EA69AAEAF0D5 /* ValidationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7370999DB13089B829E3438 /* ValidationEngine.swift */; };
+		43F35784286FF4F1DD8FE7C1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E065CE70FA3047807EEB08 /* Theme.swift */; };
+		CF23C630D6AE2576E7410D45 /* AnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9918E44415B666EA756BCD6 /* AnalysisView.swift */; };
+		FDFD0D9D06327C37C2637357 /* FaceOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C09349B904C89E212332E0 /* FaceOverlayView.swift */; };
+		C8B876D90ACFDC6AE228AA6A /* FindingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED92962E7738D7864F214B9 /* FindingRow.swift */; };
+		CF51DD82AC8AAC520B04E5AD /* MeasurementBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */; };
+		AE27F486AB7DF1AE3D99A846 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6426D138BFBACF3E99A81689 /* CameraPicker.swift */; };
+		073E654FF57DBAD621B4ED8A /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */; };
+		86FB070BB4E89BFBC730DB6A /* FramingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9EBD0E445B87FB59FA133D5 /* FramingOverlay.swift */; };
+		C6106AB6D4CC8D6F3E9FC0B1 /* PhotoImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 961E3D92AC0788AB1776FC89 /* PhotoImporter.swift */; };
+		1CAC48CEEE086E388611CDDB /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F41DBDD8CF15F5BFA0746EB /* ExportView.swift */; };
+		C3F662543695D800E859DD0C /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40AA2A8D89B4B0808F73E955 /* ShareSheet.swift */; };
+		18EFB79976078D8639B4FA45 /* DocumentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54F8788FBF0A25EFE8F1BDAF /* DocumentDetailView.swift */; };
+		F8B1592E0656F149D2B981A1 /* DocumentLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27551D16EC8BBB5BE88CE871 /* DocumentLibraryView.swift */; };
+		DDBD5FF9D08A2F4EDBA0F6DB /* UnlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */; };
+		F9D83C9671EFDC7CC182057F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDAC857F76ADA2D887487466 /* Assets.xcassets */; };
+		AC6E7BB9129E64A64D41B172 /* PassportProofTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1F1FB0CDADCC583CA48CA87 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 71F10950C15499499473F774 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E565A182FFCCDF17705C9D6A;
+			remoteInfo = PassportProof;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		F2DA15F8F635DE1C31D77BED /* PassportProof.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PassportProof.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE296DFA54CE950FEC3791FB /* PassportProofTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PassportProofTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B246EA12E7B8157A7A2BF48 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
+		D6DA9F4CC04793E1F7F6450E /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		3BEF4FF367D046025952EA47 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
+		41F3947844B25370E90A5F31 /* PassportProofApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofApp.swift; sourceTree = "<group>"; };
+		905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSession.swift; sourceTree = "<group>"; };
+		601A75661321235EC7FE87E5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		73EA9B91B5AD944DE9669773 /* DocumentCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentCorpus.swift; sourceTree = "<group>"; };
+		1DFA605BD32A0390A1CDAAF9 /* DigitalExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalExport.swift; sourceTree = "<group>"; };
+		8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSpec.swift; sourceTree = "<group>"; };
+		C9858B801B42B297EE1FE77E /* Finding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finding.swift; sourceTree = "<group>"; };
+		011AC093578B2F487407BA85 /* PrintSheetLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintSheetLayout.swift; sourceTree = "<group>"; };
+		616447732891C1A8B5912FC1 /* EntitlementStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementStore.swift; sourceTree = "<group>"; };
+		C34F703F13AFCE26F8BCACC4 /* BackgroundAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAnalyzer.swift; sourceTree = "<group>"; };
+		30C2D347DE1FA7D4F94BE93A /* CaptureGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureGate.swift; sourceTree = "<group>"; };
+		BCE296C31DCAE213F57EE06B /* FaceGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceGeometry.swift; sourceTree = "<group>"; };
+		FE173BE69F76C3C047D09D10 /* PixelSampling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelSampling.swift; sourceTree = "<group>"; };
+		B7370999DB13089B829E3438 /* ValidationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValidationEngine.swift; sourceTree = "<group>"; };
+		83E065CE70FA3047807EEB08 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		C9918E44415B666EA756BCD6 /* AnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisView.swift; sourceTree = "<group>"; };
+		05C09349B904C89E212332E0 /* FaceOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceOverlayView.swift; sourceTree = "<group>"; };
+		4ED92962E7738D7864F214B9 /* FindingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindingRow.swift; sourceTree = "<group>"; };
+		3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementBar.swift; sourceTree = "<group>"; };
+		6426D138BFBACF3E99A81689 /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
+		EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
+		C9EBD0E445B87FB59FA133D5 /* FramingOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramingOverlay.swift; sourceTree = "<group>"; };
+		961E3D92AC0788AB1776FC89 /* PhotoImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoImporter.swift; sourceTree = "<group>"; };
+		0F41DBDD8CF15F5BFA0746EB /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
+		40AA2A8D89B4B0808F73E955 /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
+		54F8788FBF0A25EFE8F1BDAF /* DocumentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentDetailView.swift; sourceTree = "<group>"; };
+		27551D16EC8BBB5BE88CE871 /* DocumentLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentLibraryView.swift; sourceTree = "<group>"; };
+		37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockView.swift; sourceTree = "<group>"; };
+		95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofTests.swift; sourceTree = "<group>"; };
+		CDAC857F76ADA2D887487466 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F0E0F644B789638A8C359294 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		723315F454D90D58350400AC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2A44C54E23411059C3A1A1E1 = {
+			isa = PBXGroup;
+			children = (
+				A9260BAEAD9A53C73C95C707 /* PassportProof */,
+				4A633AA5950C04D7472E6A77 /* PassportProofTests */,
+				FCB805248FB950EEE35380C7 /* Tools */,
+				C863DA5204F95EC573510473 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FCB805248FB950EEE35380C7 /* Tools */ = {
+			isa = PBXGroup;
+			children = (
+				50624B42B542073417840895 /* generate_project.py */,
+			);
+			path = Tools;
+			sourceTree = "<group>";
+		};
+		50624B42B542073417840895 /* generate_project.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = generate_project.py; sourceTree = "<group>"; };
+		A9260BAEAD9A53C73C95C707 /* PassportProof */ = {
+			isa = PBXGroup;
+			children = (
+				6EF92CF014CCFC849519A3C2 /* App */,
+				D5349FFC130CB8A02C5AC15D /* Core */,
+				B644E5A8D2DB80CC3849685F /* Design */,
+				FB9841CF8A7E1F2FF95AD711 /* Features */,
+				0031D64ED4E964B4E6BCB6DF /* Resources */,
+			);
+			path = PassportProof;
+			sourceTree = "<group>";
+		};
+		6EF92CF014CCFC849519A3C2 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8B246EA12E7B8157A7A2BF48 /* AppRoute.swift */,
+				D6DA9F4CC04793E1F7F6450E /* Components.swift */,
+				3BEF4FF367D046025952EA47 /* Format.swift */,
+				41F3947844B25370E90A5F31 /* PassportProofApp.swift */,
+				905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */,
+				601A75661321235EC7FE87E5 /* RootView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D5349FFC130CB8A02C5AC15D /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				CED54E19DDB9AC30712EABD4 /* Corpus */,
+				9700E53C05E321847E212198 /* Export */,
+				AF2D8274EE591C6878CE874E /* Models */,
+				B7AAA1F1F54ABB4C5C838229 /* Print */,
+				73964D0C1AE3C18D6585D1E3 /* Store */,
+				4EF980B93D00205B11D9F7DB /* Validation */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		CED54E19DDB9AC30712EABD4 /* Corpus */ = {
+			isa = PBXGroup;
+			children = (
+				73EA9B91B5AD944DE9669773 /* DocumentCorpus.swift */,
+			);
+			path = Corpus;
+			sourceTree = "<group>";
+		};
+		9700E53C05E321847E212198 /* Export */ = {
+			isa = PBXGroup;
+			children = (
+				1DFA605BD32A0390A1CDAAF9 /* DigitalExport.swift */,
+			);
+			path = Export;
+			sourceTree = "<group>";
+		};
+		AF2D8274EE591C6878CE874E /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */,
+				C9858B801B42B297EE1FE77E /* Finding.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		B7AAA1F1F54ABB4C5C838229 /* Print */ = {
+			isa = PBXGroup;
+			children = (
+				011AC093578B2F487407BA85 /* PrintSheetLayout.swift */,
+			);
+			path = Print;
+			sourceTree = "<group>";
+		};
+		73964D0C1AE3C18D6585D1E3 /* Store */ = {
+			isa = PBXGroup;
+			children = (
+				616447732891C1A8B5912FC1 /* EntitlementStore.swift */,
+			);
+			path = Store;
+			sourceTree = "<group>";
+		};
+		4EF980B93D00205B11D9F7DB /* Validation */ = {
+			isa = PBXGroup;
+			children = (
+				C34F703F13AFCE26F8BCACC4 /* BackgroundAnalyzer.swift */,
+				30C2D347DE1FA7D4F94BE93A /* CaptureGate.swift */,
+				BCE296C31DCAE213F57EE06B /* FaceGeometry.swift */,
+				FE173BE69F76C3C047D09D10 /* PixelSampling.swift */,
+				B7370999DB13089B829E3438 /* ValidationEngine.swift */,
+			);
+			path = Validation;
+			sourceTree = "<group>";
+		};
+		B644E5A8D2DB80CC3849685F /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				83E065CE70FA3047807EEB08 /* Theme.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+		FB9841CF8A7E1F2FF95AD711 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				4FEA7B499EED63914E374969 /* Analysis */,
+				DCC210DFAC1EE6063BF10BC1 /* Capture */,
+				6A37C673BCD5FB93BE38D59C /* Export */,
+				8AD55F96915C6328D15F4487 /* Library */,
+				A27B5A5DC2A6469C0E177B85 /* Unlock */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		4FEA7B499EED63914E374969 /* Analysis */ = {
+			isa = PBXGroup;
+			children = (
+				C9918E44415B666EA756BCD6 /* AnalysisView.swift */,
+				05C09349B904C89E212332E0 /* FaceOverlayView.swift */,
+				4ED92962E7738D7864F214B9 /* FindingRow.swift */,
+				3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */,
+			);
+			path = Analysis;
+			sourceTree = "<group>";
+		};
+		DCC210DFAC1EE6063BF10BC1 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				6426D138BFBACF3E99A81689 /* CameraPicker.swift */,
+				EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */,
+				C9EBD0E445B87FB59FA133D5 /* FramingOverlay.swift */,
+				961E3D92AC0788AB1776FC89 /* PhotoImporter.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		6A37C673BCD5FB93BE38D59C /* Export */ = {
+			isa = PBXGroup;
+			children = (
+				0F41DBDD8CF15F5BFA0746EB /* ExportView.swift */,
+				40AA2A8D89B4B0808F73E955 /* ShareSheet.swift */,
+			);
+			path = Export;
+			sourceTree = "<group>";
+		};
+		8AD55F96915C6328D15F4487 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				54F8788FBF0A25EFE8F1BDAF /* DocumentDetailView.swift */,
+				27551D16EC8BBB5BE88CE871 /* DocumentLibraryView.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		A27B5A5DC2A6469C0E177B85 /* Unlock */ = {
+			isa = PBXGroup;
+			children = (
+				37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */,
+			);
+			path = Unlock;
+			sourceTree = "<group>";
+		};
+		0031D64ED4E964B4E6BCB6DF /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				CDAC857F76ADA2D887487466 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		4A633AA5950C04D7472E6A77 /* PassportProofTests */ = {
+			isa = PBXGroup;
+			children = (
+				95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */,
+			);
+			path = PassportProofTests;
+			sourceTree = "<group>";
+		};
+		C863DA5204F95EC573510473 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F2DA15F8F635DE1C31D77BED /* PassportProof.app */,
+				EE296DFA54CE950FEC3791FB /* PassportProofTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E565A182FFCCDF17705C9D6A /* PassportProof */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E89D3562FBB03E3A211D12C6;
+			buildPhases = (
+				F1C7A09569E792743BD03A05 /* Sources */,
+				F0E0F644B789638A8C359294 /* Frameworks */,
+				C5AF81C7167804D4ED832B92 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PassportProof;
+			productName = PassportProof;
+			productReference = F2DA15F8F635DE1C31D77BED /* PassportProof.app */;
+			productType = "com.apple.product-type.application";
+		};
+		179777C1783E6C14735D5A89 /* PassportProofTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A3C84C09D097507FD094D0C;
+			buildPhases = (
+				36DD461C0A8ACC3EC6B0E6A3 /* Sources */,
+				723315F454D90D58350400AC /* Frameworks */,
+				7A2BA0464D81665675B13D3A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				03987C89345AEBA206D68EE0 /* PBXTargetDependency */,
+			);
+			name = PassportProofTests;
+			productName = PassportProofTests;
+			productReference = EE296DFA54CE950FEC3791FB /* PassportProofTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		71F10950C15499499473F774 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					E565A182FFCCDF17705C9D6A = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					179777C1783E6C14735D5A89 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = E565A182FFCCDF17705C9D6A;
+					};
+				};
+			};
+			buildConfigurationList = 938CBF74E81D18A798197C2C;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 2A44C54E23411059C3A1A1E1;
+			productRefGroup = C863DA5204F95EC573510473 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E565A182FFCCDF17705C9D6A /* PassportProof */,
+				179777C1783E6C14735D5A89 /* PassportProofTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C5AF81C7167804D4ED832B92 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9D83C9671EFDC7CC182057F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A2BA0464D81665675B13D3A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F1C7A09569E792743BD03A05 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AB34133BF728A17BA255232 /* AppRoute.swift in Sources */,
+				4BE0792189372DAC4D3ED32A /* Components.swift in Sources */,
+				48AEF8CB640830315F830B07 /* Format.swift in Sources */,
+				5D660FEB046E0CE42F272334 /* PassportProofApp.swift in Sources */,
+				BE32D8A408B7619089AB37BD /* PhotoSession.swift in Sources */,
+				31FFA1C8738E19C9C593A64E /* RootView.swift in Sources */,
+				9AEB923EB845E399E6255B04 /* DocumentCorpus.swift in Sources */,
+				A793E2AC6E87BE321F4F7C9B /* DigitalExport.swift in Sources */,
+				898C48E56B1CCB3285C67CFC /* DocumentSpec.swift in Sources */,
+				61EAC08883745609FBA75664 /* Finding.swift in Sources */,
+				73020240678CAAC104BBFB96 /* PrintSheetLayout.swift in Sources */,
+				81819337B46BB2B9A6486917 /* EntitlementStore.swift in Sources */,
+				6420A467B55CFD16DF46A545 /* BackgroundAnalyzer.swift in Sources */,
+				F832FEF6E47F5EE84E91AC23 /* CaptureGate.swift in Sources */,
+				2921FDAD4D163D0A8389E3DF /* FaceGeometry.swift in Sources */,
+				F481D601FD2C3A4CD0367C9F /* PixelSampling.swift in Sources */,
+				D4383B570861EA69AAEAF0D5 /* ValidationEngine.swift in Sources */,
+				43F35784286FF4F1DD8FE7C1 /* Theme.swift in Sources */,
+				CF23C630D6AE2576E7410D45 /* AnalysisView.swift in Sources */,
+				FDFD0D9D06327C37C2637357 /* FaceOverlayView.swift in Sources */,
+				C8B876D90ACFDC6AE228AA6A /* FindingRow.swift in Sources */,
+				CF51DD82AC8AAC520B04E5AD /* MeasurementBar.swift in Sources */,
+				AE27F486AB7DF1AE3D99A846 /* CameraPicker.swift in Sources */,
+				073E654FF57DBAD621B4ED8A /* CaptureView.swift in Sources */,
+				86FB070BB4E89BFBC730DB6A /* FramingOverlay.swift in Sources */,
+				C6106AB6D4CC8D6F3E9FC0B1 /* PhotoImporter.swift in Sources */,
+				1CAC48CEEE086E388611CDDB /* ExportView.swift in Sources */,
+				C3F662543695D800E859DD0C /* ShareSheet.swift in Sources */,
+				18EFB79976078D8639B4FA45 /* DocumentDetailView.swift in Sources */,
+				F8B1592E0656F149D2B981A1 /* DocumentLibraryView.swift in Sources */,
+				DDBD5FF9D08A2F4EDBA0F6DB /* UnlockView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		36DD461C0A8ACC3EC6B0E6A3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AC6E7BB9129E64A64D41B172 /* PassportProofTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		03987C89345AEBA206D68EE0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E565A182FFCCDF17705C9D6A /* PassportProof */;
+			targetProxy = A1F1FB0CDADCC583CA48CA87 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		9532DD524F487496C8A03735 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+									"DEBUG=1",
+									"$(inherited)",
+								);
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		82BAFC0BCB9B7722A9AF8F69 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A100CD761C68AB2E124E2854 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "PassportProof";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSCameraUsageDescription = "PassportProof uses the camera to measure your photo against the rules for the document you selected. Photos are processed on this device and are never uploaded.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Choose a photo to measure against the rules for the document you selected. The photo is processed on this device and is never uploaded.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+									"$(inherited)",
+									"@executable_path/Frameworks",
+								);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8A6D1D48BF8A025D5F7C5120 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "PassportProof";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSCameraUsageDescription = "PassportProof uses the camera to measure your photo against the rules for the document you selected. Photos are processed on this device and are never uploaded.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Choose a photo to measure against the rules for the document you selected. The photo is processed on this device and is never uploaded.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+									"$(inherited)",
+									"@executable_path/Frameworks",
+								);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		F9EF188D00C61798FE82F0F8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PassportProof.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PassportProof";
+			};
+			name = Debug;
+		};
+		0B0EA479D2B015668EF6EE9F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PassportProof.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PassportProof";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		938CBF74E81D18A798197C2C = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9532DD524F487496C8A03735 /* Debug */,
+				82BAFC0BCB9B7722A9AF8F69 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E89D3562FBB03E3A211D12C6 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100CD761C68AB2E124E2854 /* Debug */,
+				8A6D1D48BF8A025D5F7C5120 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0A3C84C09D097507FD094D0C = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F9EF188D00C61798FE82F0F8 /* Debug */,
+				0B0EA479D2B015668EF6EE9F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 71F10950C15499499473F774 /* Project object */;
+}

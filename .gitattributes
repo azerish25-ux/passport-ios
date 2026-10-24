@@ -1,0 +1,17 @@
+# The project is authored on Windows and built on Linux/macOS runners.
+# Without this, git's autocrlf rewrites every text file to CRLF on checkout and
+# the pbxproj, the shell steps and the Python generator all inherit \r.
+* text=auto eol=lf
+
+*.pbxproj text eol=lf
+*.xcscheme text eol=lf
+*.yml text eol=lf
+*.swift text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.storekit text eol=lf
+
+*.png binary
+*.jpg binary
+*.pdf binary

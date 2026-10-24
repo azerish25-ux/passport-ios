@@ -1,0 +1,41 @@
+{
+  "identifier" : "D3A1F0C2-5B7E-4A6D-9C21-8E4B6F2A1C33",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "17.99",
+      "familyShareable" : false,
+      "internalID" : "6F1C2A90-3E4B-4D77-8A15-9B2C7D4E5F60",
+      "localizations" : [
+        {
+          "description" : "One print sheet and one digital file for the document you selected. A single purchase, not a subscription.",
+          "displayName" : "Print & digital export",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.passportproof.app.unlock",
+      "referenceName" : "PassportProof Unlock",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "PROTOTYPE",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

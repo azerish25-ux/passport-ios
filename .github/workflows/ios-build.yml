@@ -1,0 +1,174 @@
+name: iOS Build
+
+# The prototype is authored on Windows, where no Xcode toolchain exists. This
+# workflow is therefore the only place the app is ever actually compiled, and it
+# is the source of truth for "does it build".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PROJECT: PassportProof.xcodeproj
+  SCHEME: PassportProof
+  APP_NAME: PassportProof
+
+jobs:
+  # Compiles the app for the simulator, then runs the unit tests on a concrete
+  # simulator resolved at runtime. Hardcoding a device name (iPhone 16, iPhone 17)
+  # is the most common way this kind of workflow breaks when the runner image
+  # rotates, so the device is discovered instead of assumed.
+  build-and-test:
+    name: Build & test (iOS Simulator)
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report toolchain
+        run: |
+          echo "### Toolchain" >> "$GITHUB_STEP_SUMMARY"
+          xcodebuild -version | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          xcrun simctl list runtimes | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate Xcode project
+        run: |
+          # PassportProof.xcodeproj is generated, not checked in. Without this
+          # every later step fails with "project does not exist".
+          python3 Tools/generate_project.py
+
+      - name: Validate project structure
+        run: |
+          # xcodebuild -list parses the project and enumerates targets and
+          # schemes. If the pbxproj is malformed this fails here, before a
+          # 20-minute compile, with a message that names the bad object.
+          xcodebuild -list -project "$PROJECT"
+
+      - name: Assert shared scheme exists
+        run: |
+          set -euo pipefail
+          SCHEME_FILE="$PROJECT/xcshareddata/xcschemes/$SCHEME.xcscheme"
+          if [ ! -f "$SCHEME_FILE" ]; then
+            echo "::error::Shared scheme not found at $SCHEME_FILE"
+            exit 1
+          fi
+          echo "Shared scheme present: $SCHEME_FILE"
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            -quiet
+
+      - name: Resolve an available iPhone simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list -j devices available | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          # Prefer the newest iOS runtime that has a bootable iPhone.
+          for runtime in sorted(data, reverse=True):
+              if "iOS" not in runtime:
+                  continue
+              for device in data[runtime]:
+                  if device.get("isAvailable") and device["name"].startswith("iPhone"):
+                      print(device["udid"])
+                      sys.exit(0)
+          sys.exit(1)
+          ')
+          NAME=$(xcrun simctl list -j devices | python3 -c "
+          import json, sys
+          udid = '$UDID'
+          for devices in json.load(sys.stdin)['devices'].values():
+              for d in devices:
+                  if d['udid'] == udid:
+                      print(d['name'])
+                      sys.exit(0)
+          ")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Resolved simulator: $NAME ($UDID)"
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build \
+            -resultBundlePath build/TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            -quiet
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/TestResults.xcresult
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload built app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PassportProof-simulator-app
+          path: build/Build/Products/Debug-iphonesimulator/${{ env.APP_NAME }}.app
+          if-no-files-found: error
+          retention-days: 7
+
+  # Proves the same sources compile for arm64 device against the iOS SDK. This
+  # catches simulator-only API misuse and any missing framework link that the
+  # simulator build would tolerate. Signing is disabled: the prototype has no
+  # provisioning profile and does not need one to prove it compiles.
+  device-build:
+    name: Build (generic iOS device, unsigned)
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: python3 Tools/generate_project.py
+
+      - name: Build for device
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            -quiet

@@ -1,0 +1,22 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager (unused, but ignore in case a local package is added)
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
