@@ -16,6 +16,13 @@
 //    open to the right edge, the synthetic right-hand domain value is not
 //    labelled because it means nothing, and the marker still reads against it.
 //
+//  `markerX` clamps to the gauge width. That is a guard rail, not a layout
+//  decision: `domainHi` already widens to include the measurement, so the clamp
+//  never fires for any value the engine can produce. Do not remove it, and do
+//  not "simplify" the domain back to `lower + 0.6 × span` for the one-sided
+//  case — a 3024 px source (12 MP, the common case) would then pin its marker to
+//  the right edge and contradict the 3024 px printed underneath it.
+//
 //  Deliberate omission: the "NO MEASUREMENT" caption is carried by the summary
 //  line rather than floated 4pt above the band, because 7pt of headroom above a
 //  34pt gauge cannot hold an 11pt label without colliding with the row above.

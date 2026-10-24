@@ -121,6 +121,25 @@ enum FaceAnalyzer {
 
         guard chinY > eyeY, eyeY > 0 else { return nil }
 
+        // Structural sanity check on the vertical axis.
+        //
+        // Vision reports normalised points with a bottom-left origin, and this
+        // module works top-down, so every y is flipped on the way in. If that
+        // flip were ever wrong — or if a future OS changed the convention — the
+        // failure would not look like a failure: an inverted head still has a
+        // plausible *magnitude* of head height, so the rule would quietly return
+        // a confident pass or fail built on a mirrored measurement.
+        //
+        // On a real head the eye line sits between the crown and the chin,
+        // a little under halfway down. Asserting that ordering turns an
+        // inversion into `cannot verify` instead of a wrong answer, which is the
+        // whole point of having a third state.
+        let crown = min(inferredCrown, envelope)
+        let span = chinY - crown
+        guard span > 0.02 else { return nil }
+        let eyeFromCrown = (eyeY - crown) / span
+        guard eyeFromCrown > 0.30, eyeFromCrown < 0.70 else { return nil }
+
         return FaceGeometry(
             chinY: chinY,
             eyeY: eyeY,
