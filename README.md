@@ -135,6 +135,7 @@ Generate Xcode project → build for iOS Simulator → resolve a simulator → r
 
 ```bash
 python3 Tools/generate_project.py      # regenerate the project from the tree
+python3 Tools/generate_icon.py         # regenerate the app icon (needs Pillow)
 xcodebuild -project PassportProof.xcodeproj -scheme PassportProof \
   -destination 'generic/platform=iOS Simulator' build
 ```
@@ -204,6 +205,18 @@ Three, all deliberate and all visible in the UI:
 
 ## Status
 
-Prototype. Not shipped, not signed, not submitted. The StoreKit product is not
-configured against App Store Connect, so the unlock falls back to a clearly
-labelled prototype bypass that never reports a successful purchase.
+**v1.0.0 — submission-ready build configuration.** The in-repo App Store
+requirements are met: a generated app icon (1024 px, `Tools/generate_icon.py`),
+a configured launch screen on the app's own paper colour, an explicit
+`Info.plist` with the camera and photo-library privacy descriptions, a
+`PrivacyInfo.xcprivacy` manifest declaring no tracking and no data collection,
+the export-compliance answer (`ITSAppUsesNonExistentEncryption = NO`), and a
+unit-test suite that asserts the compiled bundle actually carries all of the
+above. `docs/RELEASE.md` is the checklist for everything that lives outside the
+repo (App Store Connect records, screenshots, review notes).
+
+The StoreKit product is still not configured against App Store Connect, so the
+unlock falls back to a clearly labelled prototype bypass that never reports a
+successful purchase. The photo-age rule now receives the EXIF capture date for
+library imports and the capture instant for camera captures; without a date it
+still reports `cannot verify` rather than guessing.

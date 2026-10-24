@@ -28,14 +28,20 @@ final class PhotoSession: ObservableObject {
     @Published var analysis: PhotoAnalysis?
     @Published var analyzedDocumentID: String?
 
+    /// The photo's capture date, when one is known: the EXIF `DateTimeOriginal`
+    /// for a library import, "now" for a camera capture. Feeds the photo-age
+    /// rule (R7). A date is metadata, not an image — P1 is unaffected.
+    @Published private(set) var captureDate: Date?
+
     /// Last print layout chosen. Kept here so the picker survives a back-tap.
     @Published var layout: PrintSheetLayout = .fourBySix
 
     var hasPhoto: Bool { cgImage != nil }
 
-    func adopt(_ image: UIImage) {
+    func adopt(_ image: UIImage, captureDate: Date? = nil) {
         self.image = image
         self.cgImage = ImageBridge.cgImage(from: image)
+        self.captureDate = captureDate
         self.analysis = nil
         self.analyzedDocumentID = nil
         self.gate = nil
@@ -52,6 +58,7 @@ final class PhotoSession: ObservableObject {
         gate = nil
         analysis = nil
         analyzedDocumentID = nil
+        captureDate = nil
     }
 }
 

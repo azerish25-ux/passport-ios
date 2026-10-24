@@ -13,6 +13,7 @@
 //  photo into the diagnosis — is the one this screen disables.
 //
 
+import AVFoundation
 import SwiftUI
 import UIKit
 
@@ -29,6 +30,19 @@ struct CaptureView: View {
     @State private var gate: CaptureGateResult?
     @State private var isEvaluating = false
     @State private var pendingSource: FrameSource = .library
+
+    /// The camera cannot open: permission denied, or the device restricts it.
+    /// Stated on screen with a way out, never a black screen.
+    @State private var cameraDenied = false
+
+    /// The frame was adopted but could not be measured. The old build left the
+    /// gate at "Not evaluated" with no way forward; this states the failure.
+    @State private var gateFailure: String?
+
+    /// The capture date belonging to the pending frame: "now" for the camera
+    /// path, the EXIF date for a library import. Held outside the session until
+    /// the frame is accepted, so a discard leaves no trace.
+    @State private var pendingCaptureDate: Date?
 
     /// Where the pending frame came from. The gate governs the shutter, and a
     /// library import has no shutter: it is a frame that already exists. So the
@@ -78,9 +92,12 @@ struct CaptureView: View {
 
                 Theme.SectionHeader(title: "Source")
                 cameraRow
+                if cameraDenied {
+                    cameraDeniedRow
+                }
                 Theme.Rule()
-                PhotoImporter(title: "Choose from library") { image in
-                    adopt(image, from: .library)
+                PhotoImporter(title: "Choose from library") { image, captureDate in
+                    adopt(image, from: .library, captureDate: captureDate)
                 }
                 Theme.Rule()
 
@@ -103,7 +120,7 @@ struct CaptureView: View {
                 spec: spec,
                 onCapture: { image in
                     showCamera = false
-                    adopt(image, from: .camera)
+                    adopt(image, from: .camera, captureDate: Date())
                 },
                 onCancel: { showCamera = false }
             )
@@ -157,9 +174,7 @@ struct CaptureView: View {
 
     private var cameraRow: some View {
         Button {
-            guard cameraAvailable else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showCamera = true
+            openCamera()
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
@@ -188,6 +203,52 @@ struct CaptureView: View {
         .disabled(!cameraAvailable)
     }
 
+    /// Shown only when the camera was denied or restricted. The permission
+    /// string lives in Info.plist; this is the recovery path.
+    private var cameraDeniedRow: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text("Camera access is turned off for PassportProof. Turn it on in Settings to capture a frame; the library path below works without it.")
+                .typeStyle(Typography.meta)
+                .foregroundStyle(Theme.signalFail)
+                .fixedSize(horizontal: false, vertical: true)
+
+            SecondaryAction(title: "Open Settings") {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.margin)
+        .padding(.vertical, Theme.Spacing.m)
+    }
+
+    // MARK: Camera permission
+
+    private func openCamera() {
+        guard cameraAvailable else { return }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            cameraDenied = false
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showCamera = true
+
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor in
+                    if granted {
+                        cameraDenied = false
+                        showCamera = true
+                    } else {
+                        cameraDenied = true
+                    }
+                }
+            }
+
+        default:
+            cameraDenied = true
+        }
+    }
+
     // MARK: Review
 
     private func reviewBlock(image: UIImage) -> some View {
@@ -197,6 +258,7 @@ struct CaptureView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity)
+                .accessibilityLabel("The captured frame, awaiting review")
                 .padding(.horizontal, Theme.Spacing.margin)
                 .padding(.top, Theme.Spacing.m)
 
@@ -232,16 +294,19 @@ struct CaptureView: View {
     }
 
     private var gateBlock: some View {
-        let passed = gate?.canCapture == true
-        let tint = passed ? Theme.signalPass : Theme.signalFail
+        let failed = gateFailure != nil
+        let passed = !failed && gate?.canCapture == true
+        let tint = failed ? Theme.signalFail : (passed ? Theme.signalPass : Theme.signalFail)
         let wash = passed ? Theme.paper : Theme.failWash
         let headline: String = {
+            if let gateFailure { return "Frame could not be measured" }
             if isEvaluating { return "Evaluating the frame" }
             guard let gate else { return "Not evaluated" }
             if gate.canCapture { return "Gate passed" }
             return pendingSource == .camera ? "Gate failed — retake required" : "Gate failed"
         }()
         let message: String = {
+            if let gateFailure { return gateFailure }
             if isEvaluating {
                 return "Background uniformity and crown contrast are being measured on the captured frame."
             }
@@ -273,14 +338,17 @@ struct CaptureView: View {
 
     // MARK: Actions
 
-    private func adopt(_ image: UIImage, from source: FrameSource) {
+    private func adopt(_ image: UIImage, from source: FrameSource, captureDate: Date?) {
         pendingImage = image
         pendingSource = source
+        pendingCaptureDate = captureDate
         gate = nil
+        gateFailure = nil
         isEvaluating = true
 
         guard let cgImage = ImageBridge.cgImage(from: image) else {
             isEvaluating = false
+            gateFailure = "The frame could not be read as measurable pixels. Try a different photo."
             return
         }
 
@@ -299,7 +367,7 @@ struct CaptureView: View {
     private func accept(_ image: UIImage) {
         guard canProceed else { return }
 
-        session.adopt(image)
+        session.adopt(image, captureDate: pendingCaptureDate)
         session.gate = gate
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         goToAnalysis = true
@@ -308,6 +376,8 @@ struct CaptureView: View {
     private func discard() {
         pendingImage = nil
         gate = nil
+        gateFailure = nil
         isEvaluating = false
+        pendingCaptureDate = nil
     }
 }

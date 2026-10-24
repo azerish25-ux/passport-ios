@@ -39,6 +39,7 @@
 		F8B1592E0656F149D2B981A1 /* DocumentLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27551D16EC8BBB5BE88CE871 /* DocumentLibraryView.swift */; };
 		DDBD5FF9D08A2F4EDBA0F6DB /* UnlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */; };
 		F9D83C9671EFDC7CC182057F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDAC857F76ADA2D887487466 /* Assets.xcassets */; };
+		425163FA0A6768D22FF0264E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CEE758DCE401EC8FFA4892D6 /* PrivacyInfo.xcprivacy */; };
 		AC6E7BB9129E64A64D41B172 /* PassportProofTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -88,6 +89,7 @@
 		37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockView.swift; sourceTree = "<group>"; };
 		95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofTests.swift; sourceTree = "<group>"; };
 		CDAC857F76ADA2D887487466 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CEE758DCE401EC8FFA4892D6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -290,6 +292,7 @@
 			isa = PBXGroup;
 			children = (
 				CDAC857F76ADA2D887487466 /* Assets.xcassets */,
+				CEE758DCE401EC8FFA4892D6 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -393,6 +396,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F9D83C9671EFDC7CC182057F /* Assets.xcassets in Resources */,
+				425163FA0A6768D22FF0264E /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -592,23 +596,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "PassportProof";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSCameraUsageDescription = "PassportProof uses the camera to measure your photo against the rules for the document you selected. Photos are processed on this device and are never uploaded.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Choose a photo to measure against the rules for the document you selected. The photo is processed on this device and is never uploaded.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "PassportProof/Resources/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 									"$(inherited)",
 									"@executable_path/Frameworks",
 								);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -624,23 +619,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "PassportProof";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSCameraUsageDescription = "PassportProof uses the camera to measure your photo against the rules for the document you selected. Photos are processed on this device and are never uploaded.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Choose a photo to measure against the rules for the document you selected. The photo is processed on this device and is never uploaded.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "PassportProof/Resources/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 									"$(inherited)",
 									"@executable_path/Frameworks",
 								);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -656,7 +642,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -673,7 +659,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

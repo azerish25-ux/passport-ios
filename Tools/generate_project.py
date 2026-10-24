@@ -27,7 +27,7 @@ TEST_DIR = "PassportProofTests"
 BUNDLE_ID = "com.passportproof.app"
 DEPLOYMENT_TARGET = "17.0"
 SWIFT_VERSION = "5.0"
-MARKETING_VERSION = "0.1.0"
+MARKETING_VERSION = "1.0.0"
 BUILD_NUMBER = "1"
 
 TAB = "\t"
@@ -58,6 +58,9 @@ def walk(root_rel: str):
         for f in sorted(filenames):
             if f.endswith(".swift"):
                 swift.append(f"{rel_dir}/{f}")
+            elif f.endswith(".xcprivacy"):
+                # The privacy manifest is a compiled-in resource, not a source.
+                assets.append(f"{rel_dir}/{f}")
     return sorted(dirs), sorted(swift), sorted(assets)
 
 
@@ -68,6 +71,8 @@ def file_type(path: str) -> str:
         return "folder.assetcatalog"
     if path.endswith(".plist"):
         return "text.plist.xml"
+    if path.endswith(".xcprivacy"):
+        return "text.xml"
     return "text"
 
 
@@ -479,17 +484,11 @@ def main() -> int:
         "CODE_SIGN_STYLE = Automatic;",
         f"CURRENT_PROJECT_VERSION = {BUILD_NUMBER};",
         "ENABLE_PREVIEWS = YES;",
-        "GENERATE_INFOPLIST_FILE = YES;",
-        f'INFOPLIST_KEY_CFBundleDisplayName = "{APP_NAME}";',
-        'INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";',
-        'INFOPLIST_KEY_NSCameraUsageDescription = "PassportProof uses the camera to measure your photo against the rules for the document you selected. Photos are processed on this device and are never uploaded.";',
-        'INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Choose a photo to measure against the rules for the document you selected. The photo is processed on this device and is never uploaded.";',
-        "INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;",
-        "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;",
-        "INFOPLIST_KEY_UILaunchScreen_Generation = YES;",
-        'INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;',
-        'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";',
-        'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;',
+        # The Info.plist is explicit and checked in (PassportProof/Resources/Info.plist):
+        # launch screen, privacy descriptions and the export-compliance answer are
+        # auditable in review rather than assembled from INFOPLIST_KEY_* at build time.
+        "GENERATE_INFOPLIST_FILE = NO;",
+        f'INFOPLIST_FILE = "{APP_DIR}/Resources/Info.plist";',
         f"IPHONEOS_DEPLOYMENT_TARGET = {DEPLOYMENT_TARGET};",
         'LD_RUNPATH_SEARCH_PATHS = (',
         f'{TAB}{TAB}{TAB}{TAB}{TAB}"$(inherited)",',

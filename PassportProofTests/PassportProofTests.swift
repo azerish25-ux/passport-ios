@@ -248,6 +248,161 @@ final class PassportProofTests: XCTestCase {
         XCTAssertFalse(result.message.isEmpty)
     }
 
+    // MARK: - Photo age (R7)
+
+    func testPhotoAgePassesInsideSixMonthsAndFailsOutside() {
+        let spec = DocumentCorpus.documents[0]
+        let calendar = Calendar(identifier: .gregorian)
+
+        let recent = calendar.date(byAdding: .month, value: -1, to: Date())
+        let stale = calendar.date(byAdding: .month, value: -7, to: Date())
+
+        let recentFindings = ValidationEngine.findings(
+            geometry: nil,
+            background: nil,
+            spec: spec,
+            imagePixelSize: CGSize(width: 1200, height: 1200),
+            captureDate: recent
+        )
+        XCTAssertEqual(recentFindings.first { $0.id == .photoAge }?.status, .pass)
+
+        let staleFindings = ValidationEngine.findings(
+            geometry: nil,
+            background: nil,
+            spec: spec,
+            imagePixelSize: CGSize(width: 1200, height: 1200),
+            captureDate: stale
+        )
+        XCTAssertEqual(staleFindings.first { $0.id == .photoAge }?.status, .fail)
+    }
+
+    // MARK: - EXIF capture date
+
+    func testExifDateParsing() {
+        guard let parsed = PhotoImporter.parseExifDate("2026:03:14 10:30:00") else {
+            return XCTFail("a well-formed EXIF date must parse")
+        }
+
+        let components = Calendar(identifier: .gregorian).dateComponents(
+            [.year, .month, .day, .hour, .minute], from: parsed
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 3)
+        XCTAssertEqual(components.day, 14)
+
+        // A malformed date is unknown, never a guess.
+        XCTAssertNil(PhotoImporter.parseExifDate("not a date"))
+        XCTAssertNil(PhotoImporter.parseExifDate(""))
+    }
+
+    func testDecodeImageReadsExifCaptureDate() {
+        // Encode a JPEG carrying EXIF DateTimeOriginal, then decode it back.
+        let image = makeImage(width: 64, height: 64)
+        let data = NSMutableData()
+
+        guard let destination = CGImageDestinationCreateWithData(
+            data, "public.jpeg" as CFString, 1, nil
+        ) else {
+            return XCTFail("could not create the test destination")
+        }
+
+        let exif: [CFString: Any] = [kCGImagePropertyExifDateTimeOriginal: "2026:03:14 10:30:00"]
+        let properties: [CFString: Any] = [kCGImagePropertyExifDictionary: exif]
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            return XCTFail("could not finalize the test JPEG")
+        }
+
+        guard let decoded = PhotoImporter.decodeImage(from: data as Data) else {
+            return XCTFail("decodeImage returned nil for a valid JPEG")
+        }
+        guard let captureDate = decoded.captureDate else {
+            return XCTFail("a JPEG carrying EXIF DateTimeOriginal must decode with a capture date")
+        }
+        let components = Calendar(identifier: .gregorian).dateComponents(
+            [.year, .month, .day], from: captureDate
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 3)
+        XCTAssertEqual(components.day, 14)
+    }
+
+    func testDecodeImageRejectsNonImageData() {
+        XCTAssertNil(PhotoImporter.decodeImage(from: Data("not an image".utf8)))
+    }
+
+    // MARK: - App Store readiness (the bundle is the evidence)
+
+    /// With a test host, `Bundle.main` is the compiled app bundle, so these
+    /// assertions check what App Review would actually see.
+
+    func testAppIconIsCompiledIntoTheBundle() {
+        // actool injects CFBundleIconName when an app icon set is present and
+        // non-empty. A missing or empty AppIcon fails this.
+        let iconName = Bundle.main.infoDictionary?["CFBundleIconName"]
+        XCTAssertNotNil(iconName, "CFBundleIconName is absent — the app icon did not compile into the bundle")
+    }
+
+    func testPrivacyManifestIsBundled() {
+        let url = Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy")
+        XCTAssertNotNil(url, "PrivacyInfo.xcprivacy is not in the app bundle")
+    }
+
+    func testLaunchScreenIsConfigured() {
+        let launchScreen = Bundle.main.infoDictionary?["UILaunchScreen"]
+        XCTAssertNotNil(launchScreen, "UILaunchScreen is absent — the app has no launch screen configuration")
+    }
+
+    func testPrivacyUsageDescriptionsArePresent() {
+        let info = Bundle.main.infoDictionary
+        XCTAssertFalse(
+            (info?["NSCameraUsageDescription"] as? String ?? "").isEmpty,
+            "NSCameraUsageDescription is empty"
+        )
+        XCTAssertFalse(
+            (info?["NSPhotoLibraryUsageDescription"] as? String ?? "").isEmpty,
+            "NSPhotoLibraryUsageDescription is empty"
+        )
+    }
+
+    func testBundleVersionIsAReleaseVersion() {
+        let marketing = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        guard let marketing, !marketing.isEmpty else {
+            return XCTFail("CFBundleShortVersionString is absent or empty")
+        }
+        XCTAssertFalse(
+            marketing.hasPrefix("0."),
+            "a submission build must not carry a prototype version (found \(marketing))"
+        )
+    }
+
+    /// AC5, applied to the compile-time surface: no promise word in the plist.
+    func testInfoPlistCarriesNoBannedPromiseWords() {
+        let banned = ["approved", "guaranteed", "official", "accepted", "government-approved"]
+        let strings = allStrings(in: Bundle.main.infoDictionary ?? [:])
+        for word in banned {
+            for string in strings {
+                XCTAssertFalse(
+                    string.lowercased().contains(word),
+                    "banned promise word “\(word)” appears in Info.plist"
+                )
+            }
+        }
+    }
+
+    private func allStrings(in value: Any) -> [String] {
+        switch value {
+        case let dict as [String: Any]:
+            return dict.flatMap { [$0.key] + allStrings(in: $0.value) }
+        case let array as [Any]:
+            return array.flatMap { allStrings(in: $0) }
+        case let string as String:
+            return [string]
+        default:
+            return []
+        }
+    }
+
     // MARK: - Helpers
 
     private func headHeightFinding(geometry: FaceGeometry, spec: DocumentSpec) -> Finding {

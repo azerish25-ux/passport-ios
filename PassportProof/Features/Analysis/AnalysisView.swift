@@ -323,8 +323,9 @@ struct AnalysisView: View {
         settled = false
 
         let spec = self.spec
+        let captureDate = session.captureDate
         let value = await Task.detached(priority: .userInitiated) {
-            ValidationEngine.analyze(image: cgImage, spec: spec)
+            ValidationEngine.analyze(image: cgImage, spec: spec, captureDate: captureDate)
         }.value
 
         result = value
