@@ -83,6 +83,7 @@ jobs:
             -quiet
 
       - name: Build test bundles
+        id: build_tests
         timeout-minutes: 20
         run: |
           set -o pipefail
@@ -169,6 +170,9 @@ jobs:
           fi
 
       - name: Run UI tests
+        # Keep navigation/screenshot evidence available when a unit diagnostic
+        # finds a defect, while preserving the unit step's failed conclusion.
+        if: ${{ !cancelled() && steps.build_tests.outcome == 'success' }}
         timeout-minutes: 20
         run: |
           set +e
@@ -217,6 +221,28 @@ jobs:
               --path build/UIResults.xcresult \
               --output-path build/screenshots || true
           fi
+
+      - name: Export assessment diagnostics
+        if: always()
+        run: |
+          mkdir -p build/assessment-diagnostics
+          if [ -d build/UnitResults.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path build/UnitResults.xcresult \
+              --output-path build/assessment-diagnostics || true
+            xcrun xcresulttool get test-results summary \
+              --path build/UnitResults.xcresult \
+              > build/assessment-diagnostics/unit-summary.json || true
+          fi
+
+      - name: Upload assessment diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assessment-diagnostics
+          path: build/assessment-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload test results
         if: always()

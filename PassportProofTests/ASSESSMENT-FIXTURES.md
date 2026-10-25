@@ -16,6 +16,8 @@ The webpage uses these to illustrate expression and background requirements. The
 
 The diagnostic tests exercise real Vision landmark detection and record the production analyzer's individual findings. The automatic-crop test adds a white border around unchanged portrait pixels to provide room for the algorithm to position its crop. This is a controlled geometry experiment, not an exported applicant photograph.
 
+These 200–220 px illustrations are not assumed to yield usable app geometry. Diagnostics record a separate raw Vision face count alongside the app's result, distinguishing a detected candidate from a face that passes the app's geometry guards. A missing result must produce unresolved geometry-dependent checks; it is not treated as evidence of successful recognition. The crop probe tries the padded portraits in the declared Neutral, Blue Background, White Background order. If no fixture establishes measurable geometry and an unconstrained crop, it explicitly skips the regression rather than claiming reproduction. Rejected candidates and the selected candidate, if any, remain in the log and attachments.
+
 Uniform-background fixtures are generated in code and isolate the background rule with an explicit subject box. They do not claim successful human face recognition or whole-photo approval.
 
 Known defects use strict XCTest expected-failure assertions. A green CI result with expected failures means those defects were reproduced, not fixed; an unexpectedly passing regression must be reviewed and its expected-failure marker removed. None of these tests measures issuer acceptance rates, fairness across populations, live camera reliability, real StoreKit purchases, or physical print accuracy.
