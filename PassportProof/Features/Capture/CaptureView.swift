@@ -137,7 +137,6 @@ struct CaptureView: View {
                 flow = .crop
             }
             .padding(.horizontal, Theme.Spacing.m)
-            .accessibilityIdentifier("capture.library")
         }
         .background(Theme.paperRaised)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))

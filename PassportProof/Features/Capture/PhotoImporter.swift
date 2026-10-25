@@ -58,6 +58,7 @@ struct PhotoImporter: View {
                 .contentShape(Rectangle())
             }
             .disabled(!isEnabled || isLoading)
+            .accessibilityIdentifier("capture.library")
 
             if didFail {
                 Text("That file could not be read as an image. Try another photo.")

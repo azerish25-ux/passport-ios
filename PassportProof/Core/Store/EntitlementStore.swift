@@ -106,7 +106,7 @@ final class EntitlementStore: ObservableObject {
                     isPrototypeUnlock = false
                     state = .purchased
                     await transaction.finish()
-                case .unverified:
+                case .unverified(_, _):
                     state = .failed("The purchase could not be verified on this device. Nothing was unlocked.")
                 }
             case .userCancelled:

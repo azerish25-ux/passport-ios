@@ -196,6 +196,7 @@ struct DocumentLibraryView: View {
                     .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("library.unlock")
 
             Text("Informational diagnosis only. The issuing authority always makes the final decision.")
                 .typeStyle(Typography.meta)

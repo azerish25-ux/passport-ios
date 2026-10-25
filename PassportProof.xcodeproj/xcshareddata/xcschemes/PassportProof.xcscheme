@@ -28,6 +28,15 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "E565A182FFCCDF17705C9D6A"
+            BuildableName = "PassportProof.app"
+            BlueprintName = "PassportProof"
+            ReferencedContainer = "container:PassportProof.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
       <Testables>
          <TestableReference
             skipped = "NO">
@@ -36,6 +45,16 @@
                BlueprintIdentifier = "179777C1783E6C14735D5A89"
                BuildableName = "PassportProofTests.xctest"
                BlueprintName = "PassportProofTests"
+               ReferencedContainer = "container:PassportProof.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "45F0279CDDD75441D46CCDCC"
+               BuildableName = "PassportProofUITests.xctest"
+               BlueprintName = "PassportProofUITests"
                ReferencedContainer = "container:PassportProof.xcodeproj">
             </BuildableReference>
          </TestableReference>

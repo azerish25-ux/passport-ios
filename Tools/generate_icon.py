@@ -1,79 +1,130 @@
 #!/usr/bin/env python3
-"""
-Generates the PassportProof app icon (1024x1024, opaque, no alpha).
+"""Generate PassportProof's opaque App Store icon and launch symbol.
 
-The composition is the app's own capture screen, reduced to its four marks:
-the paper ground, the ink photo cell, the head-and-shoulders silhouette, and
-the head-height band that is the product's whole reason for existing. Flat,
-hard-edged, no gradients, no text -- the same rules the DesignSystem.md
-imposes on the interface.
-
-Colours are lifted from PassportProof/Design/Theme.swift:
-  paper  #F4F1EA   ink  #14120F   accent #10565C (light) / #4FA3A8 (dark)
-
-Run:  python Tools/generate_icon.py
-Writes: PassportProof/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+Original vector-like geometry rendered with Pillow at 3x and downsampled for
+clean small-size edges. No text, transparency, external artwork or dependencies
+beyond Pillow. Run with the project's managed Python environment.
 """
 
 from __future__ import annotations
 
+import json
 import os
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(
-    ROOT, "PassportProof", "Resources", "Assets.xcassets", "AppIcon.appiconset", "icon-1024.png"
-)
-
+ASSETS = os.path.join(ROOT, "PassportProof", "Resources", "Assets.xcassets")
+ICON_OUT = os.path.join(ASSETS, "AppIcon.appiconset", "icon-1024.png")
+LAUNCH_DIR = os.path.join(ASSETS, "LaunchSymbol.imageset")
 SIZE = 1024
+SCALE = 3
+PAPER = (244, 241, 234, 255)
+INK = (20, 37, 33, 255)
+ACCENT = (83, 199, 174, 255)
+DEEP = (13, 107, 96, 255)
 
-PAPER = (0xF4, 0xF1, 0xEA, 255)
-INK = (0x14, 0x12, 0x0F, 255)
-ACCENT = (0x4F, 0xA3, 0xA8, 255)  # the dark-appearance accent: reads on ink
+
+def scaled(values):
+    return tuple(int(round(v * SCALE)) for v in values)
 
 
-def rect(d: ImageDraw.ImageDraw, box: tuple[int, int, int, int], fill) -> None:
-    d.rectangle(box, fill=fill)
+def background() -> Image.Image:
+    image = Image.new("RGB", (SIZE, SIZE))
+    draw = ImageDraw.Draw(image)
+    start = (24, 62, 59)
+    end = (8, 28, 32)
+    for y in range(SIZE):
+        t = y / (SIZE - 1)
+        color = tuple(int(a + (b - a) * t) for a, b in zip(start, end))
+        draw.line((0, y, SIZE, y), fill=color)
+    image = image.resize((SIZE * SCALE, SIZE * SCALE), Image.Resampling.LANCZOS).convert("RGBA")
+
+    glow = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse(scaled((540, -240, 1220, 440)), fill=(83, 199, 174, 54))
+    glow = glow.filter(ImageFilter.GaussianBlur(90 * SCALE))
+    return Image.alpha_composite(image, glow)
+
+
+def app_icon() -> Image.Image:
+    image = background()
+
+    shadow = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    sd.rounded_rectangle(scaled((194, 176, 830, 876)), radius=132 * SCALE, fill=(0, 0, 0, 100))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(28 * SCALE))
+    image = Image.alpha_composite(image, shadow)
+
+    card = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    cd = ImageDraw.Draw(card)
+    cd.rounded_rectangle(scaled((202, 152, 822, 852)), radius=128 * SCALE, fill=PAPER)
+    cd.rounded_rectangle(scaled((238, 192, 786, 812)), radius=100 * SCALE, fill=(233, 229, 218, 255))
+
+    # Measurement band and viewfinder ticks, derived from the product's guide.
+    for y in (330, 590):
+        cd.rounded_rectangle(scaled((286, y - 6, 738, y + 6)), radius=6 * SCALE, fill=DEEP)
+    tick = 64
+    width = 13
+    for x, y, sx, sy in ((272, 264, 1, 1), (752, 264, -1, 1), (272, 742, 1, -1), (752, 742, -1, -1)):
+        cd.rectangle(scaled((x if sx > 0 else x - tick, y, x + tick if sx > 0 else x, y + width)), fill=DEEP)
+        cd.rectangle(scaled((x, y if sy > 0 else y - tick, x + width, y + tick if sy > 0 else y)), fill=DEEP)
+
+    # Head and shoulders are clipped to the rounded photo cell.
+    subject = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    sub = ImageDraw.Draw(subject)
+    sub.ellipse(scaled((405, 350, 619, 564)), fill=INK)
+    sub.ellipse(scaled((314, 584, 710, 956)), fill=INK)
+    mask = Image.new("L", image.size, 0)
+    md = ImageDraw.Draw(mask)
+    md.rounded_rectangle(scaled((238, 192, 786, 812)), radius=100 * SCALE, fill=255)
+    subject.putalpha(ImageChops.multiply(subject.getchannel("A"), mask))
+    card = Image.alpha_composite(card, subject)
+
+    # Validation seal: the only additional mark, readable at small sizes.
+    cd = ImageDraw.Draw(card)
+    cd.ellipse(scaled((636, 636, 830, 830)), fill=PAPER)
+    cd.ellipse(scaled((650, 650, 816, 816)), fill=DEEP)
+    cd.line(scaled((694, 733, 726, 766, 778, 700)), fill=(255, 255, 255, 255), width=17 * SCALE, joint="curve")
+
+    image = Image.alpha_composite(image, card)
+    return image.convert("RGB").resize((SIZE, SIZE), Image.Resampling.LANCZOS)
+
+
+def launch_symbol() -> Image.Image:
+    canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    draw.rounded_rectangle((24, 24, 488, 488), radius=116, fill=DEEP)
+    draw.ellipse((118, 118, 394, 394), outline=PAPER, width=22)
+    draw.line((164, 260, 226, 322, 356, 184), fill=PAPER, width=28, joint="curve")
+    return canvas
 
 
 def main() -> int:
-    img = Image.new("RGB", (SIZE, SIZE), PAPER[:3])
-    d = ImageDraw.Draw(img)
+    os.makedirs(os.path.dirname(ICON_OUT), exist_ok=True)
+    os.makedirs(LAUNCH_DIR, exist_ok=True)
+    app_icon().save(ICON_OUT, "PNG", optimize=True)
 
-    # The photo cell: a square ink field, centred, 640x640.
-    cell = (192, 192, 832, 832)
-    rect(d, cell, INK)
+    launch = launch_symbol()
+    for pixels, scale in ((160, "1x"), (320, "2x"), (480, "3x")):
+        launch.resize((pixels, pixels), Image.Resampling.LANCZOS).save(
+            os.path.join(LAUNCH_DIR, f"launch-{pixels}.png"), "PNG", optimize=True
+        )
+    contents = {
+        "images": [
+            {"filename": f"launch-{pixels}.png", "idiom": "universal", "scale": scale}
+            for pixels, scale in ((160, "1x"), (320, "2x"), (480, "3x"))
+        ],
+        "info": {"author": "xcode", "version": 1},
+    }
+    with open(os.path.join(LAUNCH_DIR, "Contents.json"), "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(contents, handle, indent=2)
+        handle.write("\n")
 
-    # Head-and-shoulders silhouette in paper, clipped to the cell.
-    silhouette = Image.new("L", (SIZE, SIZE), 0)
-    sd = ImageDraw.Draw(silhouette)
-    sd.ellipse((414, 322, 610, 518), fill=255)          # head: chin at y=518
-    sd.ellipse((337, 560, 687, 880), fill=255)          # shoulders, running past the cell edge
-    paper_layer = Image.new("RGB", (SIZE, SIZE), PAPER[:3])
-    img.paste(paper_layer, (0, 0), silhouette)
-
-    # Head-height band: the crown line and the chin line. This is the clause
-    # the corpus encodes and the one number the app will not approximate.
-    band_x0, band_x1 = 232, 792
-    for y in (322, 518):
-        rect(d, (band_x0, y - 4, band_x1, y + 4), ACCENT)
-
-    # Corner ticks, echoing FramingOverlay: onInk marks on the ink ground.
-    tick_len, tick_w = 56, 10
-    cx0, cy0, cx1, cy1 = cell
-    for (hx, hy) in ((cx0, cy0), (cx1 - tick_len, cy0), (cx0, cy1 - tick_w), (cx1 - tick_len, cy1 - tick_w)):
-        rect(d, (hx, hy, hx + tick_len, hy + tick_w), PAPER)
-    for (vx, vy) in ((cx0, cy0), (cx0, cy1 - tick_len), (cx1 - tick_w, cy0), (cx1 - tick_w, cy1 - tick_len)):
-        rect(d, (vx, vy, vx + tick_w, vy + tick_len), PAPER)
-
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    img.save(OUT, "PNG", optimize=True)
-
-    # iOS requires an opaque icon; assert rather than trust.
-    with Image.open(OUT) as check:
-        assert check.mode == "RGB" and check.size == (SIZE, SIZE), check.mode
-    print(f"wrote {OUT} ({os.path.getsize(OUT)} bytes)")
+    with Image.open(ICON_OUT) as check:
+        assert check.mode == "RGB" and check.size == (SIZE, SIZE), (check.mode, check.size)
+    print(f"wrote {ICON_OUT} ({os.path.getsize(ICON_OUT)} bytes)")
+    print(f"wrote {LAUNCH_DIR} (1x/2x/3x)")
     return 0
 
 

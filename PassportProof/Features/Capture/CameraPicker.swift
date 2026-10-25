@@ -109,7 +109,7 @@ struct CameraPicker: View {
         .padding(.horizontal, Theme.Spacing.margin)
         .padding(.bottom, Theme.Spacing.l)
         .accessibilityElement(children: .combine)
-        .accessibilityLiveRegion(.polite)
+        .accessibilityAddTraits(.updatesFrequently)
     }
 
     private var shutterBar: some View {

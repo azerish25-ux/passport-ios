@@ -111,7 +111,7 @@ struct AnalysisView: View {
         .padding(.horizontal, Theme.Spacing.margin)
         .padding(.top, Theme.Spacing.xl)
         .accessibilityElement(children: .combine)
-        .accessibilityLiveRegion(.polite)
+        .accessibilityAddTraits(.updatesFrequently)
     }
 
     private func verdict(_ result: PhotoAnalysis) -> some View {

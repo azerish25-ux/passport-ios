@@ -180,6 +180,7 @@ struct DocumentDetailView: View {
                 Text("Measure a photo")
             }
             .buttonStyle(PrimaryButtonStyle(isEnabled: true))
+            .accessibilityIdentifier("detail.measure")
             .padding(.horizontal, Theme.Spacing.margin)
             .padding(.top, Theme.Spacing.m)
             .padding(.bottom, Theme.Spacing.l)

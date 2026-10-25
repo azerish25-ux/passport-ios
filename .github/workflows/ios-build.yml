@@ -29,9 +29,9 @@ jobs:
   # is the most common way this kind of workflow breaks when the runner image
   # rotates, so the device is discovered instead of assumed.
   build-and-test:
-    name: Build & test (iOS Simulator)
+    name: Build, unit tests & UI tests (iOS Simulator)
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 50
 
     steps:
       - name: Checkout
@@ -111,15 +111,11 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           echo "Resolved simulator: $NAME ($UDID)"
 
-      - name: Run unit tests
+      - name: Run unit and UI tests
         run: |
-          # Not -quiet: the summary line ("Executed N tests, with 0 failures") is
-          # the evidence that this run proved something, and it is worth the log
-          # volume.
-          #
-          # The exit status is captured explicitly rather than piped into grep,
-          # because a filtered pipeline reports grep's status and would let a
-          # failing test suite finish green.
+          # Not -quiet: the suite summaries and test counts are the evidence that
+          # this run proved something. Capture xcodebuild's status explicitly;
+          # piping into grep would otherwise report grep's status.
           set +e
           xcodebuild test \
             -project "$PROJECT" \
@@ -135,15 +131,34 @@ jobs:
           set -e
 
           echo "xcodebuild test exit status: $STATUS"
-          echo "### Unit tests" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Tests" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          grep -E "Executed [0-9]+ test|Test Suite 'All tests'" build/test.log >> "$GITHUB_STEP_SUMMARY" || echo "no summary line found" >> "$GITHUB_STEP_SUMMARY"
+          grep -E "Executed [0-9]+ test|Test Suite '(All tests|PassportProofTests|PassportProofUITests)" build/test.log >> "$GITHUB_STEP_SUMMARY" || echo "no summary line found" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$STATUS" -ne 0 ]; then
-            echo "::error::Unit tests failed (exit $STATUS)"
-            grep -E "error:|failed" build/test.log | head -40 || true
+            echo "::error::Tests failed (exit $STATUS)"
+            grep -E "error:|failed|Assertion Failure" build/test.log | head -60 || true
             exit "$STATUS"
+          fi
+
+          if ! grep -q "Test Suite 'PassportProofTests.xctest' passed" build/test.log; then
+            echo "::error::The unit-test suite did not report a passing result"
+            exit 1
+          fi
+          if ! grep -q "Test Suite 'PassportProofUITests.xctest' passed" build/test.log; then
+            echo "::error::The UI-test suite did not report a passing result"
+            exit 1
+          fi
+
+      - name: Export simulator screenshots
+        if: always()
+        run: |
+          mkdir -p build/screenshots
+          if [ -d build/TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path build/TestResults.xcresult \
+              --output-path build/screenshots || true
           fi
 
       - name: Upload test results
@@ -151,9 +166,20 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: build/TestResults.xcresult
-          if-no-files-found: warn
+          path: |
+            build/TestResults.xcresult
+            build/test.log
+          if-no-files-found: error
           retention-days: 7
+
+      - name: Upload simulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-screenshots
+          path: build/screenshots
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload built app
         if: success()
@@ -193,3 +219,28 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             -quiet
+
+      - name: Audit the Release bundle
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release-iphoneos/$APP_NAME.app"
+          BINARY="$APP/$APP_NAME"
+
+          test -f "$BINARY"
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/AppIcon60x60@2x.png"
+          test -f "$APP/LaunchSymbol@2x.png"
+
+          if strings "$BINARY" | grep -Fq "Continue with debug unlock"; then
+            echo "::error::DEBUG purchase bypass text is present in the Release binary"
+            exit 1
+          fi
+          if strings "$BINARY" | grep -Fq "Debug demonstration unlock"; then
+            echo "::error::DEBUG entitlement path is present in the Release binary"
+            exit 1
+          fi
+
+          plutil -extract UILaunchScreen xml1 -o - "$APP/Info.plist"
+          plutil -extract NSCameraUsageDescription raw -o - "$APP/Info.plist"
+          plutil -extract NSPhotoLibraryUsageDescription raw -o - "$APP/Info.plist"
+          echo "Release bundle audit passed: icon, launch symbol, privacy manifest, usage strings, no DEBUG unlock." >> "$GITHUB_STEP_SUMMARY"

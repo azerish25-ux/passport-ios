@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generates PassportProof.xcodeproj/project.pbxproj from the contents of
-PassportProof/ and PassportProofTests/.
+PassportProof/, PassportProofTests/ and PassportProofUITests/.
 
 Why a generator instead of a checked-in binary-ish project file: the project is
 authored on Windows, where Xcode cannot open or validate it. Generating from the
@@ -22,8 +22,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 APP_NAME = "PassportProof"
 TEST_NAME = "PassportProofTests"
+UI_TEST_NAME = "PassportProofUITests"
 APP_DIR = "PassportProof"
 TEST_DIR = "PassportProofTests"
+UI_TEST_DIR = "PassportProofUITests"
 BUNDLE_ID = "com.passportproof.app"
 DEPLOYMENT_TARGET = "17.0"
 SWIFT_VERSION = "5.0"
@@ -120,6 +122,7 @@ def emit_groups(tree: dict, lines: list[str], key_prefix: str, node_key: str) ->
 def main() -> int:
     app_dirs, app_swift, app_assets = walk(APP_DIR)
     _, test_swift, test_assets = walk(TEST_DIR)
+    _, ui_test_swift, ui_test_assets = walk(UI_TEST_DIR)
 
     if not app_swift:
         print("error: no Swift sources found under", APP_DIR, file=sys.stderr)
@@ -127,6 +130,7 @@ def main() -> int:
 
     app_target = uid("target", APP_NAME)
     test_target = uid("target", TEST_NAME)
+    ui_test_target = uid("target", UI_TEST_NAME)
     project_obj = uid("project", APP_NAME)
 
     app_sources_phase = uid("phase", APP_NAME, "sources")
@@ -135,15 +139,20 @@ def main() -> int:
     test_sources_phase = uid("phase", TEST_NAME, "sources")
     test_frameworks_phase = uid("phase", TEST_NAME, "frameworks")
     test_resources_phase = uid("phase", TEST_NAME, "resources")
+    ui_test_sources_phase = uid("phase", UI_TEST_NAME, "sources")
+    ui_test_frameworks_phase = uid("phase", UI_TEST_NAME, "frameworks")
+    ui_test_resources_phase = uid("phase", UI_TEST_NAME, "resources")
 
     app_product = uid("product", APP_NAME)
     test_product = uid("product", TEST_NAME)
+    ui_test_product = uid("product", UI_TEST_NAME)
     products_group = uid("group", "Products")
 
     main_group = uid("group", "main")
 
     app_cfg_list = uid("cfglist", APP_NAME)
     test_cfg_list = uid("cfglist", TEST_NAME)
+    ui_test_cfg_list = uid("cfglist", UI_TEST_NAME)
     proj_cfg_list = uid("cfglist", "project")
 
     out: list[str] = []
@@ -180,18 +189,29 @@ def main() -> int:
             f"\t\t{uid('build', p)} /* {os.path.basename(p)} in Resources */ = "
             f"{{isa = PBXBuildFile; fileRef = {uid('file', p)} /* {os.path.basename(p)} */; }};"
         )
+    for p in ui_test_swift:
+        w(
+            f"\t\t{uid('build', p)} /* {os.path.basename(p)} in Sources */ = "
+            f"{{isa = PBXBuildFile; fileRef = {uid('file', p)} /* {os.path.basename(p)} */; }};"
+        )
+    for p in ui_test_assets:
+        w(
+            f"\t\t{uid('build', p)} /* {os.path.basename(p)} in Resources */ = "
+            f"{{isa = PBXBuildFile; fileRef = {uid('file', p)} /* {os.path.basename(p)} */; }};"
+        )
     w("/* End PBXBuildFile section */")
 
     # ------------------------------------------------------------ container proxy
     w("")
     w("/* Begin PBXContainerItemProxy section */")
-    w(f"\t\t{uid('proxy', TEST_NAME)} /* PBXContainerItemProxy */ = {{")
-    w(f"{TAB}{TAB}{TAB}isa = PBXContainerItemProxy;")
-    w(f"{TAB}{TAB}{TAB}containerPortal = {project_obj} /* Project object */;")
-    w(f"{TAB}{TAB}{TAB}proxyType = 1;")
-    w(f"{TAB}{TAB}{TAB}remoteGlobalIDString = {app_target};")
-    w(f"{TAB}{TAB}{TAB}remoteInfo = {APP_NAME};")
-    w(f"{TAB}{TAB}}};")
+    for target_name in (TEST_NAME, UI_TEST_NAME):
+        w(f"\t\t{uid('proxy', target_name)} /* PBXContainerItemProxy */ = {{")
+        w(f"{TAB}{TAB}{TAB}isa = PBXContainerItemProxy;")
+        w(f"{TAB}{TAB}{TAB}containerPortal = {project_obj} /* Project object */;")
+        w(f"{TAB}{TAB}{TAB}proxyType = 1;")
+        w(f"{TAB}{TAB}{TAB}remoteGlobalIDString = {app_target};")
+        w(f"{TAB}{TAB}{TAB}remoteInfo = {APP_NAME};")
+        w(f"{TAB}{TAB}}};")
     w("/* End PBXContainerItemProxy section */")
 
     # -------------------------------------------------------------- file refs
@@ -207,7 +227,12 @@ def main() -> int:
         f"explicitFileType = wrapper.cfbundle; includeInIndex = 0; "
         f"path = {TEST_NAME}.xctest; sourceTree = BUILT_PRODUCTS_DIR; }};"
     )
-    for p in app_swift + test_swift + app_assets + test_assets:
+    w(
+        f"\t\t{ui_test_product} /* {UI_TEST_NAME}.xctest */ = {{isa = PBXFileReference; "
+        f"explicitFileType = wrapper.cfbundle; includeInIndex = 0; "
+        f"path = {UI_TEST_NAME}.xctest; sourceTree = BUILT_PRODUCTS_DIR; }};"
+    )
+    for p in app_swift + test_swift + ui_test_swift + app_assets + test_assets + ui_test_assets:
         w(
             f"\t\t{uid('file', p)} /* {os.path.basename(p)} */ = {{isa = PBXFileReference; "
             f"lastKnownFileType = {file_type(p)}; path = {os.path.basename(p)}; "
@@ -218,7 +243,11 @@ def main() -> int:
     # -------------------------------------------------------------- frameworks
     w("")
     w("/* Begin PBXFrameworksBuildPhase section */")
-    for phase, label in ((app_frameworks_phase, APP_NAME), (test_frameworks_phase, TEST_NAME)):
+    for phase, label in (
+        (app_frameworks_phase, APP_NAME),
+        (test_frameworks_phase, TEST_NAME),
+        (ui_test_frameworks_phase, UI_TEST_NAME),
+    ):
         w(f"\t\t{phase} /* Frameworks */ = {{")
         w(f"{TAB}{TAB}{TAB}isa = PBXFrameworksBuildPhase;")
         w(f"{TAB}{TAB}{TAB}buildActionMask = 2147483647;")
@@ -233,6 +262,7 @@ def main() -> int:
     w("/* Begin PBXGroup section */")
     app_tree = build_tree(app_swift + app_assets, APP_DIR)
     test_tree = build_tree(test_swift + test_assets, TEST_DIR) if (test_swift or test_assets) else None
+    ui_test_tree = build_tree(ui_test_swift + ui_test_assets, UI_TEST_DIR) if (ui_test_swift or ui_test_assets) else None
 
     w(f"\t\t{main_group} = {{")
     w(f"{TAB}{TAB}{TAB}isa = PBXGroup;")
@@ -240,6 +270,8 @@ def main() -> int:
     w(f"{TAB}{TAB}{TAB}{TAB}{uid('group', 'app', APP_DIR)} /* {APP_DIR} */,")
     if test_tree:
         w(f"{TAB}{TAB}{TAB}{TAB}{uid('group', 'test', TEST_DIR)} /* {TEST_DIR} */,")
+    if ui_test_tree:
+        w(f"{TAB}{TAB}{TAB}{TAB}{uid('group', 'uitest', UI_TEST_DIR)} /* {UI_TEST_DIR} */,")
     w(f"{TAB}{TAB}{TAB}{TAB}{uid('group', 'Tools', 'Tools')} /* Tools */,")
     w(f"{TAB}{TAB}{TAB}{TAB}{products_group} /* Products */,")
     w(f"{TAB}{TAB}{TAB});")
@@ -266,12 +298,15 @@ def main() -> int:
     # emit_groups derives its id from ("group", key_prefix, relative path)
     if test_tree:
         emit_groups(test_tree, out, "test", TEST_DIR)
+    if ui_test_tree:
+        emit_groups(ui_test_tree, out, "uitest", UI_TEST_DIR)
 
     w(f"\t\t{products_group} /* Products */ = {{")
     w(f"{TAB}{TAB}{TAB}isa = PBXGroup;")
     w(f"{TAB}{TAB}{TAB}children = (")
     w(f"{TAB}{TAB}{TAB}{TAB}{app_product} /* {APP_NAME}.app */,")
     w(f"{TAB}{TAB}{TAB}{TAB}{test_product} /* {TEST_NAME}.xctest */,")
+    w(f"{TAB}{TAB}{TAB}{TAB}{ui_test_product} /* {UI_TEST_NAME}.xctest */,")
     w(f"{TAB}{TAB}{TAB});")
     w(f"{TAB}{TAB}{TAB}name = Products;")
     w(f'{TAB}{TAB}{TAB}sourceTree = "<group>";')
@@ -317,6 +352,25 @@ def main() -> int:
     w(f"{TAB}{TAB}{TAB}productReference = {test_product} /* {TEST_NAME}.xctest */;")
     w(f'{TAB}{TAB}{TAB}productType = "com.apple.product-type.bundle.unit-test";')
     w(f"{TAB}{TAB}}};")
+
+    w(f"\t\t{ui_test_target} /* {UI_TEST_NAME} */ = {{")
+    w(f"{TAB}{TAB}{TAB}isa = PBXNativeTarget;")
+    w(f"{TAB}{TAB}{TAB}buildConfigurationList = {ui_test_cfg_list};")
+    w(f"{TAB}{TAB}{TAB}buildPhases = (")
+    w(f"{TAB}{TAB}{TAB}{TAB}{ui_test_sources_phase} /* Sources */,")
+    w(f"{TAB}{TAB}{TAB}{TAB}{ui_test_frameworks_phase} /* Frameworks */,")
+    w(f"{TAB}{TAB}{TAB}{TAB}{ui_test_resources_phase} /* Resources */,")
+    w(f"{TAB}{TAB}{TAB});")
+    w(f"{TAB}{TAB}{TAB}buildRules = (")
+    w(f"{TAB}{TAB}{TAB});")
+    w(f"{TAB}{TAB}{TAB}dependencies = (")
+    w(f"{TAB}{TAB}{TAB}{TAB}{uid('dep', UI_TEST_NAME)} /* PBXTargetDependency */,")
+    w(f"{TAB}{TAB}{TAB});")
+    w(f"{TAB}{TAB}{TAB}name = {UI_TEST_NAME};")
+    w(f"{TAB}{TAB}{TAB}productName = {UI_TEST_NAME};")
+    w(f"{TAB}{TAB}{TAB}productReference = {ui_test_product} /* {UI_TEST_NAME}.xctest */;")
+    w(f'{TAB}{TAB}{TAB}productType = "com.apple.product-type.bundle.ui-testing";')
+    w(f"{TAB}{TAB}}};")
     w("/* End PBXNativeTarget section */")
 
     # ------------------------------------------------------------------ project
@@ -333,6 +387,10 @@ def main() -> int:
     w(f"{TAB}{TAB}{TAB}{TAB}{TAB}{TAB}CreatedOnToolsVersion = 16.0;")
     w(f"{TAB}{TAB}{TAB}{TAB}{TAB}}};")
     w(f"{TAB}{TAB}{TAB}{TAB}{TAB}{test_target} = {{")
+    w(f"{TAB}{TAB}{TAB}{TAB}{TAB}{TAB}CreatedOnToolsVersion = 16.0;")
+    w(f"{TAB}{TAB}{TAB}{TAB}{TAB}{TAB}TestTargetID = {app_target};")
+    w(f"{TAB}{TAB}{TAB}{TAB}{TAB}}};")
+    w(f"{TAB}{TAB}{TAB}{TAB}{TAB}{ui_test_target} = {{")
     w(f"{TAB}{TAB}{TAB}{TAB}{TAB}{TAB}CreatedOnToolsVersion = 16.0;")
     w(f"{TAB}{TAB}{TAB}{TAB}{TAB}{TAB}TestTargetID = {app_target};")
     w(f"{TAB}{TAB}{TAB}{TAB}{TAB}}};")
@@ -353,6 +411,7 @@ def main() -> int:
     w(f"{TAB}{TAB}{TAB}targets = (")
     w(f"{TAB}{TAB}{TAB}{TAB}{app_target} /* {APP_NAME} */,")
     w(f"{TAB}{TAB}{TAB}{TAB}{test_target} /* {TEST_NAME} */,")
+    w(f"{TAB}{TAB}{TAB}{TAB}{ui_test_target} /* {UI_TEST_NAME} */,")
     w(f"{TAB}{TAB}{TAB});")
     w(f"{TAB}{TAB}}};")
     w("/* End PBXProject section */")
@@ -360,7 +419,11 @@ def main() -> int:
     # ---------------------------------------------------------------- resources
     w("")
     w("/* Begin PBXResourcesBuildPhase section */")
-    for phase, files in ((app_resources_phase, app_assets), (test_resources_phase, test_assets)):
+    for phase, files in (
+        (app_resources_phase, app_assets),
+        (test_resources_phase, test_assets),
+        (ui_test_resources_phase, ui_test_assets),
+    ):
         w(f"\t\t{phase} /* Resources */ = {{")
         w(f"{TAB}{TAB}{TAB}isa = PBXResourcesBuildPhase;")
         w(f"{TAB}{TAB}{TAB}buildActionMask = 2147483647;")
@@ -375,7 +438,11 @@ def main() -> int:
     # ------------------------------------------------------------------ sources
     w("")
     w("/* Begin PBXSourcesBuildPhase section */")
-    for phase, files in ((app_sources_phase, app_swift), (test_sources_phase, test_swift)):
+    for phase, files in (
+        (app_sources_phase, app_swift),
+        (test_sources_phase, test_swift),
+        (ui_test_sources_phase, ui_test_swift),
+    ):
         w(f"\t\t{phase} /* Sources */ = {{")
         w(f"{TAB}{TAB}{TAB}isa = PBXSourcesBuildPhase;")
         w(f"{TAB}{TAB}{TAB}buildActionMask = 2147483647;")
@@ -390,11 +457,12 @@ def main() -> int:
     # ------------------------------------------------------------------ targets
     w("")
     w("/* Begin PBXTargetDependency section */")
-    w(f"\t\t{uid('dep', TEST_NAME)} /* PBXTargetDependency */ = {{")
-    w(f"{TAB}{TAB}{TAB}isa = PBXTargetDependency;")
-    w(f"{TAB}{TAB}{TAB}target = {app_target} /* {APP_NAME} */;")
-    w(f"{TAB}{TAB}{TAB}targetProxy = {uid('proxy', TEST_NAME)} /* PBXContainerItemProxy */;")
-    w(f"{TAB}{TAB}}};")
+    for target_name in (TEST_NAME, UI_TEST_NAME):
+        w(f"\t\t{uid('dep', target_name)} /* PBXTargetDependency */ = {{")
+        w(f"{TAB}{TAB}{TAB}isa = PBXTargetDependency;")
+        w(f"{TAB}{TAB}{TAB}target = {app_target} /* {APP_NAME} */;")
+        w(f"{TAB}{TAB}{TAB}targetProxy = {uid('proxy', target_name)} /* PBXContainerItemProxy */;")
+        w(f"{TAB}{TAB}}};")
     w("/* End PBXTargetDependency section */")
 
     # ----------------------------------------------------------- configurations
@@ -513,6 +581,18 @@ def main() -> int:
         'TARGETED_DEVICE_FAMILY = "1,2";',
         'TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PassportProof.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PassportProof";',
     ]
+    ui_test_settings = [
+        "CODE_SIGN_STYLE = Automatic;",
+        f"CURRENT_PROJECT_VERSION = {BUILD_NUMBER};",
+        "GENERATE_INFOPLIST_FILE = YES;",
+        f"IPHONEOS_DEPLOYMENT_TARGET = {DEPLOYMENT_TARGET};",
+        f"MARKETING_VERSION = {MARKETING_VERSION};",
+        f"PRODUCT_BUNDLE_IDENTIFIER = {BUNDLE_ID}.uitests;",
+        'PRODUCT_NAME = "$(TARGET_NAME)";',
+        "SWIFT_EMIT_LOC_STRINGS = NO;",
+        'TARGETED_DEVICE_FAMILY = "1,2";',
+        f"TEST_TARGET_NAME = {APP_NAME};",
+    ]
 
     w("")
     w("/* Begin XCBuildConfiguration section */")
@@ -522,6 +602,8 @@ def main() -> int:
     config_block(uid("cfg", APP_NAME, "Release"), "Release", app_settings)
     config_block(uid("cfg", TEST_NAME, "Debug"), "Debug", test_settings)
     config_block(uid("cfg", TEST_NAME, "Release"), "Release", test_settings)
+    config_block(uid("cfg", UI_TEST_NAME, "Debug"), "Debug", ui_test_settings)
+    config_block(uid("cfg", UI_TEST_NAME, "Release"), "Release", ui_test_settings)
     w("/* End XCBuildConfiguration section */")
 
     w("")
@@ -530,6 +612,7 @@ def main() -> int:
         (proj_cfg_list, (("project", "Debug"), ("project", "Release"))),
         (app_cfg_list, ((APP_NAME, "Debug"), (APP_NAME, "Release"))),
         (test_cfg_list, ((TEST_NAME, "Debug"), (TEST_NAME, "Release"))),
+        (ui_test_cfg_list, ((UI_TEST_NAME, "Debug"), (UI_TEST_NAME, "Release"))),
     ):
         w(f"\t\t{lst} = {{")
         w(f"{TAB}{TAB}{TAB}isa = XCConfigurationList;")
@@ -553,12 +636,13 @@ def main() -> int:
         fh.write("\n".join(out) + "\n")
 
     write_scheme(os.path.join(proj_dir, "xcshareddata", "xcschemes", f"{APP_NAME}.xcscheme"),
-                 app_target, test_target, app_product, test_product)
+                 app_target, test_target, ui_test_target)
 
     print(f"wrote {APP_NAME}.xcodeproj")
     print(f"  app sources : {len(app_swift)}")
     print(f"  app assets  : {len(app_assets)}")
     print(f"  test sources: {len(test_swift)}")
+    print(f"  UI sources  : {len(ui_test_swift)}")
     return 0
 
 
@@ -592,6 +676,15 @@ SCHEME = """<?xml version="1.0" encoding="UTF-8"?>
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "{app_target}"
+            BuildableName = "{app_name}.app"
+            BlueprintName = "{app_name}"
+            ReferencedContainer = "container:{app_name}.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
       <Testables>
          <TestableReference
             skipped = "NO">
@@ -600,6 +693,16 @@ SCHEME = """<?xml version="1.0" encoding="UTF-8"?>
                BlueprintIdentifier = "{test_target}"
                BuildableName = "{test_name}.xctest"
                BlueprintName = "{test_name}"
+               ReferencedContainer = "container:{app_name}.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "{ui_test_target}"
+               BuildableName = "{ui_test_name}.xctest"
+               BlueprintName = "{ui_test_name}"
                ReferencedContainer = "container:{app_name}.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -654,14 +757,16 @@ SCHEME = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def write_scheme(path: str, app_target: str, test_target: str, app_product: str, test_product: str) -> None:
+def write_scheme(path: str, app_target: str, test_target: str, ui_test_target: str) -> None:
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(
             SCHEME.format(
                 app_target=app_target,
                 test_target=test_target,
+                ui_test_target=ui_test_target,
                 app_name=APP_NAME,
                 test_name=TEST_NAME,
+                ui_test_name=UI_TEST_NAME,
             )
         )
 

@@ -2,234 +2,244 @@
 //  UnlockView.swift
 //  PassportProof
 //
-//  One price, one button, one sentence about what it buys. No subscription, no
-//  trial, no credit pack (P3).
-//
-//  When StoreKit has no product — the normal case for a prototype with no App
-//  Store Connect record — the screen says so, verbatim, and offers a bypass that
-//  is labelled as a bypass. Nothing on this screen claims a purchase succeeded.
+//  One non-consumable purchase with restore, pending and failure recovery.
+//  The demonstration path is compiled only for DEBUG.
 //
 
 import SwiftUI
 
 @MainActor
 struct UnlockView: View {
-
     @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isWorking = false
-
     private var price: String {
-        entitlements.displayPrice.isEmpty ? "—" : entitlements.displayPrice
+        entitlements.state == .loading ? "—" : entitlements.displayPrice
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-
-                ScreenTitle(title: "Unlock")
-
-                priceBlock
-                sentence
-                action
-                footnote
-
-                Spacer(minLength: Theme.Spacing.xxxl)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                hero
+                benefits
+                purchaseArea
+                reassurance
             }
+            .padding(Theme.Spacing.margin)
         }
         .background(Theme.paper)
-        .navigationTitle("Unlock")
+        .navigationTitle("Export unlock")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await entitlements.refresh()
-        }
+        .task { await entitlements.refresh() }
         .onChange(of: entitlements.isUnlocked) { _, unlocked in
-            if unlocked { dismiss() }
+            if unlocked && !entitlements.isPrototypeUnlock { dismiss() }
         }
     }
 
-    // MARK: Price
-
-    private var priceBlock: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
-            Typography.measurement.text(price)
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.largeTitle)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 64, height: 64)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
+            Text("One unlock.\nEvery export.")
+                .font(.largeTitle.weight(.bold))
+                .tracking(-0.8)
                 .foregroundStyle(Theme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-
-            Typography.unit.text("once")
-                .foregroundStyle(Theme.inkTertiary)
-
-            Spacer(minLength: 0)
+            Text("Precise print sheets or portal-ready digital files, created from the photo you reviewed.")
+                .font(.body)
+                .foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                Text(price)
+                    .font(.system(.largeTitle, design: .monospaced, weight: .bold))
+                    .foregroundStyle(Theme.ink)
+                Text("one time")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.inkSecondary)
+            }
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xxl)
     }
 
-    private var sentence: some View {
-        Text("One purchase, held by the App Store. It unlocks the print sheet and the digital file for every encoded document, on this device. It does not buy a review, a decision, or a better outcome.")
-            .typeStyle(Typography.bodySmall)
-            .foregroundStyle(Theme.inkSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.m)
+    private var benefits: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            BenefitRow(icon: "printer.fill", title: "Precision print sheets", detail: "Physical page geometry and a free calibration sheet.")
+            BenefitRow(icon: "square.and.arrow.up.fill", title: "Portal-ready digital files", detail: "Exact pixels, sRGB JPEG and verified file-size limits.")
+            BenefitRow(icon: "infinity", title: "No subscription", detail: "One purchase linked to your Apple Account, with restore support.")
+            BenefitRow(icon: "lock.shield.fill", title: "Private by design", detail: "No account, analytics or photo upload.")
+        }
+        .padding(Theme.Spacing.l)
+        .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: 20))
     }
-
-    // MARK: State
 
     @ViewBuilder
-    private var action: some View {
+    private var purchaseArea: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             if entitlements.isUnlocked || entitlements.state == .purchased {
                 unlockedBlock
             } else {
-                storeState
+                switch entitlements.state {
+                case .loading:
+                    HStack(spacing: Theme.Spacing.m) {
+                        ProgressView()
+                        Text("Connecting to the App Store…")
+                            .foregroundStyle(Theme.inkSecondary)
+                    }
+                case .available:
+                    purchaseButtons
+                case .purchased:
+                    unlockedBlock
+                case .pending:
+                    NoticeCard(
+                        icon: "hourglass",
+                        title: "Purchase pending",
+                        message: "The purchase needs approval or more time. Restore after it completes; nothing is unlocked yet.",
+                        tint: Theme.signalVerify
+                    )
+                    SecondaryAction(title: "Check purchase status", isEnabled: !entitlements.isWorking) {
+                        Task { await entitlements.restore() }
+                    }
+                case .unavailable(let reason):
+                    NoticeCard(
+                        icon: "wifi.exclamationmark",
+                        title: "Store unavailable",
+                        message: reason,
+                        tint: Theme.signalVerify
+                    )
+                    SecondaryAction(title: "Try again", isEnabled: !entitlements.isWorking) {
+                        Task { await entitlements.refresh() }
+                    }
+                    #if DEBUG
+                    prototypeBlock
+                    #endif
+                case .failed(let reason):
+                    NoticeCard(
+                        icon: "exclamationmark.triangle.fill",
+                        title: "Could not complete the request",
+                        message: reason,
+                        tint: Theme.signalFail
+                    )
+                    PrimaryButton(title: "Try again", isEnabled: !entitlements.isWorking) {
+                        Task { await entitlements.refresh() }
+                    }
+                    SecondaryAction(title: "Restore purchase", isEnabled: !entitlements.isWorking) {
+                        Task { await entitlements.restore() }
+                    }
+                }
             }
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xxl)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("unlock.purchaseArea")
     }
 
-    /// Kept in its own `@ViewBuilder` so the switch is type-checked separately
-    /// from the surrounding layout.
-    @ViewBuilder
-    private var storeState: some View {
-        switch entitlements.state {
-
-        case .loading:
-            Typography.findingLabel.text("Checking the store")
-                .foregroundStyle(Theme.inkTertiary)
-
-        case .available:
-            PrimaryButton(title: "Unlock for \(price)", isEnabled: !isWorking) {
-                purchase()
+    private var purchaseButtons: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            PrimaryButton(
+                title: entitlements.isWorking ? "Contacting App Store…" : "Unlock for \(price)",
+                isEnabled: !entitlements.isWorking
+            ) {
+                Task { await entitlements.purchase() }
             }
-
-            SecondaryAction(title: "Restore purchase") {
-                restore()
+            .accessibilityIdentifier("unlock.purchase")
+            SecondaryAction(title: "Restore purchase", isEnabled: !entitlements.isWorking) {
+                Task { await entitlements.restore() }
             }
-
-        case .purchased:
-            unlockedBlock
-
-        case .unavailable(let reason):
-            notice(reason)
-            prototypeBlock
-
-        case .failed(let reason):
-            notice(reason)
-
-            PrimaryButton(title: "Try again", isEnabled: !isWorking) {
-                purchase()
-            }
-
-            SecondaryAction(title: "Restore purchase") {
-                restore()
-            }
+            .accessibilityIdentifier("unlock.restore")
         }
     }
 
     private var unlockedBlock: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-            Typography.findingLabel.text(entitlements.isPrototypeUnlock ? "Prototype unlock" : "Unlocked")
-                .foregroundStyle(Theme.signalPass)
-
-            Text(entitlements.isPrototypeUnlock
-                 ? "The print sheet and the digital file are available. No purchase was made and nothing was charged."
-                 : "The print sheet and the digital file are available.")
-                .typeStyle(Typography.bodySmall)
-                .foregroundStyle(Theme.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Label(
+            entitlements.isPrototypeUnlock
+                ? "Debug demonstration unlock is active. No purchase was made."
+                : "Export is unlocked for this Apple Account.",
+            systemImage: "checkmark.circle.fill"
+        )
+        .font(.body.weight(.semibold))
+        .foregroundStyle(Theme.signalPass)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(Theme.Spacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, Theme.Stroke.statusRail + Theme.Spacing.m)
-        .padding(.trailing, Theme.Spacing.m)
-        .padding(.vertical, Theme.Spacing.m)
-        .background(Theme.paper)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(Theme.signalPass)
-                .frame(width: Theme.Stroke.statusRail)
-        }
+        .background(Theme.signalPass.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
     }
 
-    /// The store's own words, unedited. If it says there is no product, that is
-    /// what the screen says.
-    private func notice(_ reason: String) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Typography.findingLabel.text("Store unavailable")
-                .foregroundStyle(Theme.signalVerify)
-
-            Text(reason)
-                .typeStyle(Typography.tabular)
-                .foregroundStyle(Theme.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("No purchase can complete in this build. Nothing is charged, and no receipt is created.")
-                .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, Theme.Stroke.statusRail + Theme.Spacing.m)
-        .padding(.trailing, Theme.Spacing.m)
-        .padding(.vertical, Theme.Spacing.m)
-        .background(Theme.verifyWash)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(Theme.signalVerify)
-                .frame(width: Theme.Stroke.statusRail)
-        }
-    }
-
+    #if DEBUG
     private var prototypeBlock: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            PrimaryButton(title: "Unlock for prototype", isEnabled: !isWorking) {
-                unlockForPrototype()
+            SecondaryAction(title: "Continue with debug unlock", isEnabled: !entitlements.isWorking) {
+                entitlements.unlockForPrototype()
             }
-
-            Text("A prototype bypass, not a purchase. It exists so the export screens can be demonstrated without an App Store record, and it is labelled so it cannot be read as a transaction.")
-                .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text("DEBUG only · not a purchase · omitted from Release builds")
+                .font(.caption)
+                .foregroundStyle(Theme.inkSecondary)
         }
+        .padding(Theme.Spacing.m)
+        .background(Theme.signalVerify.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
+    #endif
 
-    private var footnote: some View {
+    private var reassurance: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Theme.Rule(color: Theme.ruleStrong, weight: Theme.Stroke.rule)
-
-            Text("No account, no subscription, no server. The entitlement is whatever the App Store reports for this device.")
+            Text("Purchase unlocks file export only. It does not change findings, buy a review or promise a different outcome.")
                 .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.inkTertiary)
+                .foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Calibration, document guidance and on-device analysis remain available without purchase.")
+                .typeStyle(Typography.meta)
+                .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xxl)
     }
+}
 
-    // MARK: Work
+private struct BenefitRow: View {
+    let icon: String
+    let title: String
+    let detail: String
 
-    private func purchase() {
-        isWorking = true
-        Task {
-            await entitlements.purchase()
-            await MainActor.run { isWorking = false }
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+            Image(systemName: icon)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
+                Text(detail)
+                    .typeStyle(Typography.meta)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
+}
 
-    private func restore() {
-        isWorking = true
-        Task {
-            await entitlements.restore()
-            await MainActor.run { isWorking = false }
+private struct NoticeCard: View {
+    let icon: String
+    let title: String
+    let message: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                Text(message)
+                    .typeStyle(Typography.bodySmall)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-    }
-
-    private func unlockForPrototype() {
-        // Synchronous by design: the bypass touches no StoreKit state and does
-        // no I/O, so there is nothing to await.
-        entitlements.unlockForPrototype()
+        .padding(Theme.Spacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
     }
 }
