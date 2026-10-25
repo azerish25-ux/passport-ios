@@ -94,6 +94,7 @@ struct ExportView: View {
                     Text(spec.supportsPrintSheet ? "Your print sheet" : "Your photo")
                         .font(.headline)
                         .foregroundStyle(Theme.ink)
+                        .accessibilityIdentifier("export.preview")
                     Spacer(minLength: 8)
                     Text(spec.supportsPrintSheet ? "PDF" : "JPEG")
                         .font(.system(.caption, design: .monospaced, weight: .semibold))
@@ -156,7 +157,6 @@ struct ExportView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .accessibilityIdentifier("export.preview")
     }
 
     private var readinessCard: some View {

@@ -36,7 +36,7 @@ enum CaptureGate {
         guard let geometry = FaceAnalyzer.geometry(of: measuredFrame) else {
             return CaptureGateResult(
                 canCapture: false,
-                message: "No face detected. Fill the frame with your head and shoulders and hold still.",
+                message: "Could not measure the face reliably. Face the camera directly, fill the frame with your head and shoulders, and hold still.",
                 headTopFraction: nil,
                 headBottomFraction: nil
             )

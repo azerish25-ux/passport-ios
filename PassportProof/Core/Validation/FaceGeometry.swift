@@ -92,14 +92,12 @@ enum FaceAnalyzer {
         case unsupportedModel(LandmarkModel)
     }
 
-    /// Pin a documented model instead of allowing an OS default to change the
-    /// measurements. Revision 3 produced unstable raw points in repeated real
-    /// Simulator requests, including when every compute stage used the CPU.
-    /// Strict photographic regressions require revision 2 / 65 points to stay
-    /// repeatable and align with the fixture's inspected eye/chin regions.
-    /// Selecting a revision alone does not establish model accuracy.
-    /// Both Simulator and hardware retain system-selected compute devices.
-    static let defaultModel = LandmarkModel.revision2With65Points
+    /// Pin the documented 76-point configuration and use the public image-space
+    /// accessor below. Changing to revision 2 or forcing CPU compute did not
+    /// resolve the normalized-accessor instability observed in Simulator tests.
+    /// Both Simulator and hardware retain system-selected compute devices;
+    /// strict photographic regressions, not this selection, establish behavior.
+    static let defaultModel = LandmarkModel.revision3With76Points
 
     /// One request factory for production inference and runtime diagnostics.
     /// Unsupported revisions or constellations fail explicitly; there is no
@@ -130,16 +128,16 @@ enum FaceAnalyzer {
             return nil
         }
 
+        let imageSize = CGSize(width: image.width, height: image.height)
+        guard imageSize.width > 0, imageSize.height > 0 else { return nil }
+
         // An applicant photo contains one person. Selecting the largest face
         // would silently discard evidence of a second person in the frame.
         guard let results = request.results, results.count == 1,
               let observation = results.first,
               let landmarks = observation.landmarks,
               let allPoints = landmarks.allPoints,
-              normalizedFacePointsAreValid(allPoints.normalizedPoints) else { return nil }
-
-        let imageSize = CGSize(width: image.width, height: image.height)
-        guard imageSize.width > 0, imageSize.height > 0 else { return nil }
+              imagePointsAreValid(allPoints.pointsInImage(imageSize: imageSize), imageSize: imageSize) else { return nil }
 
         // Vision's bounding box is normalised with a bottom-left origin. Flip
         // the origin so that the rest of the module can work top-down.
@@ -151,20 +149,21 @@ enum FaceAnalyzer {
             height: visionBox.height
         )
 
-        let contour = topLeftPoints(of: landmarks.faceContour, in: visionBox) ?? []
+        let contour = topLeftPoints(of: landmarks.faceContour, imageSize: imageSize) ?? []
         // The chin is the lowest point of the contour, which is the *largest*
         // y once the origin is at the top.
         guard let chinY = contour.map({ Double($0.y) }).max() else { return nil }
-        let leftEye = topLeftPoints(of: landmarks.leftEye, in: visionBox)
-            ?? topLeftPoints(of: landmarks.leftPupil, in: visionBox) ?? []
-        let rightEye = topLeftPoints(of: landmarks.rightEye, in: visionBox)
-            ?? topLeftPoints(of: landmarks.rightPupil, in: visionBox) ?? []
+        let leftEye = topLeftPoints(of: landmarks.leftEye, imageSize: imageSize)
+            ?? topLeftPoints(of: landmarks.leftPupil, imageSize: imageSize) ?? []
+        let rightEye = topLeftPoints(of: landmarks.rightEye, imageSize: imageSize)
+            ?? topLeftPoints(of: landmarks.rightPupil, imageSize: imageSize) ?? []
         guard !leftEye.isEmpty, !rightEye.isEmpty else { return nil }
         let leftEyeY = leftEye.map { Double($0.y) }.reduce(0, +) / Double(leftEye.count)
         let rightEyeY = rightEye.map { Double($0.y) }.reduce(0, +) / Double(rightEye.count)
         let eyeY = (leftEyeY + rightEyeY) / 2
         guard chinY.isFinite, eyeY.isFinite,
-              chinY > eyeY, eyeY > 0, chinY <= 1 else { return nil }
+              chinY > eyeY, eyeY > 0, chinY <= 1,
+              hasPlausibleEyeToChinSpan(eyeY: eyeY, chinY: chinY, faceBoxHeight: Double(faceBox.height)) else { return nil }
 
         // The classic head: the eye line sits at the midpoint of crown and chin.
         // So crown = eye − (chin − eye). Clamped into the frame.
@@ -248,30 +247,42 @@ enum FaceAnalyzer {
 
     // MARK: - Private
 
-    /// Vision documents normalizedPoints relative to the face bounding box,
-    /// with a lower-left origin. Map that explicit coordinate contract once.
-    /// https://developer.apple.com/documentation/vision/vnfacelandmarks2d
-    static func imagePoint(fromNormalizedFacePoint point: CGPoint, in boundingBox: CGRect) -> CGPoint {
-        CGPoint(x: boundingBox.minX + point.x * boundingBox.width,
-                y: 1 - (boundingBox.minY + point.y * boundingBox.height))
+    /// pointsInImage(imageSize:) supplies full-image pixel coordinates with
+    /// Vision's lower-left origin. Convert only the image scale and y origin;
+    /// the face bounding box must not be applied again.
+    /// https://developer.apple.com/documentation/vision/vnfacelandmarkregion2d/pointsinimage(imagesize:)
+    static func topOriginNormalizedPoint(fromImagePoint point: CGPoint, imageSize: CGSize) -> CGPoint {
+        CGPoint(x: point.x / imageSize.width, y: 1 - point.y / imageSize.height)
     }
 
-    /// Reject broken framework output before it becomes a plausible-looking
-    /// crop or rule measurement. The documented face-normalized range is 0…1.
-    static func normalizedFacePointsAreValid(_ points: [CGPoint]) -> Bool {
-        !points.isEmpty && points.allSatisfy {
+    /// Invalid image-space output cannot become a crop or a rule measurement.
+    /// Keep this validation before normalization or any crown estimation.
+    static func imagePointsAreValid(_ points: [CGPoint], imageSize: CGSize) -> Bool {
+        guard imageSize.width.isFinite, imageSize.height.isFinite,
+              imageSize.width > 0, imageSize.height > 0 else { return false }
+        return !points.isEmpty && points.allSatisfy {
             $0.x.isFinite && $0.y.isFinite
-                && (0...1).contains($0.x) && (0...1).contains($0.y)
+                && (0...imageSize.width).contains($0.x) && (0...imageSize.height).contains($0.y)
         }
+    }
+
+    /// A coarse app sanity check for a frontal portrait: reject landmarks that
+    /// collapse the eyes and chin into a small part of the detected face box.
+    /// The 0.25 ratio is not an issuer rule or proof of correct anatomy. It
+    /// rejects uncertain measurements without inventing replacement positions.
+    static func hasPlausibleEyeToChinSpan(eyeY: Double, chinY: Double, faceBoxHeight: Double) -> Bool {
+        guard eyeY.isFinite, chinY.isFinite, faceBoxHeight.isFinite,
+              faceBoxHeight > 0 else { return false }
+        return chinY - eyeY >= 0.25 * faceBoxHeight
     }
 
     private static func topLeftPoints(
         of region: VNFaceLandmarkRegion2D?,
-        in boundingBox: CGRect
+        imageSize: CGSize
     ) -> [CGPoint]? {
         guard let region else { return nil }
-        let points = region.normalizedPoints
-        guard normalizedFacePointsAreValid(points) else { return nil }
-        return points.map { imagePoint(fromNormalizedFacePoint: $0, in: boundingBox) }
+        let points = region.pointsInImage(imageSize: imageSize)
+        guard imagePointsAreValid(points, imageSize: imageSize) else { return nil }
+        return points.map { topOriginNormalizedPoint(fromImagePoint: $0, imageSize: imageSize) }
     }
 }

@@ -173,7 +173,7 @@ enum ValidationEngine {
                 id: .headHeight,
                 title: "Head height",
                 status: .cannotVerify,
-                detail: "No face was detected, so chin-to-crown cannot be measured. Face the camera directly, fill the frame with your head and shoulders, and try again.",
+                detail: "Reliable face landmarks were unavailable, so chin-to-crown cannot be measured. Face the camera directly, fill the frame with your head and shoulders, and try again.",
                 measurement: nil,
                 provenance: .source
             )
@@ -251,7 +251,7 @@ enum ValidationEngine {
                 id: .headHeightShare,
                 title: "Head height share",
                 status: .cannotVerify,
-                detail: "No face was detected, so the head's share of the frame cannot be measured.",
+                detail: "Reliable face landmarks were unavailable, so the head's share of the frame cannot be measured.",
                 measurement: nil,
                 provenance: .source
             )
@@ -330,7 +330,7 @@ enum ValidationEngine {
                 id: .eyeLine,
                 title: "Eye line",
                 status: .cannotVerify,
-                detail: "No eyes were detected, so the eye line cannot be located.",
+                detail: "The eye landmarks could not be measured reliably, so the eye line is unresolved.",
                 measurement: nil,
                 provenance: .source
             )
@@ -386,7 +386,7 @@ enum ValidationEngine {
                 id: .centring,
                 title: "Centring",
                 status: .cannotVerify,
-                detail: "No face was detected, so the face centre cannot be located.",
+                detail: "Reliable face geometry was unavailable, so centring could not be measured.",
                 measurement: nil,
                 provenance: .appDefault
             )
@@ -434,7 +434,7 @@ enum ValidationEngine {
                 id: .backgroundUniformity,
                 title: "Background uniformity",
                 status: .cannotVerify,
-                detail: "No face was detected, so the background could not be separated from the subject.",
+                detail: "Reliable face geometry was unavailable, so the background could not be separated from the subject.",
                 measurement: nil,
                 provenance: .appDefault
             )
@@ -567,7 +567,7 @@ enum ValidationEngine {
                 id: .expression,
                 title: "Expression",
                 status: .cannotVerify,
-                detail: "No face was detected, so expression and open eyes need a clearer photograph.",
+                detail: "Reliable face landmarks were unavailable. Expression and open eyes need a clearer photograph and a visual check.",
                 measurement: nil,
                 provenance: .source
             )

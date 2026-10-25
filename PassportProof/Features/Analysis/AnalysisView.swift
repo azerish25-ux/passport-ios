@@ -211,6 +211,7 @@ struct AnalysisView: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Your final look").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink)
+                    .accessibilityIdentifier("analysis.visualChecklist")
                 Text("\(confirmedCount) of 4 confirmed").font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(confirmedCount == 4 ? Theme.signalPass : Theme.inkSecondary)
             }
@@ -233,7 +234,6 @@ struct AnalysisView: View {
                 }
             }
         }
-        .accessibilityIdentifier("analysis.visualChecklist")
     }
     private var findings: some View {
         VStack(alignment: .leading, spacing: 14) {

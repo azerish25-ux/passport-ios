@@ -56,10 +56,10 @@ final class CoreRegressionTests: XCTestCase {
         }
     }
 
-    func testFaceLandmarkMappingHasExplicitOriginAndBoxScale() {
-        let box = CGRect(x: 0.20, y: 0.30, width: 0.40, height: 0.50)
-        let eye = FaceAnalyzer.imagePoint(fromNormalizedFacePoint: CGPoint(x: 0.375, y: 0.70), in: box)
-        let chin = FaceAnalyzer.imagePoint(fromNormalizedFacePoint: CGPoint(x: 0.50, y: 0.15), in: box)
+    func testImageLandmarkMappingHasExplicitOriginAndImageScale() {
+        let imageSize = CGSize(width: 1000, height: 800)
+        let eye = FaceAnalyzer.topOriginNormalizedPoint(fromImagePoint: CGPoint(x: 350, y: 520), imageSize: imageSize)
+        let chin = FaceAnalyzer.topOriginNormalizedPoint(fromImagePoint: CGPoint(x: 400, y: 300), imageSize: imageSize)
         XCTAssertEqual(eye.x, 0.35, accuracy: 0.000_001)
         XCTAssertEqual(eye.y, 0.35, accuracy: 0.000_001)
         XCTAssertEqual(chin.x, 0.40, accuracy: 0.000_001)
@@ -67,13 +67,33 @@ final class CoreRegressionTests: XCTestCase {
         XCTAssertLessThan(eye.y, chin.y, "Top-origin eyes must remain above the chin.")
     }
 
-    func testInvalidRawLandmarksCannotBecomeMeasurements() {
-        XCTAssertTrue(FaceAnalyzer.normalizedFacePointsAreValid([CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 1)]))
-        XCTAssertFalse(FaceAnalyzer.normalizedFacePointsAreValid([]))
-        for point in [CGPoint(x: CGFloat.nan, y: 0.5), CGPoint(x: 0.5, y: CGFloat.infinity),
-                      CGPoint(x: -0.001, y: 0.5), CGPoint(x: 0.5, y: 1.001)] {
-            XCTAssertFalse(FaceAnalyzer.normalizedFacePointsAreValid([point]))
+    func testInvalidImageLandmarksCannotBecomeMeasurements() {
+        let size = CGSize(width: 1000, height: 800)
+        XCTAssertTrue(FaceAnalyzer.imagePointsAreValid([CGPoint(x: 0, y: 0), CGPoint(x: 1000, y: 800)], imageSize: size))
+        XCTAssertFalse(FaceAnalyzer.imagePointsAreValid([], imageSize: size))
+        for point in [CGPoint(x: CGFloat.nan, y: 400), CGPoint(x: 500, y: CGFloat.infinity),
+                      CGPoint(x: -0.001, y: 400), CGPoint(x: 500, y: 800.001), CGPoint(x: 1000.001, y: 400)] {
+            XCTAssertFalse(FaceAnalyzer.imagePointsAreValid([point], imageSize: size))
         }
+        XCTAssertFalse(FaceAnalyzer.imagePointsAreValid([.zero], imageSize: .zero))
+        XCTAssertFalse(FaceAnalyzer.imagePointsAreValid([.zero], imageSize: CGSize(width: CGFloat.infinity, height: 800)))
+    }
+
+    func testCollapsedLandmarksAreRejectedWithoutReplacementCoordinates() {
+        // These two bounded but misplaced outputs were recorded by real Vision
+        // in Actions runs 40168821550 and 40170019707. Being inside 0...1 alone
+        // did not make them usable measurements of the photographed face.
+        let observedFaceHeight = 0.3851594030857086
+        XCTAssertFalse(FaceAnalyzer.hasPlausibleEyeToChinSpan(
+            eyeY: 0.3746928814316828, chinY: 0.4438868901512736, faceBoxHeight: observedFaceHeight))
+        XCTAssertFalse(FaceAnalyzer.hasPlausibleEyeToChinSpan(
+            eyeY: 0.4114340196191272, chinY: 0.4580481285553404, faceBoxHeight: observedFaceHeight))
+        // A deliberately coarse frontal positive control; production must
+        // still locate its own landmarks from the original image pixels.
+        XCTAssertTrue(FaceAnalyzer.hasPlausibleEyeToChinSpan(
+            eyeY: 0.32, chinY: 0.60, faceBoxHeight: 0.40))
+        XCTAssertFalse(FaceAnalyzer.hasPlausibleEyeToChinSpan(
+            eyeY: .nan, chinY: 0.60, faceBoxHeight: 0.40))
     }
 
     func testUncertainCrownDoesNotEraseMeasuredEyeLine() throws {

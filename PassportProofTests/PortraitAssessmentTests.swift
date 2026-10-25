@@ -125,59 +125,81 @@ final class PortraitAssessmentTests: XCTestCase {
         XCTFail("No portrait established measurable, unconstrained source geometry, including the full-resolution fixture. The photographic crop regression was not exercised.")
     }
 
-    /// Keep alternative models after production-path tests. The selected model
-    /// must pass the raw-coordinate and repeatability checks. Other supported
-    /// revision/constellation pairs are recorded without concealing a failure
-    /// of the production path or replacing it with diagnostic measurements.
-    func testZZRawVisionModelComparison() throws {
+    /// Exercise the same public image-coordinate accessor as production, with
+    /// no normalizedPoints reads anywhere before or within this experiment.
+    func testZImagePointAccessorIsBoundedAndStable() throws {
         let source = try fixture(named: "FullResolutionPortrait")
-        var lines = ["Raw Vision model comparison using system-selected compute. Face contour is read three times from the SAME observation before any coordinate mapping."]
-        defer { attachDiagnostic(lines, name: "raw-vision-model-comparison") }
+        let imageSize = CGSize(width: source.width, height: source.height)
+        var lines = ["Real Vision image-coordinate repeatability. Same observation read three times; no normalized-coordinate accessor."]
+        defer { attachDiagnostic(lines, name: "image-point-accessor-repeatability") }
+        var baseline: [CGPoint]?
+        for index in 0..<12 {
+            let request = try FaceAnalyzer.landmarkRequest()
+            try VNImageRequestHandler(cgImage: source, orientation: .up, options: [:]).perform([request])
+            let faces = request.results ?? []
+            lines.append("model=\(FaceAnalyzer.defaultModel.rawValue) revision=\(request.revision) constellation=\(request.constellation.rawValue) devices=\(computeDescription(for: request)) request=\(index) faces=\(faces.count)")
+            XCTAssertEqual(faces.count, 1)
+            let face = try XCTUnwrap(faces.first)
+            let contour = try XCTUnwrap(face.landmarks?.faceContour)
+            let reads = (0..<3).map { _ in
+                contour.pointsInImage(imageSize: imageSize).map { CGPoint(x: $0.x, y: $0.y) }
+            }
+            let first = reads[0]
+            let normalizedFirst = first.map { FaceAnalyzer.topOriginNormalizedPoint(fromImagePoint: $0, imageSize: imageSize) }
+            lines.append("box=\(face.boundingBox) image-pixels-before-normalization \(pointRange(first))")
+            for (readIndex, points) in reads.enumerated() {
+                let readDelta = maximumPointDelta(first, points)
+                lines.append("same-observation-read=\(readIndex) \(pointRange(points)) deltaPixelsFromFirst=\(readDelta)")
+                XCTAssertTrue(FaceAnalyzer.imagePointsAreValid(points, imageSize: imageSize),
+                              "Image-space landmarks must be finite and inside the image at request \(index).")
+                XCTAssertLessThanOrEqual(readDelta, 0.000_001, "Repeated accessor reads must preserve one observation.")
+            }
+            if let previous = baseline {
+                let requestDelta = maximumPointDelta(previous, normalizedFirst)
+                lines.append("deltaImageFractionFromFirstRequest=\(requestDelta)")
+                XCTAssertLessThanOrEqual(requestDelta, 0.001, "Image coordinates drifted on identical pixels at request \(index).")
+            } else {
+                baseline = normalizedFirst
+            }
+        }
+    }
 
-        for model in [FaceAnalyzer.LandmarkModel.revision2With65Points, .revision3With65Points, .revision3With76Points] {
-            var baseline: [CGPoint]?
-            let requiresValidOutput = model == FaceAnalyzer.defaultModel
-            for index in 0..<8 {
-                do {
-                    let request = try FaceAnalyzer.landmarkRequest(model: model)
-                    let handler = VNImageRequestHandler(cgImage: source, orientation: .up, options: [:])
-                    try handler.perform([request])
-                    let faces = request.results ?? []
-                    lines.append("model=\(model.rawValue) revision=\(request.revision) constellation=\(request.constellation.rawValue) devices=\(computeDescription(for: request)) request=\(index) faces=\(faces.count)")
-                    guard faces.count == 1, let face = faces.first,
-                          let contour = face.landmarks?.faceContour else {
-                        lines.append("no single face contour")
-                        if requiresValidOutput { XCTFail("\(model.rawValue) request \(index) did not produce one face contour.") }
-                        continue
-                    }
-                    // Copy values into new Swift storage, so later framework
-                    // reads cannot alter the snapshots we compare.
-                    let reads = (0..<3).map { _ in
-                        contour.normalizedPoints.map { CGPoint(x: $0.x, y: $0.y) }
-                    }
-                    let first = reads[0]
-                    lines.append("box=\(face.boundingBox) before-mapping \(normalizedRange(first))")
-                    for (readIndex, points) in reads.enumerated() {
-                        let readDelta = maximumPointDelta(first, points)
-                        lines.append("same-observation-read=\(readIndex) \(normalizedRange(points)) deltaFromFirst=\(readDelta)")
-                        if requiresValidOutput {
-                            XCTAssertTrue(FaceAnalyzer.normalizedFacePointsAreValid(points), "\(model.rawValue) request \(index) raw normalized landmarks are invalid.")
-                            XCTAssertLessThanOrEqual(readDelta, 0.000_001, "A repeated getter read must not mutate one observation.")
-                        }
-                    }
-                    if let previous = baseline {
-                        let requestDelta = maximumPointDelta(previous, first)
-                        lines.append("deltaFromFirstRequest=\(requestDelta)")
-                        if requiresValidOutput {
-                            XCTAssertLessThanOrEqual(requestDelta, 0.001, "\(model.rawValue) request \(index) drifted on identical pixels.")
-                        }
-                    } else {
-                        baseline = first
-                    }
-                } catch {
-                    lines.append("model=\(model.rawValue) request=\(index) error=\(error)")
-                    if requiresValidOutput { XCTFail("Real \(model.rawValue) Vision request failed: \(error)") }
+    /// Run this legacy-accessor comparison LAST. It is diagnostic only: none of
+    /// its values are supplied to production or used to excuse a failed strict
+    /// image-coordinate, anatomical-region, or photographic crop regression.
+    func testZZNormalizedAccessorComparisonAfterProductionChecks() throws {
+        let source = try fixture(named: "FullResolutionPortrait")
+        let imageSize = CGSize(width: source.width, height: source.height)
+        var lines = ["Diagnostic only: compare public image coordinates before and after the legacy normalized getter on the SAME observation, after all production-path tests."]
+        defer { attachDiagnostic(lines, name: "coordinate-accessor-comparison") }
+        for index in 0..<8 {
+            do {
+                let request = try FaceAnalyzer.landmarkRequest()
+                try VNImageRequestHandler(cgImage: source, orientation: .up, options: [:]).perform([request])
+                let faces = request.results ?? []
+                lines.append("model=\(FaceAnalyzer.defaultModel.rawValue) revision=\(request.revision) constellation=\(request.constellation.rawValue) devices=\(computeDescription(for: request)) request=\(index) faces=\(faces.count)")
+                guard faces.count == 1, let face = faces.first,
+                      let contour = face.landmarks?.faceContour else {
+                    lines.append("no single face contour")
+                    continue
                 }
+                let before = contour.pointsInImage(imageSize: imageSize).map { CGPoint(x: $0.x, y: $0.y) }
+                let normalizedReads = (0..<3).map { _ in
+                    contour.normalizedPoints.map { CGPoint(x: $0.x, y: $0.y) }
+                }
+                let after = contour.pointsInImage(imageSize: imageSize).map { CGPoint(x: $0.x, y: $0.y) }
+                let mappedLegacy = normalizedReads[0].map {
+                    CGPoint(x: (face.boundingBox.minX + $0.x * face.boundingBox.width) * imageSize.width,
+                            y: (face.boundingBox.minY + $0.y * face.boundingBox.height) * imageSize.height)
+                }
+                lines.append("image-pixels-before \(pointRange(before))")
+                for (readIndex, points) in normalizedReads.enumerated() {
+                    lines.append("normalized-read=\(readIndex) \(pointRange(points)) deltaFromFirst=\(maximumPointDelta(normalizedReads[0], points))")
+                }
+                lines.append("image-pixels-after \(pointRange(after)) deltaFromBefore=\(maximumPointDelta(before, after))")
+                lines.append("legacyMappedToImageVsDirectPixelsDelta=\(maximumPointDelta(before, mappedLegacy))")
+            } catch {
+                lines.append("request=\(index) error=\(error)")
             }
         }
     }
@@ -241,7 +263,7 @@ final class PortraitAssessmentTests: XCTestCase {
         var lines = [
             "ASSESSMENT portrait=\(name) size=\(image.width)x\(image.height) overall=\(analysis.overall.rawValue)",
             "Photographic diagnostic only; reference image resolution may fail. No accuracy or issuer-acceptance claim.",
-            rawVisionSummary(image: image),
+            visionImagePointSummary(image: image),
             context,
         ]
         if let geometry = analysis.geometry {
@@ -268,19 +290,21 @@ final class PortraitAssessmentTests: XCTestCase {
         add(imageAttachment)
     }
 
-    private func rawVisionSummary(image: CGImage) -> String {
+    private func visionImagePointSummary(image: CGImage) -> String {
         let handler = VNImageRequestHandler(cgImage: image, orientation: .up, options: [:])
+        let imageSize = CGSize(width: image.width, height: image.height)
         do {
             let request = try FaceAnalyzer.landmarkRequest()
             try handler.perform([request])
             let faces = request.results ?? []
             var summary = "rawVisionLandmarkFaceCount=\(faces.count) facesWithLandmarks=\(faces.filter { $0.landmarks != nil }.count) model=\(FaceAnalyzer.defaultModel.rawValue) revision=\(request.revision) constellation=\(request.constellation.rawValue) devices=\(computeDescription(for: request)) (separate diagnostic request; app geometry may reject a detected face)"
             if let face = faces.first, let landmarks = face.landmarks {
-                summary += " raw-before-mapping \(normalizedRange(landmarks.allPoints?.normalizedPoints ?? []))"
-                let eyePoints = (landmarks.leftEye?.normalizedPoints ?? []) + (landmarks.rightEye?.normalizedPoints ?? [])
-                let mappedEyes = eyePoints.map { FaceAnalyzer.imagePoint(fromNormalizedFacePoint: $0, in: face.boundingBox) }
-                let mappedChin = landmarks.faceContour?.normalizedPoints.map {
-                    FaceAnalyzer.imagePoint(fromNormalizedFacePoint: $0, in: face.boundingBox).y
+                summary += " image-pixels-before-normalization \(pointRange(landmarks.allPoints?.pointsInImage(imageSize: imageSize) ?? []))"
+                let eyePoints = (landmarks.leftEye?.pointsInImage(imageSize: imageSize) ?? [])
+                    + (landmarks.rightEye?.pointsInImage(imageSize: imageSize) ?? [])
+                let mappedEyes = eyePoints.map { FaceAnalyzer.topOriginNormalizedPoint(fromImagePoint: $0, imageSize: imageSize) }
+                let mappedChin = landmarks.faceContour?.pointsInImage(imageSize: imageSize).map {
+                    FaceAnalyzer.topOriginNormalizedPoint(fromImagePoint: $0, imageSize: imageSize).y
                 }.max()
                 let mappedEyeY: CGFloat? = mappedEyes.isEmpty ? nil : mappedEyes.map(\.y).reduce(0, +) / CGFloat(mappedEyes.count)
                 summary += " box=\(face.boundingBox) mappedEyeY=\(mappedEyeY as Any) mappedChinY=\(mappedChin as Any)"
@@ -291,7 +315,7 @@ final class PortraitAssessmentTests: XCTestCase {
         }
     }
 
-    private func normalizedRange(_ points: [CGPoint]) -> String {
+    private func pointRange(_ points: [CGPoint]) -> String {
         let finite = points.filter { $0.x.isFinite && $0.y.isFinite }
         return "count=\(points.count) finite=\(finite.count) x=\(finite.map(\.x).min() as Any)...\(finite.map(\.x).max() as Any) y=\(finite.map(\.y).min() as Any)...\(finite.map(\.y).max() as Any)"
     }
