@@ -39,11 +39,11 @@ final class PassportProofUITests: XCTestCase {
     func testDocumentDetailLeadsToCaptureSources() {
         let app = launchApp()
         let document = app.buttons["library.document.us-visa"]
-        XCTAssertTrue(document.waitForExistence(timeout: 5))
+        scrollToHittable(document, in: app)
         document.tap()
 
         let measure = app.buttons["detail.measure"]
-        XCTAssertTrue(measure.waitForExistence(timeout: 5))
+        scrollToHittable(measure, in: app)
         measure.tap()
 
         XCTAssertTrue(app.buttons["capture.camera"].waitForExistence(timeout: 5))
@@ -54,14 +54,7 @@ final class PassportProofUITests: XCTestCase {
     func testLibraryUnlockRouteShowsPurchaseArea() {
         let app = launchApp()
         let unlock = app.buttons["library.unlock"]
-        XCTAssertTrue(unlock.waitForExistence(timeout: 5))
-
-        var attempts = 0
-        while !unlock.isHittable && attempts < 5 {
-            app.swipeUp()
-            attempts += 1
-        }
-        XCTAssertTrue(unlock.isHittable, "The unlock route should be reachable by scrolling")
+        scrollToHittable(unlock, in: app)
         unlock.tap()
 
         let purchaseArea = app.descendants(matching: .any)["unlock.purchaseArea"]
@@ -81,6 +74,16 @@ final class PassportProofUITests: XCTestCase {
             "The library did not finish launching"
         )
         return app
+    }
+
+    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication) {
+        XCTAssertTrue(element.waitForExistence(timeout: 8))
+        var attempts = 0
+        while !element.isHittable && attempts < 6 {
+            app.swipeUp()
+            attempts += 1
+        }
+        XCTAssertTrue(element.isHittable, "Element should be reachable by scrolling: \(element)")
     }
 
     private func capture(_ app: XCUIApplication, named name: String) {
