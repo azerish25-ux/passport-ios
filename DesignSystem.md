@@ -1,243 +1,158 @@
 # PassportProof — Design System
 
-**Precision instrument / technical document.** The app is a measuring instrument, not a photo
-editor. Every screen is a calibration sheet: a ruled surface, a stated range, a measured value,
-a source, a date. Nothing is decorative. Nothing is promised.
+**Calm precision, not technical intimidation.** PassportProof should feel like a
+well-made private photo studio: warm paper, deep green ink, exact measurements
+and plain language. It is not a photo editor and never looks like a generic
+document utility.
 
-Three rules: **separation by rule, never by shadow** (hairlines and tone shifts only); **numbers
-outrank prose** (a measurement is larger, monospaced, and adjacent to its range); **colour marks
-truth, never taste** (signals on findings only; the accent marks *where you are*, never *what is
-true*).
+Three principles govern the product:
+
+1. **One decision per screen.** Capture, check and export are distinct steps.
+2. **Truth before reassurance.** Status always combines icon, text and colour.
+   “Review” is a legitimate result, not an error to hide.
+3. **The photo leads.** Guidance supports the image rather than covering it in
+   instrumentation.
 
 ## 1. Palette
 
-Warm paper, warm ink. Dark mode is a warm near-black, never `#000`.
+All interface colours resolve through dynamic `UIColor` providers in
+`Theme.swift`. Hero/camera foregrounds are fixed because their grounds stay dark
+in both appearances.
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `paper` | `#F4F1EA` | `#17140E` | Screen background, sheet ground |
-| `paperSunk` | `#EAE5D8` | `#100E09` | Recessed wells, inactive tab strip, expanded row body |
-| `paperRaised` | `#FBF9F4` | `#201C14` | Top bar, readout strip on non-camera screens |
-| `ink` | `#14120F` | `#EDE8DC` | Primary text, primary button fill, measured marker |
-| `inkSecondary` | `#4C463A` | `#A9A292` | Labels, section headers, range text |
-| `inkTertiary` | `#7B7364` | `#7C7565` | Sources, dates, units, disabled text |
-| `rule` | `#D8D2C4` | `#332F26` | Hairline separators (0.5pt) |
-| `ruleStrong` | `#B4AC99` | `#4C4638` | Section rules, measurement axis (1pt) |
-| `accent` | `#10565C` | `#4FA3A8` | Selected tab underline, focus ring, caret. Nothing else |
-| `signalFail` | `#B23A1E` | `#E0704F` | FAIL only |
-| `signalPass` | `#2F6B4F` | `#6FAE8C` | PASS only |
-| `signalVerify` | `#82631B` | `#C9A44E` | CANNOT VERIFY only |
-| `failWash` | `#F3E3DC` | `#2A1712` | FAIL row ground |
-| `verifyWash` | `#EFE8D3` | `#241E0E` | CANNOT VERIFY row ground |
-| `bandFill` | `#DCD5C4` | `#2E2A21` | Allowed-range band on the measurement bar |
-| `inkPressed` | `#2B2721` | `#D6D0C2` | Pressed primary button |
-| `onInk` | `#F4F1EA` | `#16140F` | Text on ink fill |
-| `onInkMuted` | `#C6BFAE` | `#4C4638` | Secondary text and rules on ink fill |
-| `scrim` | `#0B0A08` @ 62% | same | Flat camera scrim. Opaque edges, no blur |
-
-**Contrast.** `ink` on `paper` 16.8:1 · `inkSecondary` 8.4:1 · `signalFail` 5.3:1 ·
-`signalPass` 5.6:1 · `signalVerify` 5.0:1 · `accent` 7.4:1. The brief's ochre `#8A6A1F` measured
-4.47:1 on paper, so it is darkened to `#82631B`. **Never** gradient-fill, tint, or shadow any of
-these. `signalPass` is not a success flourish; it is the statement "this dimension is inside
-tolerance."
-
-## 2. Typography
-
-SF Pro for language. SF Mono for anything measured, coded, or cited. Mono is not styling — it is
-the mark of a value you could check with a ruler.
-
-| Style | Face | Size / Line | Weight | Tracking | Case |
-|---|---|---|---|---|---|
-| `display` | SF Pro | 34 / 40 | Regular | −0.6 | Sentence |
-| `title` | SF Pro | 24 / 28 | Medium | −0.3 | Sentence |
-| `body` | SF Pro | 16 / 24 | Regular | 0 | Sentence |
-| `bodySmall` | SF Pro | 14 / 20 | Regular | 0 | Sentence |
-| `meta` | SF Pro | 12 / 16 | Regular | +0.1 | Sentence |
-| `sectionLabel` | SF Pro | 11 / 14 | Semibold | +1.6 | UPPER |
-| `findingLabel` | SF Mono | 10 / 12 | Semibold | +1.4 | UPPER |
-| `measurement` | SF Mono | 30 / 32 | Medium | −0.6 | Figures |
-| `measurementInline` | SF Mono | 17 / 20 | Medium | −0.2 | Figures |
-| `unit` | SF Mono | 11 / 13 | Regular | +0.8 | UPPER |
-| `tabular` | SF Mono | 12 / 16 | Regular | +0.2 | As written |
-| `mrz` | SF Mono | 13 / 18 | Medium | +2.2 | UPPER |
-| `button` | SF Pro | 14 / 18 | Semibold | +1.1 | UPPER |
+| `paper` | `#F4F1EA` | `#17140E` | Screen ground |
+| `paperSunk` | `#EAE5D8` | `#100E09` | Recessed wells, code tiles |
+| `paperRaised` | `#FBF9F4` | `#201C14` | Cards, bottom bars |
+| `ink` | `#14120F` | `#EDE8DC` | Primary text, primary fill |
+| `inkSecondary` | `#4C463A` | `#A9A292` | Supporting copy |
+| `inkTertiary` | `#7B7364` | `#7C7565` | Non-essential metadata only |
+| `rule` | `#D8D2C4` | `#332F26` | Hairlines and card borders |
+| `accent` | `#0D6B60` | `#63D3BD` | Interactive actions and focus |
+| `onAccent` | `#FFFFFF` | `#092821` | Text on accent |
+| `signalPass` | `#2F6B4F` | `#6FAE8C` | Passing state only |
+| `signalFail` | `#B23A1E` | `#E0704F` | Failed/blocking state only |
+| `signalVerify` | `#82631B` | `#C9A44E` | Unresolved/review state only |
+| `heroTop` | `#183E3B` | `#102C2A` | Hero gradient start |
+| `heroBottom` | `#0C2529` | `#081C1E` | Hero gradient end |
+| `heroInk` | fixed `#F7F4EC` | fixed | Text on hero |
+| `heroMuted` | fixed `#C4D1C9` | fixed | Secondary text on hero |
 
 Rules:
 
-- **Tabular figures everywhere.** Never proportional digits in a table, readout, or list.
-- `measurement` is used once per screen where possible — the primary value. Inline values drop to
-  `measurementInline`. A measurement is never smaller than the body text beside it.
-- `mrz` is for document codes and reference IDs only (`USA`, `PP-2026-0417`, `ICAO 9303`).
-- Uppercase only on `sectionLabel`, `findingLabel`, `unit`, `button`, `mrz`.
-- Maximum measure 64 characters. Numbers never use thousands separators. Ranges use an en dash:
-  `32.0–36.0 mm`. Never bold a value to make it important — enlarge it.
+- Red is never a decorative brand colour. It means a failed or blocking state.
+- Accent is for actions and focus. It does not imply success.
+- Never use colour alone: pair it with an icon and a text label.
+- Tertiary text is reserved for dates, source hosts and non-essential metadata;
+  essential instructions use `inkSecondary` or stronger.
 
-## 3. Space, radius, stroke
+## 2. Typography
 
-**Space** (4pt base): `2 · 4 · 8 · 12 · 16 · 24 · 32 · 48`. Screen margin **20pt**; row padding
-**20 / 12**; value-to-unit gap **3pt**; gap between a section rule and its first row **0** — the
-rule is the boundary, not a decoration.
+SF Pro for language. SF Mono for measurements, document codes and exact values.
+All numeric design tokens map to semantic text styles so Dynamic Type scales the
+whole interface.
 
-**Radius**: containers **2pt**; controls, rules, buttons, and the camera guide **0pt**. There is no
-other radius in the app. A 16pt card does not exist here.
+| Style | Relative text style | Weight | Tracking | Case |
+|---|---|---|---|---|
+| `display` | Large Title | Regular | −0.6 | Sentence |
+| `title` | Title 2 | Medium | −0.3 | Sentence |
+| `body` | Body | Regular | 0 | Sentence |
+| `bodySmall` | Subheadline | Regular | 0 | Sentence |
+| `meta` | Caption | Regular | +0.1 | Sentence |
+| `sectionLabel` | Caption 2 | Semibold | +1.6 | UPPER |
+| `findingLabel` | Caption 2 Mono | Semibold | +1.4 | UPPER |
+| `measurement` | Title Mono | Medium | −0.6 | Figures |
+| `measurementInline` | Headline Mono | Medium | −0.2 | Figures |
+| `unit` | Caption 2 Mono | Regular | +0.8 | UPPER |
+| `tabular` | Caption Mono | Regular | +0.2 | As written |
+| `mrz` | Footnote Mono | Medium | +2.2 | UPPER |
 
-**Stroke**: hairline **0.5pt**, rule **1pt**, emphasis **2pt**, status rail **3pt**. Hairlines are
-always 0.5 — never 0.33, never "1px". At @3x they render 1.5px, which reads as a ruled line rather
-than a border.
+Rules:
+
+- Use tabular/monospaced digits for measurements and ranges.
+- Never shrink essential text below its Dynamic Type size. Values may use a
+  minimum scale factor only inside a fixed preview card, never for instructions
+  or actions.
+- Use an en dash for ranges: `25.4–34.9 mm`.
+- Maximum prose measure is roughly 64 characters; cards use generous vertical
+  rhythm instead of dense columns.
+
+## 3. Space, shape and elevation
+
+- Spacing scale: `2 · 4 · 8 · 12 · 16 · 24 · 32 · 48`.
+- Screen margin: **20 pt**.
+- Card radius: **16–20 pt**; hero radius **28 pt**; icon tile **12–18 pt**.
+- Tap target: minimum **44 × 44 pt**.
+- Primary button height: minimum **52 pt**.
+- Cards use a 0.5–1 pt border plus tonal fill. Avoid heavy drop shadows; hierarchy
+  comes from surface tone, spacing and type.
+- On iPad the root navigation content is capped at **820 pt** and centred.
 
 ## 4. Components
 
-### 4.1 Finding row
+### Primary action
 
-Full-bleed. No card. Separated by a 0.5pt `rule` bottom hairline that runs edge to edge.
+- Full-width, 16 pt radius, `ink` fill, `onInk` label, 52 pt minimum height.
+- Disabled: `rule` fill, tertiary label, no unexplained dead end.
+- Pressed: subtle opacity change, 80 ms.
 
-```
-┌─┬──────────────────────────────────────────────────────────────┐
-│▌│ FAIL     Head height                              31.4 mm    │  ← 3pt rail
-│ │          Required 32.0–36.0 mm · measured 31.4 mm            │
-│ │          ICAO 9303 Pt 3 §3.2 · verified 2026-03-14           │
-└─┴──────────────────────────────────────────────────────────────┘
-```
+### Accent action
 
-| Element | Spec |
-|---|---|
-| Rail | 3pt wide, full row height, flush left, `signalFail` / `signalPass` / `signalVerify` |
-| Status label | `findingLabel`, fixed column **100pt**, vertically centred on line 1 |
-| Rule name | `body`, `ink`, baseline-aligned with status label |
-| Measured value | `measurementInline`, right-aligned, `ink` normally; `signalFail` when FAIL |
-| Required range | `meta`, `inkTertiary`, second line, 2pt below |
-| Source + date | `tabular`, `inkTertiary`, third line, 2pt below, `·` separator |
-| Padding | 20 leading (after rail) / 20 trailing / 12 vertical |
-| Min height | 64pt collapsed, auto when expanded |
+Used on dark hero surfaces only. `accent` fill, `onAccent` label, same geometry
+as the primary button.
 
-States:
+### Secondary action
 
-- **PASS** — rail `signalPass`, label `signalPass`, value `ink`, ground `paper`.
-- **FAIL** — rail `signalFail`, label `signalFail`, value `signalFail`, ground `failWash`.
-- **CANNOT VERIFY** — rail `signalVerify` drawn **dashed** (2pt on / 2pt off) to say "unresolved",
-  label `signalVerify`, value `—` in `inkTertiary`, ground `verifyWash`. The reason replaces the
-  range line: "Crown edge indistinguishable from background."
-- **Expanded** — ground `paperSunk`; the measurement bar (§4.2) sits 16pt below the source line,
-  inset 20pt both sides. A 0.5pt `rule` closes the row.
+Text-only accent label with a 44 pt minimum tap target. No persistent underline.
+The label must describe the action (“Retry”, “Restore purchase”), not “Click
+here”.
 
-A row is tappable across its full width. No chevron: expansion is shown by the bar appearing.
+### Cards
 
-### 4.2 Measurement bar
+- `paperRaised` fill, 16–20 pt radius, subtle `rule` border.
+- Status cards add a 4 pt leading rail and a status-tinted wash.
+- Cards grow vertically with text; no fixed heights on text-bearing surfaces.
 
-The core gauge. Geometry is fixed; only the data varies. Given `required = [lower, upper]`,
-`span = upper − lower`, `W = content width`:
+### Finding row
 
-```
-domainLo = max(0, lower − 0.6 × span)
-domainHi = upper + 0.6 × span
-x(v)     = W × (v − domainLo) / (domainHi − domainLo)
-```
+Collapsed row shows icon, status word, title, measured value and required range.
+Expanding reveals the plain-language explanation, measurement bar and source.
+The whole row is a Button with an accessibility hint and expanded/collapsed
+state. The measurement bar is visual; its essential values are already in the
+accessible row label.
 
-Vertical layout, total height **34pt**:
+### Camera
 
-| Element | y (pt) | Spec |
-|---|---|---|
-| Range band | 7 → 13 | x(lower) → x(upper), fill `bandFill`, 1pt `rule` on top and bottom edges |
-| Axis | 10 | 1pt `ruleStrong`, full width, 0 → W |
-| Ticks | 10 → 14 | 0.5pt `rule`, at 5 evenly spaced domain positions including both ends |
-| Tick labels | baseline 22 | `unit`, `inkTertiary`; only `domainLo`, `lower`, `upper`, `domainHi` are labelled |
-| Marker | 2 → 18 | 2pt wide vertical bar at x(measured), 16pt tall |
-| Connector | 10 | when out of range: 1pt `signalFail` from the nearest band edge to the marker |
-
-Marker colour: `ink` when `lower ≤ measured ≤ upper`, `signalFail` otherwise. The band never
-changes colour — the band is the rule, the marker is the fact.
-
-`CANNOT VERIFY`: band drawn normally, no marker, no connector. A 1pt dashed `signalVerify`
-horizontal line spans the band at y=10 and `unit` text "NO MEASUREMENT" sits at the band's
-left edge, 4pt above it.
-
-Below the bar, 8pt gap, one line — `MEASURED 31.4 mm        RANGE 32.0–36.0 mm`. Words in
-`tabular` / `inkTertiary`, figures in `measurementInline` / `ink` (or `signalFail`). Two columns,
-left-aligned, 24pt apart. No box, no background.
-
-### 4.3 Document row
-
-Height **72pt**, full-bleed, 0.5pt `rule` between rows.
-
-| Element | Spec |
-|---|---|
-| Country code | `mrz`, `inkSecondary`, fixed width **56pt**, left-aligned at margin |
-| Document name | `body`, `ink` — "Passport", "Visa — B1/B2" |
-| Spec summary | `meta`, `inkTertiary`, second line: "2 × 2 in · 51 × 51 mm · 300 dpi" |
-| Chevron | `chevron.right`, 11pt, `inkTertiary`, 20pt from trailing edge |
-| Selected | 2pt `accent` rail flush left; ground `paperSunk`; name becomes `ink` at full weight |
-| Verified chip | none. Recency is text, not a badge: "verified 2026-03-14" in `tabular` |
-
-The code column never wraps or truncates; codes longer than four characters drop to `tabular` at
-11pt.
-
-### 4.4 Section header
-
-Height **28pt**. Label `sectionLabel` in `inkSecondary`, 20pt from margin, 12pt clear above.
-Optional trailing count or date in `tabular` / `inkTertiary`, right-aligned at margin. Rule: 1pt
-`ruleStrong`, 8pt below the label baseline, full-bleed. Zero space below the rule — the first row
-starts immediately. Headers are never inside containers and never carry backgrounds.
-
-### 4.5 Primary button
-
-- Width screen − 40pt, height **52pt**, radius **0**. Fill `ink`; label `button` / `onInk`.
-- Pressed: fill `inkPressed`, 80ms opacity-only transition. Disabled: fill `rule`, label
-  `inkTertiary`, no opacity change.
-- One per screen, pinned 16pt above the safe-area bottom, on `paper`.
-- Secondary action: `button` style, `ink`, no fill, no border, 44pt tap target, 1pt `ruleStrong`
-  underline offset 6pt below baseline.
-- Destructive uses `signalFail` as the *label* colour only; the fill stays `ink`. Never a red
-  filled button — red belongs to findings.
-
-### 4.6 Capture overlay
-
-Camera feed, full-bleed, no blur anywhere.
-
-| Element | Spec |
-|---|---|
-| Scrim | `scrim` (`#0B0A08` @ 62%), flat, hard-edged at the guide rect. No feathering |
-| Guide | Inset 24pt horizontally, 96pt from top, aspect locked to the document (e.g. 35:45) |
-| Corner ticks | 4 corners, 14pt long, 1.5pt wide, `onInk`, drawn as an L — no full border |
-| Head band | Between crown and chin lines, fill `captureBand` (`onInk` @ 10%), 1pt dashed edges (3 on / 2 off) |
-| Crown line | 1pt solid `onInk`, full guide width, label "CROWN" in `unit` 6pt above, left-aligned |
-| Chin line | 1pt dashed `onInk` (3 on / 2 off), label "CHIN" 6pt below, left-aligned |
-| Eye line | 1pt dashed `onInk` (4 on / 3 off), label "EYE" right-aligned, 6pt above |
-| Centre line | 1pt dashed `onInk` @ 45%, vertical, full guide height, no label |
-| Readout strip | Height **56pt**, fill `ink`, pinned above the shutter. Three columns split by 1pt `onInkMuted` vertical rules at 1/3 and 2/3 |
-
-Readout column: value in `measurementInline` (`onInk`), caption in `unit` (`onInkMuted`) 2pt below:
-`31.4 mm` / HEAD · `+1.2 mm` / EYE OFFSET · `0.4°` / TILT. Values update at 4 Hz and never animate.
-Band edges come from the live document spec, so they move when the document changes and never
-otherwise. Nothing in the overlay pulses.
+- Full-bleed preview with a top and bottom scrim.
+- Head-height guide drawn from the selected document.
+- Live status card states what is missing, not a generic “hold still”.
+- Custom shutter is disabled until the gate passes; it is a white ring with a
+  filled centre and a visible progress state.
+- Close and privacy controls remain reachable at large text sizes.
 
 ## 5. Motion
 
-**One animation exists.** Finding rows settling in, after a measurement completes.
+- Finding rows settle with a 220 ms timing curve and a maximum 6-row stagger.
+- Reduce Motion disables offset/stagger; opacity may change instantly.
+- Press feedback is 80 ms and never bouncy.
+- Loading uses native `ProgressView`; no looping decorative animation.
 
-| Property | Value |
-|---|---|
-| Curve | `timingCurve(0.2, 0, 0, 1)` — no overshoot, no spring |
-| Duration | 220ms |
-| Stagger | 40ms per row, top to bottom, max 6 rows (rows 7+ share the last offset) |
-| Transform | `offset(y: +6 → 0)`, `opacity 0 → 1`. No scale, rotation, or blur |
-| Reduce Motion | stagger removed, duration 120ms, opacity only |
+## 6. Accessibility
 
-Everything else is instant: state changes, marker movement, tab switches. Standard UIKit sheet
-timing is acceptable because it is the system's, not ours. No bounce, spring, parallax, shimmer,
-or skeleton loading. Haptics confirm rather than celebrate: `.rigid` on measurement completion,
-`.light` on selection. Never on scroll, never repeated.
+- Every flow has a non-gesture alternative: crop zoom slider and custom move
+  actions, visible buttons, and descriptive labels.
+- VoiceOver reads status as text, not colour. Technical overlays are hidden from
+  assistive technology; findings carry the essential values.
+- Decorative camera guides and branding symbols are hidden.
+- Test at AX5 with no clipped actions. Test light/dark contrast, Reduce Motion,
+  VoiceOver and 320 pt-class width.
+- Never communicate an error only through haptics or colour.
 
-## 6. Implementation
+## 7. Brand assets
 
-`PassportProof/Design/Theme.swift` is the only source of these values. It exposes:
-
-- `Theme.paper / paperSunk / paperRaised / ink / inkSecondary / inkTertiary / rule / ruleStrong`
-- `Theme.accent`, `Theme.signalFail / signalPass / signalVerify`, `Theme.failWash / verifyWash`
-- `Theme.bandFill / inkPressed / onInk / onInkMuted / scrim / captureBand`
-- `Theme.Spacing`, `Theme.Radius`, `Theme.Stroke`, `Theme.Metrics`, `Theme.Motion`
-- `Typography.<style>.text(_:)`, `Typography.value(_:unit:)`, `.typeStyle(_:)` for multi-line blocks
-- `Theme.Rule` (horizontal/vertical hairline), `Theme.SectionHeader`
-
-All colours resolve through `UIColor { traits in … }`; no call site branches on `colorScheme`.
-**Do not** add a colour, size, or radius outside this file. If a screen needs one, the system is
-wrong — argue it here first.
+- **App icon:** deep-teal capture field, ivory photo card, crown/chin measurement
+  lines, head silhouette and validation seal. Opaque 1024 × 1024 RGB.
+- **Launch symbol:** simplified seal/check mark in the same deep teal, on the
+  paper launch background, with light/dark-compatible colour set.
+- Both are generated from original geometry by `Tools/generate_icon.py`; no
+  third-party artwork or generated photographic content is shipped.

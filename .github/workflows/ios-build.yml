@@ -226,10 +226,15 @@ jobs:
           APP="build/Build/Products/Release-iphoneos/$APP_NAME.app"
           BINARY="$APP/$APP_NAME"
 
-          test -f "$BINARY"
-          test -f "$APP/PrivacyInfo.xcprivacy"
-          test -f "$APP/AppIcon60x60@2x.png"
-          test -f "$APP/LaunchSymbol@2x.png"
+          echo "Release bundle files:" >> "$GITHUB_STEP_SUMMARY"
+          find "$APP" -maxdepth 1 -type f -print | sort | tee -a "$GITHUB_STEP_SUMMARY"
+
+          for required in "$BINARY" "$APP/PrivacyInfo.xcprivacy" "$APP/AppIcon60x60@2x.png" "$APP/Assets.car"; do
+            if [ ! -f "$required" ]; then
+              echo "::error::Required Release bundle file is missing: $required"
+              exit 1
+            fi
+          done
 
           if strings "$BINARY" | grep -Fq "Continue with debug unlock"; then
             echo "::error::DEBUG purchase bypass text is present in the Release binary"
@@ -243,4 +248,18 @@ jobs:
           plutil -extract UILaunchScreen xml1 -o - "$APP/Info.plist"
           plutil -extract NSCameraUsageDescription raw -o - "$APP/Info.plist"
           plutil -extract NSPhotoLibraryUsageDescription raw -o - "$APP/Info.plist"
+
+          xcrun --sdk iphoneos assetutil --info "$APP/Assets.car" > build/assets.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          assets = json.loads(Path("build/assets.json").read_text())
+          names = {item.get("Name") for item in assets if isinstance(item, dict)}
+          for required in ("AppIcon", "LaunchSymbol"):
+              if required not in names:
+                  raise SystemExit(f"compiled asset is missing: {required}; found {sorted(n for n in names if n)}")
+          print("compiled assets present:", "AppIcon", "LaunchSymbol")
+          PY
+
           echo "Release bundle audit passed: icon, launch symbol, privacy manifest, usage strings, no DEBUG unlock." >> "$GITHUB_STEP_SUMMARY"

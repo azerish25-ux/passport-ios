@@ -1,5 +1,12 @@
 # Build Contract — PassportProof prototype
 
+> **Historical contract, superseded.** The current implementation narrows the
+> corpus to three complete US workflows, adds a user-reviewed crop and visual
+> confirmations, removes the Release prototype bypass, and enforces
+> document-specific digital byte limits. Use [`README.md`](../README.md) and
+> [`RELEASE.md`](RELEASE.md) for the shipped contract. This file remains as the
+> original research-to-engineering decision record.
+
 **Owner:** team lead. **Status:** binding on all implementers.
 This document resolves the gaps listed in `docs/SPEC.md` §10 and fixes the exact
 public API surface. Code written against this contract compiles without

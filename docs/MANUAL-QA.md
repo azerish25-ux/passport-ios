@@ -1,91 +1,109 @@
-# Manual QA — what CI cannot check
+# Manual QA — device, purchase and print checks
 
-CI proves the app compiles for two SDKs and that the pure-logic tests pass. It
-cannot prove the app is *correct*, because the three things most likely to be
-wrong are all visual or device-dependent. This is the short list; run it on a
-simulator before trusting any measurement the app reports.
+CI proves that the project compiles, that logic/imaging tests pass, that the UI
+smoke tests can navigate the simulator, and that the Release bundle excludes the
+DEBUG unlock. It cannot prove camera behavior, printer fidelity, sandbox
+purchases, VoiceOver usability or App Review acceptance.
 
-Everything here is a two-minute check on the Simulator (Xcode 16+, iPhone 16 or
-later), except item 4, which needs a printer.
+Run this checklist on a current iPhone with iOS 17 or later before submission.
 
----
+## 1. Camera permission and live gate
 
-## 1. The vertical axis is not flipped — **highest priority**
+1. Fresh install. Open a workflow → **Use live camera**.
+2. Deny permission. Confirm the recovery card appears and **Open Settings**
+   returns to a working app.
+3. Re-enable permission in Settings and reopen the camera.
+4. Point at a busy, uneven background. Confirm the shutter is disabled and the
+   message names the problem.
+5. Move to a plain wall with even light, one face in frame, shoulders visible.
+   Confirm the shutter enables only when the live gate reports ready.
+6. Capture. Confirm the resulting image is portrait-oriented and the crop editor
+   opens without rotation artifacts.
+7. Rotate the device; the app intentionally supports portrait only.
 
-`FaceAnalyzer` receives Vision points with a bottom-left origin and flips them to
-top-down. If that flip is wrong, nothing crashes and nothing fails a test: an
-inverted head still has a plausible *magnitude* of head height, so the app would
-return a confident pass or fail built on a mirrored measurement. This is the
-worst failure mode the product has, because it is silent.
+## 2. Crop and measurement consistency
 
-**The check is binary, not numerical.** `FaceOverlayView` draws `crownEnvelopeY`,
-`chinY` and `eyeY` straight through as `normalised × containerSize` with no
-transform of its own. So:
+1. Choose an asymmetric portrait from the library. Adjust zoom and pan.
+2. Accept the crop and inspect the overlay. Crown must be above chin; eye line
+   must lie between them.
+3. Confirm the dimensions shown for the measured crop are the same pixels used
+   in export.
+4. Zoom until the crop is below 600 × 600 px. Confirm **Crop resolution** fails
+   and export is blocked.
+5. Choose a photo with no face. Confirm findings say review/fail honestly and
+   never report a confident pass.
 
-1. Import any portrait photo with a visible face.
-2. Open **Diagnose**.
-3. Look at the overlay.
+## 3. Visual review and export policy
 
-- **Crown line above the chin line, eye line between them** → the flip is correct.
-  If the lines are right-way-round but offset from the face, the flip is fine and
-  the error is in the landmark points themselves.
-- **Crown line below the chin line** → the flip is inverted. Every head-height
-  number in the app is mirrored. Fix `topLeftPoints` before anything else.
+1. Confirm all four visual checks. Their rows should update immediately without
+   a new “measuring” pass.
+2. Turn off one confirmation. Export must become unavailable.
+3. Produce a failed measured rule. Confirm **Export anyway** no longer exists.
+4. Return, retake, and confirm the prior diagnosis cannot overwrite the new
+   photo.
+5. For a clean photo with a remaining unresolved crown/glare check, confirm the
+   export explanation appears and only continues after acknowledgement.
 
-Do not substitute "the head height looks about right" for this check. It does not
-catch the failure.
+## 4. StoreKit sandbox
 
-As a second line of defence, `FaceAnalyzer` now refuses geometry where the eye
-line does not fall between 30% and 70% of the way from crown to chin, and reports
-`cannot verify` instead. If you see `cannot verify` on a clean, well-lit portrait
-with the face filling half the frame, that guard is firing — check the flip.
+Use a sandbox Apple Account on a development build:
 
-## 2. The PDF is the right way up
+1. Purchase the non-consumable. Confirm the app unlocks only after verified
+   StoreKit success.
+2. Cancel a purchase. Confirm no unlock and no false error state.
+3. Use Ask to Buy / pending. Confirm the pending message and later restore.
+4. Restore on a second install. Confirm entitlement recovers.
+5. Revoke/refund the purchase through the sandbox flow where possible, relaunch,
+   and confirm entitlement is recomputed rather than cached forever.
+6. Launch purchased while offline. Confirm StoreKit current entitlements still
+   unlock export.
+7. Inspect a Release build. No prototype/debug unlock UI may exist.
 
-`PrintSheetRenderer` draws a `UIImage` into a PDF page. A rotated sheet still
-looks like a sheet until it is next to a ruler.
+## 5. Privacy and lifecycle
 
-Print the **calibration sheet** (Export → *Print calibration sheet*, which does
-not consume the unlock). It draws a 2.000 in square and a millimetre ruler on a
-page with nothing else on it. If the square and the ruler disagree about which
-way is up, or the square does not measure 2.000 in, the draw path is wrong.
+1. Enter the app switcher with a photo loaded. Confirm the privacy cover hides
+   the photo.
+2. Share an export, cancel the share sheet, then inspect the app's temporary
+   directory. The `passportproof-*` file must be gone.
+3. Complete a session, force-quit, relaunch, and inspect the app container. No
+   photograph should persist.
+4. Use Airplane mode: library, import, crop, diagnosis, visual checks,
+   calibration and export should work. Only a new StoreKit purchase should be
+   unavailable.
+5. Confirm issuer links open only after a tap and contain no session/photo data.
 
-Then check a real sheet: the photo cells and the "PRINT AT 100% — DO NOT SCALE"
-line must share an orientation.
+## 6. Print calibration
 
-## 3. The capture gate actually blocks the shutter
+1. Export the calibration page for 4×6, 5×7 and Letter layouts.
+2. Print at **100% / actual size**, not fit-to-page.
+3. Measure the 2.000 in / 50.8 mm square and the millimetre ruler with a physical
+   ruler.
+4. Print the photo sheet and measure an individual cell. It must remain the
+   document's exact physical size.
+5. Repeat on at least an inkjet and a laser printer. Record the results; printer
+   scaling is not something the PDF can force.
 
-§6.2's gate exists to guarantee a plain, evenly lit background *before* the
-shutter releases. Point the camera at a busy, high-contrast background: the
-shutter must be disabled and the gate's message must name what is wrong. Point it
-at a plain wall with a face in the band: the shutter must enable.
+## 7. Accessibility and presentation
 
-The Simulator has no camera, so this needs a device. On the Simulator the camera
-affordance is disabled with an explanatory line and the photo-library path stays
-fully functional — that is expected, not a bug.
+1. Test Dynamic Type at AX1 and AX5. No essential value or action may clip;
+   cards should grow vertically.
+2. Turn on Reduce Motion. Finding rows must not slide; opacity changes are
+   acceptable.
+3. Complete the main flow with VoiceOver. Finding rows must announce status,
+   title, measured value, required range, expansion state and source.
+4. Verify the crop editor's adjustable slider and custom “Move crop” actions.
+5. Check light and dark appearance for contrast, especially status washes,
+   secondary copy and camera overlays.
+6. Test iPhone SE-class width and an iPad. Content should remain readable and
+   centred rather than stretching edge to edge.
+7. Take final App Store screenshots from a current 6.9-inch simulator/device.
 
-## 4. The print geometry survives a real printer
+## 8. Known external gaps
 
-This is the report's number-one unmeasured risk (§6.6), and it is still
-unmeasured. Print one sheet on three printers — inkjet, laser, photo kiosk — at
-three settings each: 100%/actual size, fit-to-page, borderless. Measure a cell
-with a ruler. Anything other than 2.000 in at "100%" means the driver is scaling,
-which is exactly why the calibration sheet ships.
-
-## 5. The prohibitions are still honoured
-
-Five minutes with the app, checked against §2.6:
-
-- **No photo storage** — run a full session, force-quit, relaunch, then inspect
-  the app container. No image file should exist.
-- **No account** — cold launch reaches the library with zero taps.
-- **No subscription** — the unlock screen shows one price and one button.
-- **No server** — put the device in airplane mode. Capture, diagnose and both
-  exports must complete. Only purchase may be unavailable.
-- **No approval promise** — read every string. "approved", "guaranteed",
-  "official" and "accepted" must not appear as a claim about the user's photo.
-
-## 6. Dynamic Type
-
-Set the largest accessibility text size. Measurement rows must wrap rather than
-clip, and the monospaced figures must stay legible. This is not tested anywhere.
+- A public privacy-policy URL and support page must be hosted outside this repo.
+- Signing, TestFlight processing and App Review require the Apple Developer
+  account.
+- Expression, glasses, recency and source-originality are user confirmations,
+  not machine classifiers.
+- Background/shadow/centring/crown thresholds are app-selected tolerances and
+  are labelled as such in the UI.

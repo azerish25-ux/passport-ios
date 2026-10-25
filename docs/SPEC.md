@@ -1,5 +1,12 @@
 # PassportProof — Engineering Specification
 
+> **Historical research artifact.** The shipped production scope is defined in
+> [`README.md`](../README.md): three complete US workflows with output-specific
+> rules. In particular, this document's four-document/UK assumptions, 4×6
+> four-up contract and "prototype data" labels no longer describe the app. The
+> research reasoning remains here for provenance and audit, not as the current
+> product contract.
+
 **Derived from:** `PassportProof-iOS-App-Research-Report.md` v2.0 (24 Oct 2026), `PassportProof-Stress-Test.md`, and `…-v1.0-superseded.md`.
 **Governing source:** v2.0. Where v1.0 and v2.0 disagree, v2.0 wins and the disagreement is noted in one line.
 **Scope:** the prototype app only. The research concludes the *business* should not be built; that conclusion is out of scope here and does not affect the engineering spec, which v2.0 states is sound (§10, "What survives").

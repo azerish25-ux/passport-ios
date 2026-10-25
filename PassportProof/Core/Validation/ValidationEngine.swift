@@ -389,7 +389,7 @@ enum ValidationEngine {
                 status: .cannotVerify,
                 detail: "No face was detected, so the face centre cannot be located.",
                 measurement: nil,
-                provenance: .prototypeDefault
+                provenance: .appDefault
             )
         }
 
@@ -409,18 +409,18 @@ enum ValidationEngine {
                 id: .centring,
                 title: "Centring",
                 status: .fail,
-                detail: "The face centre sits \(MeasurementFormat.number(offsetMM)) mm off the middle of the frame, to the \(side). The prototype tolerance is \(rangeText). Re-crop so the face is centred.",
+                detail: "The face centre sits \(MeasurementFormat.number(offsetMM)) mm off the middle of the frame, to the \(side). The app tolerance is \(rangeText). Re-crop so the face is centred.",
                 measurement: measurement,
-                provenance: .prototypeDefault
+                provenance: .appDefault
             )
         }
         return Finding(
             id: .centring,
             title: "Centring",
             status: .pass,
-            detail: "The face centre is \(MeasurementFormat.number(offsetMM)) mm from the middle of the frame, inside the prototype tolerance of \(rangeText).",
+            detail: "The face centre is \(MeasurementFormat.number(offsetMM)) mm from the middle of the frame, inside the app tolerance of \(rangeText).",
             measurement: measurement,
-            provenance: .prototypeDefault
+            provenance: .appDefault
         )
     }
 
@@ -437,7 +437,7 @@ enum ValidationEngine {
                 status: .cannotVerify,
                 detail: "No face was detected, so the background could not be separated from the subject.",
                 measurement: nil,
-                provenance: .prototypeDefault
+                provenance: .appDefault
             )
         }
 
@@ -461,7 +461,7 @@ enum ValidationEngine {
                 status: .fail,
                 detail: base + " The background is not even. Stand further from the wall, face a single light source, and avoid a wall that is lit unevenly across the frame.",
                 measurement: measurement,
-                provenance: .prototypeDefault
+                provenance: .appDefault
             )
         }
         if background.edgeResidualFraction > BackgroundAnalyzer.edgeResidualFractionLimit {
@@ -471,7 +471,7 @@ enum ValidationEngine {
                 status: .fail,
                 detail: base + " Something other than the plain background is showing at the edge of the head. Clear the frame behind you and keep hair clear of the outline.",
                 measurement: measurement,
-                provenance: .prototypeDefault
+                provenance: .appDefault
             )
         }
         return Finding(
@@ -480,7 +480,7 @@ enum ValidationEngine {
             status: .pass,
             detail: base,
             measurement: measurement,
-            provenance: .prototypeDefault
+            provenance: .appDefault
         )
     }
 
@@ -496,7 +496,7 @@ enum ValidationEngine {
                 status: .cannotVerify,
                 detail: "Lighting across the face could not be measured for this input.",
                 measurement: nil,
-                provenance: .prototypeDefault
+                provenance: .appDefault
             )
         }
 
@@ -514,18 +514,18 @@ enum ValidationEngine {
                 id: .shadow,
                 title: "Shadow",
                 status: .fail,
-                detail: "Luminance varies by \(MeasurementFormat.number(delta)) across the face; the prototype limit is \(MeasurementFormat.number(shadowDeltaLimit)). Turn to face the light so both sides of the face are lit evenly.",
+                detail: "Luminance varies by \(MeasurementFormat.number(delta)) across the face; the app-selected limit is \(MeasurementFormat.number(shadowDeltaLimit)). Turn to face the light so both sides of the face are lit evenly.",
                 measurement: measurement,
-                provenance: .prototypeDefault
+                provenance: .appDefault
             )
         }
         return Finding(
             id: .shadow,
             title: "Shadow",
             status: .pass,
-            detail: "Luminance varies by \(MeasurementFormat.number(delta)) across the face, inside the prototype limit of \(MeasurementFormat.number(shadowDeltaLimit)).",
+            detail: "Luminance varies by \(MeasurementFormat.number(delta)) across the face, inside the app-selected limit of \(MeasurementFormat.number(shadowDeltaLimit)).",
             measurement: measurement,
-            provenance: .prototypeDefault
+            provenance: .appDefault
         )
     }
 

@@ -36,12 +36,12 @@ enum RuleID: String, Codable, Sendable, CaseIterable {
 
 // MARK: - Provenance
 
-/// Where a number came from. `prototypeDefault` means "we chose this because the
-/// sources are silent", and the UI must say so out loud.
+/// Where a number came from. `appDefault` means "we chose this because the
+/// issuer is silent", and the UI must say so out loud.
 enum Provenance: String, Codable, Sendable {
     case source
     case derived
-    case prototypeDefault
+    case appDefault
 }
 
 // MARK: - Measurement

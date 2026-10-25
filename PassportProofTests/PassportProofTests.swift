@@ -368,7 +368,7 @@ final class PassportProofTests: XCTestCase {
         components.day = day
         components.hour = 12
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         return calendar.date(from: components) ?? Date(timeIntervalSince1970: 0)
     }
 

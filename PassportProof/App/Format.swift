@@ -76,7 +76,7 @@ extension Provenance {
             return "issuer rule"
         case .derived:
             return "derived from issuer rule"
-        case .prototypeDefault:
+        case .appDefault:
             return "app threshold — not issuer specified"
         }
     }
