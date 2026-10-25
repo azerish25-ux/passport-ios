@@ -31,12 +31,29 @@ final class PassportProofUITests: XCTestCase {
         storeSession.disableDialogs = true
     }
 
-    override func tearDownWithError() throws {
-        testedApp?.terminate()
-        testedApp = nil
+    override func tearDown() async throws {
+        await MainActor.run {
+            if let app = testedApp, app.state == .runningForeground {
+                // Dismiss an observed system picker before ending its host.
+                // A failed import can otherwise leave the remote Photos UI
+                // open while the next test begins another picker session.
+                let pickerNavigation = app.navigationBars.matching(NSPredicate(
+                    format: "identifier IN %@", ["Photos", "PUPickerUnavailableView"]
+                )).firstMatch
+                if pickerNavigation.exists {
+                    let cancel = pickerNavigation.buttons["Cancel"]
+                    if cancel.exists && cancel.isHittable {
+                        print("PHOTOS PICKER teardown: dismissing \(pickerNavigation.identifier)")
+                        cancel.tap()
+                    }
+                }
+            }
+            testedApp?.terminate()
+            testedApp = nil
+        }
         storeSession?.clearTransactions()
         storeSession = nil
-        try super.tearDownWithError()
+        try await super.tearDown()
     }
 
     @MainActor
@@ -363,7 +380,9 @@ final class PassportProofUITests: XCTestCase {
         // loading screen leaves the app's hidden photo.on.rectangle icon in the
         // accessibility tree, so an app-wide 'Photo' image query is unsafe.
         let photosNavigation = app.navigationBars["Photos"]
-        require(photosNavigation, in: app, timeout: 20)
+        // The recorded simulator kept the real PUPickerUnavailableView loading
+        // past 20 seconds. Wait for the actual Photos UI, never an app icon.
+        require(photosNavigation, in: app, timeout: 45)
         let pickers = app.scrollViews.matching(identifier: "photosView_content_scroll_view")
         let picker = pickers.firstMatch
         require(picker, in: app, timeout: 20)
@@ -394,15 +413,33 @@ final class PassportProofUITests: XCTestCase {
         func tapSameVisibleAsset() {
             var previousFrame = CGRect.null
             var stableObservations = 0
-            waitUntil(in: app, description: "The exact PhotosPicker asset must have a stable visible frame before tapping", timeout: 10) {
-                guard photosNavigation.exists, picker.exists, portrait.exists,
-                      portrait.label == selectedLabel else { return false }
-                let frame = portrait.frame
+            let screenFrame = app.frame
+            // Each remote AX observation took several seconds in the recorded
+            // run. Two complete observations must fit within this budget.
+            waitUntil(in: app, description: "The exact PhotosPicker asset must have a stable visible frame before tapping", timeout: 30) {
+                guard photosNavigation.exists, picker.exists,
+                      let asset = try? portrait.snapshot(), asset.label == selectedLabel else {
+                    previousFrame = .null
+                    stableObservations = 0
+                    return false
+                }
+                // A snapshot reads this exact asset's label and frame together.
+                let frame = asset.frame
                 guard frame.width >= 30, frame.height >= 30,
-                      picker.frame.intersection(app.frame).contains(frame),
-                      frame.minY >= photosNavigation.frame.maxY else { return false }
-                stableObservations = frame == previousFrame ? stableObservations + 1 : 0
+                      picker.frame.intersection(screenFrame).contains(frame),
+                      frame.minY >= photosNavigation.frame.maxY else {
+                    previousFrame = .null
+                    stableObservations = 0
+                    return false
+                }
+                let unchanged = !previousFrame.isNull &&
+                    abs(frame.minX - previousFrame.minX) <= 1 &&
+                    abs(frame.minY - previousFrame.minY) <= 1 &&
+                    abs(frame.width - previousFrame.width) <= 1 &&
+                    abs(frame.height - previousFrame.height) <= 1
+                stableObservations = unchanged ? stableObservations + 1 : 1
                 previousFrame = frame
+                print("PHOTOS PICKER stable observation \(stableObservations): \(asset.label); frame=\(frame)")
                 return stableObservations >= 2
             }
             let frame = portrait.frame
