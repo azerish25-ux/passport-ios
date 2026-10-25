@@ -109,8 +109,7 @@ struct FramingOverlay: View {
             dashedLine(x1: guide.minX, x2: guide.maxX, y: bottom, dash: [])
             dashedLine(x1: guide.minX, x2: guide.maxX, y: top, dash: [3, 2])
 
-            label("CROWN MIN", at: CGPoint(x: guide.minX, y: bottom - 18))
-            label("CROWN MAX", at: CGPoint(x: guide.minX, y: top - 18))
+            label("HEAD BAND", at: CGPoint(x: guide.minX, y: top - 18))
         }
     }
 
@@ -129,7 +128,7 @@ struct FramingOverlay: View {
 
             ZStack(alignment: .topLeading) {
                 dashedLine(x1: guide.minX, x2: guide.maxX, y: y, dash: [4, 3])
-                label("EYE", at: CGPoint(x: guide.minX, y: y - 18))
+                label("EYE", at: CGPoint(x: guide.maxX - 38, y: y - 18))
             }
         }
     }

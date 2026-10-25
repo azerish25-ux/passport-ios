@@ -22,8 +22,12 @@ addressed the code-side findings:
 | Shallow verification | Unit coverage expanded for crop/export consistency, byte ceilings, applicable rules, future EXIF dates, session export gating and contrast; XCUITest covers library, privacy, capture entry and unlock with screenshots |
 
 The current release status and external residuals are tracked in
-[`RELEASE.md`](RELEASE.md). A CI link and exact test count are added after the
-final verified run; no signed/TestFlight/App Review claim is made here.
+[`RELEASE.md`](RELEASE.md). The full macOS run on commit `5119434`
+([GitHub Actions 40152865037](https://github.com/azerish25-ux/passport-ios/actions/runs/40152865037))
+passed 26 unit tests and 5 simulator UI tests, exported screenshots, compiled
+the unsigned Release device build and passed the Release-bundle audit. Visual-
+only refinements after that run are revalidated by the same workflow before
+handoff. No signed, TestFlight or App Review claim is made here.
 
 ## Executive finding
 

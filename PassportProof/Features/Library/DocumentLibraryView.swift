@@ -39,10 +39,14 @@ struct DocumentLibraryView: View {
                 Text("PassportProof")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
                 Text("PRIVATE PHOTO STUDIO")
                     .font(.caption2.weight(.semibold))
                     .tracking(1.1)
                     .foregroundStyle(Theme.inkSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
             }
             Spacer()
             Button {
