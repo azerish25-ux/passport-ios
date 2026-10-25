@@ -387,14 +387,40 @@ final class PassportProofUITests: XCTestCase {
         }
         // CI adds this portrait immediately after erasing the simulator. The
         // picker sorts newest first; the runtime's sample assets are historical.
-        let assetFrame = portrait.frame
-        print("PHOTOS PICKER selecting newest asset: \(portrait.label); frame=\(assetFrame); isHittable=\(portrait.isHittable); pickerFrame=\(picker.frame)")
+        let selectedLabel = portrait.label
+        print("PHOTOS PICKER selecting newest asset: \(selectedLabel); frame=\(portrait.frame); isHittable=\(portrait.isHittable); pickerFrame=\(picker.frame)")
         attachHierarchy(app, named: "\(evidencePrefix)-system-photos-picker")
         capture(app, named: "\(evidencePrefix)-photos-picker")
-        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
-            dx: assetFrame.midX - app.frame.minX,
-            dy: assetFrame.midY - app.frame.minY
-        )).tap()
+        func tapSameVisibleAsset() {
+            var previousFrame = CGRect.null
+            var stableObservations = 0
+            waitUntil(in: app, description: "The exact PhotosPicker asset must have a stable visible frame before tapping", timeout: 10) {
+                guard photosNavigation.exists, picker.exists, portrait.exists,
+                      portrait.label == selectedLabel else { return false }
+                let frame = portrait.frame
+                guard frame.width >= 30, frame.height >= 30,
+                      picker.frame.intersection(app.frame).contains(frame),
+                      frame.minY >= photosNavigation.frame.maxY else { return false }
+                stableObservations = frame == previousFrame ? stableObservations + 1 : 0
+                previousFrame = frame
+                return stableObservations >= 2
+            }
+            let frame = portrait.frame
+            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+                dx: frame.midX - app.frame.minX, dy: frame.midY - app.frame.minY
+            )).tap()
+        }
+        tapSameVisibleAsset()
+        let crop = app.buttons["crop.confirm"]
+        if !crop.waitForExistence(timeout: 8), photosNavigation.exists, picker.exists,
+           portrait.exists, portrait.label == selectedLabel {
+            // The recorded failure left this exact grid untouched after the
+            // first tap. Retry once only while the same picker remains open;
+            // never send a second tap into a dismissed picker or crop editor.
+            capture(app, named: "\(evidencePrefix)-picker-selection-not-accepted")
+            attachHierarchy(app, named: "\(evidencePrefix)-picker-selection-not-accepted")
+            tapSameVisibleAsset()
+        }
         require(app.buttons["crop.confirm"], in: app, timeout: 30)
     }
 
@@ -476,15 +502,41 @@ final class PassportProofUITests: XCTestCase {
     private func setManualGuide(_ identifier: String, to position: CGFloat, in app: XCUIApplication) {
         let slider = app.sliders[identifier]
         scrollToHittable(slider, in: app, within: manualViewport(in: app))
-        slider.adjust(toNormalizedSliderPosition: position)
-        let value = slider.value as? String ?? ""
-        let numeric = value.split(separator: " ").first.flatMap { Double($0) }
-        XCTAssertNotNil(numeric, "Each guide must expose its position as an accessible numeric value")
-        if let numeric {
-            XCTAssertEqual(numeric / 100, Double(position), accuracy: 0.015,
-                           "The UI guide must reach the inspected position, not merely become valid")
+        func readPosition() -> CGFloat? {
+            let value = slider.value as? String ?? ""
+            guard let number = value.split(separator: " ").first.flatMap({ Double($0) }),
+                  number.isFinite, (0...100).contains(number) else { return nil }
+            return CGFloat(number / 100)
         }
-        print("MANUAL GUIDE \(identifier): requested=\(position), actual=\(value)")
+        guard var actual = readPosition() else {
+            failureEvidence(app, named: "manual-guide-value-missing")
+            XCTFail("Each guide must expose an accessible numeric position: \(identifier)")
+            return
+        }
+        // XCTest's normalized slider adjustment missed 66.9% as 57.2% on this
+        // runtime. Move the observed thumb toward the requested photo feature,
+        // then read its real value; at most three physical corrections are made.
+        for attempt in 0..<3 where abs(actual - position) > 0.015 {
+            let frame = slider.frame
+            let inset = min(frame.height / 2, frame.width / 4)
+            let trackWidth = frame.width - 2 * inset
+            let startX = frame.minX + inset + actual * trackWidth
+            let endX = frame.minX + inset + position * trackWidth
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: startX - app.frame.minX, dy: frame.midY - app.frame.minY))
+            let end = origin.withOffset(CGVector(dx: endX - app.frame.minX, dy: frame.midY - app.frame.minY))
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: XCUIGestureVelocity(150), thenHoldForDuration: 0.3)
+            guard let updated = readPosition() else {
+                failureEvidence(app, named: "manual-guide-value-missing")
+                XCTFail("The guide position disappeared after adjustment: \(identifier)")
+                return
+            }
+            actual = updated
+            print("MANUAL GUIDE \(identifier) attempt=\(attempt + 1): requested=\(position), actual=\(actual), frame=\(frame)")
+        }
+        if abs(actual - position) > 0.015 { failureEvidence(app, named: "manual-guide-position-failed") }
+        XCTAssertEqual(Double(actual), Double(position), accuracy: 0.015,
+                       "The UI guide must reach the inspected position, not merely become valid")
     }
 
     @MainActor
@@ -660,10 +712,20 @@ final class PassportProofUITests: XCTestCase {
                               "Crop scrolling must begin in visible controls, outside the photo")
             }
             let origin = app.coordinate(withNormalizedOffset: .zero)
+            var endY = upward ? bottom : top
+            if let viewport {
+                let frame = element.frame
+                let outside = upward ? viewport.minY - frame.minY : frame.maxY - viewport.maxY
+                let travel = min(max(24, outside + 12), viewport.height * 0.6)
+                endY = upward ? min(startY + travel, viewport.maxY - 8)
+                    : max(startY - travel, viewport.minY + 8)
+            }
             let start = origin.withOffset(CGVector(dx: x - app.frame.minX, dy: startY - app.frame.minY))
-            let end = origin.withOffset(CGVector(dx: x - app.frame.minX, dy: (upward ? bottom : top) - app.frame.minY))
+            let end = origin.withOffset(CGVector(dx: x - app.frame.minX, dy: endY - app.frame.minY))
             print("UI SCROLL \(element.identifier): frame=\(element.frame), viewport=\(gestureFrame), start=(\(x),\(startY)), direction=\(upward ? "toward top" : "toward bottom")")
-            start.press(forDuration: 0.05, thenDragTo: end)
+            // End while holding still, so a small visibility adjustment does
+            // not become the fling that previously oscillated behind the photo.
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: XCUIGestureVelocity(150), thenHoldForDuration: 0.35)
             attempts += 1
         }
         if !isReachable() { failureEvidence(app, named: "unreachable-element") }
