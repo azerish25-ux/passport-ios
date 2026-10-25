@@ -1,6 +1,6 @@
 // Standalone diagnostic; not part of the application or its test target.
 // Compile with -parse-as-library and run in a NEW process for each mode:
-//   VisionProbe <absolute-jpeg-path> <direct|explicit>
+//   VisionProbe <absolute-jpeg-path> <direct|explicit|modern|legacy1>
 //
 // This probe is specific to the unmodified 1062 × 1210 FullResolutionPortrait
 // fixture documented in PassportProofTests/ASSESSMENT-FIXTURES.md. The coarse
@@ -18,6 +18,8 @@ struct VisionProbe {
     enum Mode: String {
         case direct
         case explicit
+        case modern
+        case legacy1
     }
 
     struct ProbeError: Error, CustomStringConvertible {
@@ -31,10 +33,10 @@ struct VisionProbe {
         let chinY: Double
     }
 
-    static func main() {
+    static func main() async {
         let arguments = CommandLine.arguments
         guard arguments.count == 3, let mode = Mode(rawValue: arguments[2]) else {
-            emit(["event": "error", "message": "Usage: VisionProbe <absolute-jpeg-path> <direct|explicit>"])
+            emit(["event": "error", "message": "Usage: VisionProbe <absolute-jpeg-path> <direct|explicit|modern|legacy1>"])
             exit(64)
         }
 
@@ -52,14 +54,22 @@ struct VisionProbe {
             "architecture": architectureDescription,
             "image": url.lastPathComponent,
             "repetitions": repetitions,
-            "landmarkRevision": VNDetectFaceLandmarksRequestRevision3,
-            "constellation": "76 points",
+            "landmarkRevision": mode == .modern ? "modern default; recorded per request" as Any : (mode == .legacy1 ? 1 : 3),
+            "constellation": mode == .modern ? "modern default" : (mode == .legacy1 ? "65 points" : "76 points"),
             "compute": "system-selected",
             "supportedLandmarkRevisions": Array(VNDetectFaceLandmarksRequest.supportedRevisions),
             "eyeYBoundsFromTop": [0.28, 0.36],
             "chinYBoundsFromTop": [0.53, 0.68],
             "maximumRepeatedImageFractionDrift": 0.001
         ])
+
+        if mode == .modern {
+            if #available(iOS 18.0, macOS 15.0, *) {
+                exit(await runModern(url: url, repetitions: repetitions))
+            }
+            emit(["event": "error", "mode": mode.rawValue, "message": "Modern Vision requires iOS 18 or macOS 15."])
+            exit(1)
+        }
 
         for index in 0..<repetitions {
             autoreleasepool {
@@ -88,11 +98,13 @@ struct VisionProbe {
                         throw ProbeError("This probe's inspected bounds require the original upright 1062 × 1210 fixture.")
                     }
 
-                    let revision = VNDetectFaceLandmarksRequestRevision3
-                    let constellation = VNRequestFaceLandmarksConstellation.constellation76Points
+                    // Revision 1 is intentionally a diagnostic of the older,
+                    // deprecated implementation, not a production selection.
+                    let revision = mode == .legacy1 ? VNDetectFaceLandmarksRequestRevision1 : VNDetectFaceLandmarksRequestRevision3
+                    let constellation: VNRequestFaceLandmarksConstellation = mode == .legacy1 ? .constellation65Points : .constellation76Points
                     guard VNDetectFaceLandmarksRequest.supportedRevisions.contains(revision),
                           VNDetectFaceLandmarksRequest.revision(revision, supportsConstellation: constellation) else {
-                        throw ProbeError("Revision 3 / 76 points is unavailable in this runtime.")
+                        throw ProbeError("The requested revision/constellation is unavailable in this runtime.")
                     }
                     let request = VNDetectFaceLandmarksRequest()
                     request.revision = revision
@@ -135,46 +147,12 @@ struct VisionProbe {
                     let contour = imagePoints(contourRegion, size: size)
                     let left = imagePoints(leftRegion, size: size)
                     let right = imagePoints(rightRegion, size: size)
-                    let regions = [("all", all), ("contour", contour), ("leftEye", left), ("rightEye", right)]
-                    record["pixelRegions"] = Dictionary(uniqueKeysWithValues: regions.map { ($0.0, pointRange($0.1)) })
-                    var failures: [String] = []
-                    for (name, points) in regions where !valid(points, size: size) {
-                        failures.append("\(name) has empty, non-finite, or out-of-image coordinates")
-                    }
-
-                    let eyeY = 1 - (meanY(left) + meanY(right)) / (2 * Double(image.height))
-                    let chinY = 1 - Double(contour.map(\.y).min() ?? .nan) / Double(image.height)
-                    record["eyeYFromTop"] = number(eyeY)
-                    record["chinYFromTop"] = number(chinY)
-                    if !eyeY.isFinite || !(0.28...0.36).contains(eyeY) {
-                        failures.append("eyes are outside the independently inspected fixture region")
-                    }
-                    if !chinY.isFinite || !(0.53...0.68).contains(chinY) {
-                        failures.append("chin is outside the independently inspected fixture region")
-                    }
-                    let measurement = Measurement(
-                        points: all.map { CGPoint(x: $0.x / size.width, y: 1 - $0.y / size.height) },
-                        eyeY: eyeY, chinY: chinY
-                    )
-                    if let first = baseline {
-                        let pointDelta = maximumDelta(first.points, measurement.points)
-                        let eyeDelta = abs(first.eyeY - eyeY)
-                        let chinDelta = abs(first.chinY - chinY)
-                        record["pointDriftFromFirst"] = number(pointDelta)
-                        record["eyeDriftFromFirst"] = number(eyeDelta)
-                        record["chinDriftFromFirst"] = number(chinDelta)
-                        if !pointDelta.isFinite || pointDelta > 0.001
-                            || !eyeDelta.isFinite || eyeDelta > 0.001
-                            || !chinDelta.isFinite || chinDelta > 0.001 {
-                            failures.append("identical image pixels produced measurements differing by more than 0.001 image fraction")
-                        }
-                    } else {
-                        baseline = measurement
-                    }
-                    record["failures"] = failures
-                    record["passed"] = failures.isEmpty
-                    failureCount += failures.count
-                    if failures.isEmpty { successfulRequests += 1 }
+                    let result = evaluate(all: all, contour: contour, left: left, right: right,
+                                          size: size, upperLeft: false, baseline: baseline)
+                    record.merge(result.record) { _, new in new }
+                    if baseline == nil { baseline = result.measurement }
+                    failureCount += result.failures.count
+                    if result.failures.isEmpty { successfulRequests += 1 }
                 } catch {
                     failureCount += 1
                     record["passed"] = false
@@ -184,13 +162,116 @@ struct VisionProbe {
             }
         }
 
+        exit(finish(mode: mode, repetitions: repetitions, successfulRequests: successfulRequests, failureCount: failureCount))
+    }
+
+    static func finish(mode: Mode, repetitions: Int, successfulRequests: Int, failureCount: Int) -> Int32 {
         let passed = failureCount == 0 && successfulRequests == repetitions
         emit([
             "event": "summary", "mode": mode.rawValue, "passed": passed,
             "requests": repetitions, "successfulRequests": successfulRequests,
             "failureCount": failureCount
         ])
-        exit(passed ? 0 : 1)
+        return passed ? 0 : 1
+    }
+
+    @available(iOS 18.0, macOS 15.0, *)
+    static func runModern(url: URL, repetitions: Int) async -> Int32 {
+        var baseline: Measurement?
+        var failureCount = 0
+        var successfulRequests = 0
+        for index in 0..<repetitions {
+            var record: [String: Any] = ["event": "request", "mode": Mode.modern.rawValue, "index": index]
+            do {
+                guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                      let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                    throw ProbeError("ImageIO could not decode the JPEG.")
+                }
+                let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+                let orientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+                let size = CGSize(width: image.width, height: image.height)
+                record["image"] = ["width": image.width, "height": image.height, "orientation": orientation]
+                guard image.width == 1062, image.height == 1210, orientation == 1 else {
+                    throw ProbeError("This probe's inspected bounds require the original upright 1062 × 1210 fixture.")
+                }
+                // Follow Apple's public async request and image-coordinate API:
+                // https://developer.apple.com/documentation/vision/analyzing-a-selfie-and-visualizing-its-content
+                let request = DetectFaceLandmarksRequest()
+                record["requestRevision"] = String(describing: request.revision)
+                let faces = try await request.perform(on: url, orientation: .up)
+                record["landmarkFaceCount"] = faces.count
+                guard faces.count == 1, let face = faces.first, let landmarks = face.landmarks else {
+                    throw ProbeError("The modern request did not provide exactly one face with landmarks.")
+                }
+                record["faceBox"] = boxRecord(face.boundingBox.cgRect)
+                let result = evaluate(
+                    all: landmarks.allPoints.pointsInImageCoordinates(size, origin: .upperLeft),
+                    contour: landmarks.faceContour.pointsInImageCoordinates(size, origin: .upperLeft),
+                    left: landmarks.leftEye.pointsInImageCoordinates(size, origin: .upperLeft),
+                    right: landmarks.rightEye.pointsInImageCoordinates(size, origin: .upperLeft),
+                    size: size, upperLeft: true, baseline: baseline
+                )
+                record.merge(result.record) { _, new in new }
+                if baseline == nil { baseline = result.measurement }
+                failureCount += result.failures.count
+                if result.failures.isEmpty { successfulRequests += 1 }
+            } catch {
+                failureCount += 1
+                record["passed"] = false
+                record["error"] = String(describing: error)
+            }
+            emit(record)
+        }
+        return finish(mode: .modern, repetitions: repetitions, successfulRequests: successfulRequests, failureCount: failureCount)
+    }
+
+    /// All APIs share these unchanged bounds and repeatability checks. Only
+    /// the documented origin differs: modern .upperLeft is already top-down.
+    static func evaluate(
+        all: [CGPoint], contour: [CGPoint], left: [CGPoint], right: [CGPoint],
+        size: CGSize, upperLeft: Bool, baseline: Measurement?
+    ) -> (record: [String: Any], failures: [String], measurement: Measurement) {
+        let regions = [("all", all), ("contour", contour), ("leftEye", left), ("rightEye", right)]
+        var record: [String: Any] = [
+            "coordinateOrigin": upperLeft ? "upperLeft" : "lowerLeft",
+            "pixelRegions": Dictionary(uniqueKeysWithValues: regions.map { ($0.0, pointRange($0.1)) })
+        ]
+        var failures: [String] = []
+        for (name, points) in regions where !valid(points, size: size) {
+            failures.append("\(name) has empty, non-finite, or out-of-image coordinates")
+        }
+        let eyeFraction = (meanY(left) + meanY(right)) / (2 * Double(size.height))
+        let eyeY = upperLeft ? eyeFraction : 1 - eyeFraction
+        let chinFraction = Double((upperLeft ? contour.map(\.y).max() : contour.map(\.y).min()) ?? .nan) / Double(size.height)
+        let chinY = upperLeft ? chinFraction : 1 - chinFraction
+        record["eyeYFromTop"] = number(eyeY)
+        record["chinYFromTop"] = number(chinY)
+        if !eyeY.isFinite || !(0.28...0.36).contains(eyeY) {
+            failures.append("eyes are outside the independently inspected fixture region")
+        }
+        if !chinY.isFinite || !(0.53...0.68).contains(chinY) {
+            failures.append("chin is outside the independently inspected fixture region")
+        }
+        let measurement = Measurement(
+            points: all.map { CGPoint(x: $0.x / size.width, y: upperLeft ? $0.y / size.height : 1 - $0.y / size.height) },
+            eyeY: eyeY, chinY: chinY
+        )
+        if let first = baseline {
+            let pointDelta = maximumDelta(first.points, measurement.points)
+            let eyeDelta = abs(first.eyeY - eyeY)
+            let chinDelta = abs(first.chinY - chinY)
+            record["pointDriftFromFirst"] = number(pointDelta)
+            record["eyeDriftFromFirst"] = number(eyeDelta)
+            record["chinDriftFromFirst"] = number(chinDelta)
+            if !pointDelta.isFinite || pointDelta > 0.001
+                || !eyeDelta.isFinite || eyeDelta > 0.001
+                || !chinDelta.isFinite || chinDelta > 0.001 {
+                failures.append("identical image pixels produced measurements differing by more than 0.001 image fraction")
+            }
+        }
+        record["failures"] = failures
+        record["passed"] = failures.isEmpty
+        return (record, failures, measurement)
     }
 
     static func imagePoints(_ region: VNFaceLandmarkRegion2D, size: CGSize) -> [CGPoint] {

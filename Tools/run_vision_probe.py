@@ -15,7 +15,11 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("runtime", choices=["macos", "18.5", "26.2"])
+    parser.add_argument("--modes", default="direct,explicit", help="Comma-separated independent probe modes")
     args = parser.parse_args()
+    modes = args.modes.split(",")
+    if not modes or any(mode not in ("direct", "explicit", "modern", "legacy1") for mode in modes):
+        raise SystemExit("Modes must be direct, explicit, modern or legacy1")
     root = Path(__file__).resolve().parents[1]
     output = root / "build" / "vision-probe"
     output.mkdir(parents=True, exist_ok=True)
@@ -64,7 +68,7 @@ def main():
                 subprocess.run(["xcrun", "simctl", "bootstatus", simulator_id, "-b"], stdout=log, stderr=subprocess.STDOUT, timeout=240, check=True)
 
         results = []
-        for mode in ("direct", "explicit"):
+        for mode in modes:
             command = [str(executable), str(fixture), mode]
             if simulator_id:
                 command = ["xcrun", "simctl", "spawn", simulator_id] + command

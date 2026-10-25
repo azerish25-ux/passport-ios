@@ -12,31 +12,37 @@ on:
       runner:
         description: Hosted runner architecture
         type: choice
-        default: macos-15-intel
+        default: macos-15
         options: [macos-15-intel, macos-15]
       runtime:
         description: Exact runtime, or native macOS
         type: choice
-        default: '18.5'
+        default: '26.2'
         options: ['18.5', '26.2', macos]
+      modes:
+        description: Independent API/model controls
+        type: choice
+        default: modern,legacy1
+        options: ['modern,legacy1', 'direct,explicit', modern, legacy1, direct, explicit]
 
 permissions:
   contents: read
 
 concurrency:
-  group: vision-probe-${{ github.ref }}-${{ inputs.runner || 'macos-15-intel' }}-${{ inputs.runtime || '18.5' }}
+  group: vision-probe-${{ github.ref }}-${{ inputs.runner || 'macos-15' }}-${{ inputs.runtime || '26.2' }}-${{ inputs.modes || 'modern,legacy1' }}
   cancel-in-progress: true
 
 jobs:
   isolated-vision:
-    # The earlier arm64/macOS and arm64/iOS comparisons are preserved in run
-    # 40172454108. The next control holds iOS18.5 fixed and changes the host
-    # architecture. A dispatch can reproduce any earlier supported target.
-    name: Native Vision ${{ inputs.runtime || '18.5' }} on ${{ inputs.runner || 'macos-15-intel' }}
-    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
+    # Native macOS, two arm64 iOS runtimes and Intel18.5 were compared in runs
+    # 40172454108 and40173253252. This control compares the modern Swift API
+    # and the older documented model. A dispatch can reproduce earlier targets.
+    name: Native Vision ${{ inputs.runtime || '26.2' }} on ${{ inputs.runner || 'macos-15' }}
+    runs-on: ${{ inputs.runner || 'macos-15' }}
     timeout-minutes: 15
     env:
-      VISION_PROBE_RUNTIME: ${{ inputs.runtime || '18.5' }}
+      VISION_PROBE_RUNTIME: ${{ inputs.runtime || '26.2' }}
+      VISION_PROBE_MODES: ${{ inputs.modes || 'modern,legacy1' }}
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 26.3
@@ -46,12 +52,12 @@ jobs:
           xcodebuild -version
           xcrun simctl list runtimes
       - name: Run independent native Vision processes
-        run: python3 Tools/run_vision_probe.py "$VISION_PROBE_RUNTIME"
+        run: python3 Tools/run_vision_probe.py "$VISION_PROBE_RUNTIME" --modes "$VISION_PROBE_MODES"
       - name: Preserve every result, including failures
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: isolated-vision-${{ inputs.runtime || '18.5' }}-${{ runner.arch }}
+          name: isolated-vision-${{ inputs.runtime || '26.2' }}-${{ runner.arch }}
           path: build/vision-probe/*.log
           if-no-files-found: warn
           retention-days: 14
