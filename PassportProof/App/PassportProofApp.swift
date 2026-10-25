@@ -15,10 +15,14 @@ struct PassportProofApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var isLargeTextUITest: Bool {
+        ProcessInfo.processInfo.arguments.contains("-UITestLargeText")
+    }
+
     var body: some Scene {
         WindowGroup {
             ZStack {
-                RootView()
+                appRoot
                     .environmentObject(entitlements)
                     .environmentObject(session)
                     .task { await entitlements.refresh() }
@@ -29,6 +33,15 @@ struct PassportProofApp: App {
                 }
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: scenePhase)
+        }
+    }
+
+    @ViewBuilder
+    private var appRoot: some View {
+        if isLargeTextUITest {
+            RootView().dynamicTypeSize(.accessibility3)
+        } else {
+            RootView()
         }
     }
 }

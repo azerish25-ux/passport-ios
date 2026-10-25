@@ -110,6 +110,7 @@ struct DocumentDetailView: View {
     private var rulesSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             Theme.SectionHeader(title: "Rules encoded", trailing: "verified \(Format.day(spec.verifiedOn))")
+                .padding(.horizontal, Theme.Spacing.margin)
             VStack(spacing: Theme.Spacing.s) {
                 if let share = spec.headHeightShare {
                     RulePill(

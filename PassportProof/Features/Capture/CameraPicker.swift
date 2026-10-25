@@ -309,10 +309,9 @@ private final class CameraSessionController: NSObject {
                 return
             }
             session.addOutput(videoOutput)
-            if let connection = videoOutput.connection(with: .video),
-               connection.isVideoRotationAngleSupported(90) {
-                connection.videoRotationAngle = 90
-            }
+            // Video-data buffers remain in sensor orientation. The analysis
+            // path rotates them explicitly; rotating both here and there would
+            // present Vision with a sideways frame.
 
             guard session.canAddOutput(photoOutput) else {
                 report("Photo capture could not be configured on this device.")

@@ -133,6 +133,7 @@ struct ExportView: View {
     private var printContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Theme.SectionHeader(title: "Print layout")
+                .padding(.horizontal, Theme.Spacing.margin)
             VStack(spacing: Theme.Spacing.s) {
                 ForEach(PrintSheetLayout.allCases) { item in
                     LayoutRow(item: item, isSelected: layout == item) {
@@ -176,6 +177,7 @@ struct ExportView: View {
     private var digitalContent: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Theme.SectionHeader(title: "Digital file")
+                .padding(.horizontal, Theme.Spacing.margin)
 
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 ExportFact(icon: "photo", title: "Geometry", value: "\(spec.widthPixels) × \(spec.heightPixels) pixels")

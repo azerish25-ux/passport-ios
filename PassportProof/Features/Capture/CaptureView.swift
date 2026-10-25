@@ -38,9 +38,11 @@ struct CaptureView: View {
                 )
 
                 Theme.SectionHeader(title: "Your setup")
+                    .padding(.horizontal, Theme.Spacing.margin)
                 setupGuide
 
                 Theme.SectionHeader(title: "Choose a source")
+                    .padding(.horizontal, Theme.Spacing.margin)
                 sourceCard
 
                 if cameraDenied {
@@ -92,8 +94,9 @@ struct CaptureView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             FramingOverlay(spec: spec)
                 .aspectRatio(CGFloat(spec.aspectRatio), contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: 320)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .frame(maxWidth: .infinity, alignment: .center)
                 .accessibilityLabel("Example framing guide")
                 .accessibilityHidden(true)
 
