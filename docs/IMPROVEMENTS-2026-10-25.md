@@ -16,6 +16,10 @@ The simulator assessment found a missing white/off-white background check, a cro
 - Export previews the actual PDF renderer or complete digital crop. A single contextual primary action respects readiness and purchase state. Share files have a dedicated protected temporary directory and cleanup for active, dismissed and abandoned files.
 - A single StoreKit configuration is copied only to test bundles. Integration tests exercise production transaction handling. The app shows a purchasable price only when StoreKit metadata is available.
 
+## Lifecycle refinement
+
+Reopening the crop uses the same full-screen workspace as the first edit. A synchronous per-scene privacy window covers app presentations on backgrounding; active sharing is kept usable. The UI suite backgrounds and resumes a draft edit, then verifies its zoom and dimensions survive and cancel preserves the accepted review. This is state-restoration coverage, not proof of every OS app-switcher snapshot.
+
 ## Verification contract
 
 GitHub Actions builds the simulator and unsigned device Release app, runs unit tests, and exports real test attachments. A successful repair unit gate requires zero failed, skipped or expected-failure tests. UI tests use a real PhotosPicker input and local StoreKit transactions; no pre-approved PhotoAnalysis or debug entitlement is injected into the main-flow test.

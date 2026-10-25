@@ -10,8 +10,10 @@
 		5AB34133BF728A17BA255232 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B246EA12E7B8157A7A2BF48 /* AppRoute.swift */; };
 		4BE0792189372DAC4D3ED32A /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6DA9F4CC04793E1F7F6450E /* Components.swift */; };
 		48AEF8CB640830315F830B07 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BEF4FF367D046025952EA47 /* Format.swift */; };
+		766D1BFBC28DE12D6ED4AB12 /* NoticeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0415F604EAE330AFFCB7D55 /* NoticeCard.swift */; };
 		5D660FEB046E0CE42F272334 /* PassportProofApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F3947844B25370E90A5F31 /* PassportProofApp.swift */; };
 		BE32D8A408B7619089AB37BD /* PhotoSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */; };
+		F27CC19DDA079284A8D25F72 /* PrivacyShieldCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C501CFF02AA39EAFD496691 /* PrivacyShieldCoordinator.swift */; };
 		676EE6AB7DD6A4A90B5E8785 /* PrivacyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533378039F0EDD012A20E622 /* PrivacyView.swift */; };
 		31FFA1C8738E19C9C593A64E /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601A75661321235EC7FE87E5 /* RootView.swift */; };
 		9AEB923EB845E399E6255B04 /* DocumentCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73EA9B91B5AD944DE9669773 /* DocumentCorpus.swift */; };
@@ -82,8 +84,10 @@
 		8B246EA12E7B8157A7A2BF48 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		D6DA9F4CC04793E1F7F6450E /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		3BEF4FF367D046025952EA47 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
+		F0415F604EAE330AFFCB7D55 /* NoticeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoticeCard.swift; sourceTree = "<group>"; };
 		41F3947844B25370E90A5F31 /* PassportProofApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofApp.swift; sourceTree = "<group>"; };
 		905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSession.swift; sourceTree = "<group>"; };
+		1C501CFF02AA39EAFD496691 /* PrivacyShieldCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyShieldCoordinator.swift; sourceTree = "<group>"; };
 		533378039F0EDD012A20E622 /* PrivacyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyView.swift; sourceTree = "<group>"; };
 		601A75661321235EC7FE87E5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		73EA9B91B5AD944DE9669773 /* DocumentCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentCorpus.swift; sourceTree = "<group>"; };
@@ -193,8 +197,10 @@
 				8B246EA12E7B8157A7A2BF48 /* AppRoute.swift */,
 				D6DA9F4CC04793E1F7F6450E /* Components.swift */,
 				3BEF4FF367D046025952EA47 /* Format.swift */,
+				F0415F604EAE330AFFCB7D55 /* NoticeCard.swift */,
 				41F3947844B25370E90A5F31 /* PassportProofApp.swift */,
 				905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */,
+				1C501CFF02AA39EAFD496691 /* PrivacyShieldCoordinator.swift */,
 				533378039F0EDD012A20E622 /* PrivacyView.swift */,
 				601A75661321235EC7FE87E5 /* RootView.swift */,
 			);
@@ -525,8 +531,10 @@
 				5AB34133BF728A17BA255232 /* AppRoute.swift in Sources */,
 				4BE0792189372DAC4D3ED32A /* Components.swift in Sources */,
 				48AEF8CB640830315F830B07 /* Format.swift in Sources */,
+				766D1BFBC28DE12D6ED4AB12 /* NoticeCard.swift in Sources */,
 				5D660FEB046E0CE42F272334 /* PassportProofApp.swift in Sources */,
 				BE32D8A408B7619089AB37BD /* PhotoSession.swift in Sources */,
+				F27CC19DDA079284A8D25F72 /* PrivacyShieldCoordinator.swift in Sources */,
 				676EE6AB7DD6A4A90B5E8785 /* PrivacyView.swift in Sources */,
 				31FFA1C8738E19C9C593A64E /* RootView.swift in Sources */,
 				9AEB923EB845E399E6255B04 /* DocumentCorpus.swift in Sources */,

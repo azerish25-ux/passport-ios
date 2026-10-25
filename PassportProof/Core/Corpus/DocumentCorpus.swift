@@ -30,7 +30,7 @@ enum DocumentCorpus {
             backgroundDescription: "Plain white or off-white, without shadows, texture, objects or lines",
             expressionRequirement: "Eyes open, mouth closed, with a neutral expression or natural smile",
             glassesRequirement: "No eyeglasses unless a documented medical exception applies; eyes must remain fully visible",
-            sourceURL: url("https://travel.state.gov/content/travel/en/passports/how-apply/photos.html"),
+            sourceURL: url("https://travel.state.gov/en/passports/apply/help/photos.html"),
             verifiedOn: verifiedDate,
             changelog: [
                 ChangelogEntry(

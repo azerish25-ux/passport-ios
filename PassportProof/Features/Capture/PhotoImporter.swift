@@ -35,7 +35,10 @@ struct PhotoImporter: View {
     @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+        // PhotosPicker's label closure is nonisolated. Read the State value on
+        // the main actor, then pass a snapshot that refreshes with this body.
+        let loading = isLoading
+        return VStack(alignment: .leading, spacing: Theme.Spacing.s) {
 
             PhotosPicker(selection: $item, matching: .images) {
                 HStack(spacing: Theme.Spacing.m) {
@@ -47,7 +50,7 @@ struct PhotoImporter: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(title).font(.headline)
                             .foregroundStyle(isEnabled ? Theme.ink : Theme.inkTertiary)
-                        Text(isLoading ? "Opening your original…" : "Choose an original from your photo library")
+                        Text(loading ? "Opening your original…" : "Choose an original from your photo library")
                             .font(.footnote)
                             .foregroundStyle(Theme.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -55,7 +58,7 @@ struct PhotoImporter: View {
 
                     Spacer(minLength: Theme.Spacing.m)
 
-                    if isLoading {
+                    if loading {
                         ProgressView().accessibilityLabel("Loading photo")
                     } else {
                         Image(systemName: "chevron.right")

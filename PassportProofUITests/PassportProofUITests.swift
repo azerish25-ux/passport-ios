@@ -187,6 +187,33 @@ final class PassportProofUITests: XCTestCase {
         waitUntil(in: app, description: "Rotation must finish", timeout: 30) { app.buttons["crop.reset"].isEnabled }
         app.buttons["crop.reset"].tap()
         waitUntil(in: app, description: "Reset must finish", timeout: 30) { app.buttons["crop.confirm"].isEnabled }
+
+        // Check lifecycle preservation through public UI operations. A distinct
+        // draft zoom makes a silently recreated editor observable. This does not
+        // inspect or make claims about the system's private app-switcher image.
+        let zoom = app.sliders["crop.zoom"]
+        scrollToHittable(zoom, in: app, towardTop: true)
+        let resetZoom = try XCTUnwrap(zoom.value as? String)
+        zoom.adjust(toNormalizedSliderPosition: 0.2)
+        waitUntil(in: app, description: "The draft zoom must change before testing restoration", timeout: 5) {
+            (zoom.value as? String) != resetZoom
+        }
+        let draftZoom = try XCTUnwrap(zoom.value as? String)
+        let dimensions = app.descendants(matching: .any)["crop.dimensions"]
+        require(dimensions, in: app)
+        let draftDimensions = dimensions.label
+        XCUIDevice.shared.press(.home)
+        waitUntil(in: app, description: "The application must remain running in the background", timeout: 10) {
+            app.state == .runningBackground || app.state == .runningBackgroundSuspended
+        }
+        app.activate()
+        require(app.buttons["crop.cancel"], in: app)
+        waitUntil(in: app, description: "The privacy cover must release the active crop editor", timeout: 5) {
+            !app.descendants(matching: .any)["privacy.shield"].exists && app.buttons["crop.cancel"].isHittable
+        }
+        XCTAssertEqual(zoom.value as? String, draftZoom, "Returning to the app must preserve the draft crop")
+        XCTAssertEqual(dimensions.label, draftDimensions)
+        XCTAssertTrue(app.buttons["crop.confirm"].isEnabled)
         capture(app, named: "08-real-photo-draft-edit")
         app.buttons["crop.cancel"].tap()
         require(photo, in: app)
@@ -278,7 +305,11 @@ final class PassportProofUITests: XCTestCase {
         require(element, in: app)
         var attempts = 0
         while !element.isHittable && attempts < 9 {
-            if towardTop { app.swipeDown() } else { app.swipeUp() }
+            // The crop preview owns its drag gesture. Scroll in the outer
+            // padding so reaching its controls never reframes the photograph.
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: towardTop ? 0.32 : 0.72))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: towardTop ? 0.72 : 0.32))
+            start.press(forDuration: 0.05, thenDragTo: end)
             attempts += 1
         }
         if !element.isHittable { failureEvidence(app, named: "unreachable-element") }

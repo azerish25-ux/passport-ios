@@ -78,7 +78,7 @@ struct AnalysisView: View {
         .safeAreaInset(edge: .bottom) { bottomBar }
         .task(id: "\(spec.id)-\(session.revision.uuidString)") { await run() }
         .navigationDestination(isPresented: $goToExport) { ExportView(spec: spec) }
-        .sheet(item: $editContext) { context in
+        .fullScreenCover(item: $editContext) { context in
             CropEditorView(context: context, spec: spec, onAccept: { crop in
                 _ = session.acceptCrop(crop, for: spec, captureDate: context.captureDate)
                 editContext = nil
