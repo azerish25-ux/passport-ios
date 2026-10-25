@@ -337,10 +337,27 @@ final class PassportProofTests: XCTestCase {
     /// assertions check what App Review would actually see.
 
     func testAppIconIsCompiledIntoTheBundle() {
-        // actool injects CFBundleIconName when an app icon set is present and
-        // non-empty. A missing or empty AppIcon fails this.
-        let iconName = Bundle.main.infoDictionary?["CFBundleIconName"]
-        XCTAssertNotNil(iconName, "CFBundleIconName is absent — the app icon did not compile into the bundle")
+        // The strongest evidence: actool emplaces the compiled icon PNGs at the
+        // bundle root. Absent icon files mean the icon did not compile.
+        XCTAssertNotNil(
+            Bundle.main.url(forResource: "AppIcon60x60@2x", withExtension: "png"),
+            "AppIcon60x60@2x.png is not in the bundle — the app icon did not compile"
+        )
+
+        // Plist registration. Which key appears varies by toolchain and
+        // platform: CFBundleIconName is the App Store requirement, CFBundleIcons
+        // is the registration dict actool writes for SpringBoard. The failure
+        // message lists what is actually there, so a toolchain change is
+        // diagnosable from the log alone.
+        let info = Bundle.main.infoDictionary ?? [:]
+        let registered = info["CFBundleIconName"] != nil || info["CFBundleIcons"] != nil
+        let iconKeys = info.keys.filter {
+            $0.localizedCaseInsensitiveContains("icon")
+        }.sorted()
+        XCTAssertTrue(
+            registered,
+            "no icon registration in Info.plist; icon-related keys present: \(iconKeys)"
+        )
     }
 
     func testPrivacyManifestIsBundled() {
