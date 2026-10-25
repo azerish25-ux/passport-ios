@@ -14,7 +14,6 @@ struct DocumentLibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                brandHeader
                 hero
                 catalogue
                 process
@@ -23,6 +22,12 @@ struct DocumentLibraryView: View {
             }
         }
         .background(Theme.paper)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            brandHeader
+                .padding(.bottom, Theme.Spacing.s)
+                .background(Theme.paper)
+                .overlay(alignment: .bottom) { Theme.Rule() }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showPrivacy) {
             NavigationStack { PrivacyView() }
@@ -124,14 +129,26 @@ struct DocumentLibraryView: View {
 
     private var catalogue: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            HStack {
-                Text("Choose your document")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(Theme.ink)
-                Spacer()
-                Text("\(DocumentCorpus.documents.count) workflows")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Theme.inkSecondary)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    Text("Choose your document")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(DocumentCorpus.documents.count) workflows")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.inkSecondary)
+                }
+            } else {
+                HStack {
+                    Text("Choose your document")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(Theme.ink)
+                    Spacer()
+                    Text("\(DocumentCorpus.documents.count) workflows")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.inkSecondary)
+                }
             }
 
             VStack(spacing: Theme.Spacing.m) {
@@ -221,41 +238,43 @@ struct DocumentLibraryView: View {
 
 private struct DocumentCard: View {
     let spec: DocumentSpec
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .center, spacing: Theme.Spacing.m) {
-            Text(spec.countryCode)
-                .font(.system(.headline, design: .monospaced, weight: .bold))
-                .foregroundStyle(Theme.ink)
-                .frame(width: 52, height: 52)
-                .background(Theme.paperSunk, in: RoundedRectangle(cornerRadius: 14))
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                HStack(spacing: Theme.Spacing.s) {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                    HStack(spacing: Theme.Spacing.s) {
+                        countryTile
+                        workflowBadge
+                        Spacer()
+                        chevron
+                    }
                     Text(spec.documentName)
-                        .font(.headline)
+                        .font(.title3.weight(.bold))
                         .foregroundStyle(Theme.ink)
-                    Text(spec.workflow.shortTitle)
-                        .font(.caption2.weight(.bold))
-                        .tracking(0.5)
-                        .foregroundStyle(Theme.accent)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(Theme.accent.opacity(0.1), in: Capsule())
+                        .fixedSize(horizontal: false, vertical: true)
+                    summary
                 }
-                Text(spec.supportsPrintSheet
-                     ? "2 × 2 in print sheet · 300 DPI"
-                     : "\(spec.widthPixels) × \(spec.heightPixels) JPEG · up to \(spec.maximumFileSizeBytes.map { $0 / 1_000 } ?? 0) kB")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                    countryTile
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        HStack(spacing: Theme.Spacing.s) {
+                            Text(spec.documentName)
+                                .font(.headline)
+                                .foregroundStyle(Theme.ink)
+                            workflowBadge
+                        }
+                        summary
+                    }
+                    Spacer(minLength: Theme.Spacing.s)
+                    chevron
+                }
             }
-            Spacer(minLength: Theme.Spacing.s)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Theme.inkTertiary)
         }
         .padding(Theme.Spacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.paperRaised)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
@@ -263,6 +282,39 @@ private struct DocumentCard: View {
                 .stroke(Theme.rule, lineWidth: 0.5)
         }
         .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var countryTile: some View {
+        Text(spec.countryCode)
+            .font(.system(.headline, design: .monospaced, weight: .bold))
+            .foregroundStyle(Theme.ink)
+            .frame(width: 52, height: 52)
+            .background(Theme.paperSunk, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var workflowBadge: some View {
+        Text(spec.workflow.shortTitle)
+            .font(.caption2.weight(.bold))
+            .tracking(0.5)
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(Theme.accent.opacity(0.1), in: Capsule())
+    }
+
+    private var summary: some View {
+        Text(spec.supportsPrintSheet
+             ? "2 × 2 in print sheet · 300 DPI"
+             : "\(spec.widthPixels) × \(spec.heightPixels) JPEG · up to \(spec.maximumFileSizeBytes.map { $0 / 1_000 } ?? 0) kB")
+            .typeStyle(Typography.meta)
+            .foregroundStyle(Theme.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.caption.weight(.bold))
+            .foregroundStyle(Theme.inkTertiary)
     }
 }
 
