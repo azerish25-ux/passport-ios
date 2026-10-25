@@ -44,7 +44,10 @@
 		DDBD5FF9D08A2F4EDBA0F6DB /* UnlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */; };
 		F9D83C9671EFDC7CC182057F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDAC857F76ADA2D887487466 /* Assets.xcassets */; };
 		425163FA0A6768D22FF0264E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CEE758DCE401EC8FFA4892D6 /* PrivacyInfo.xcprivacy */; };
+		40EF49084A84A0F14DC69064 /* AssessmentDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */; };
 		AC6E7BB9129E64A64D41B172 /* PassportProofTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */; };
+		59C51B405BE6B73239A1A0E3 /* PortraitAssessmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA91B0AF243B6D7FA51535E2 /* PortraitAssessmentTests.swift */; };
+		62DFB061A1CC369FD9991266 /* AssessmentAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E863363863A0B658325A5728 /* AssessmentAssets.xcassets */; };
 		F5DFCDF475BDFDDD0EE62710 /* PassportProofUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124CD4FB86723F8CA70D24C4 /* PassportProofUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -104,10 +107,13 @@
 		54F8788FBF0A25EFE8F1BDAF /* DocumentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentDetailView.swift; sourceTree = "<group>"; };
 		27551D16EC8BBB5BE88CE871 /* DocumentLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentLibraryView.swift; sourceTree = "<group>"; };
 		37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockView.swift; sourceTree = "<group>"; };
+		2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssessmentDiagnosticsTests.swift; sourceTree = "<group>"; };
 		95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofTests.swift; sourceTree = "<group>"; };
+		CA91B0AF243B6D7FA51535E2 /* PortraitAssessmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortraitAssessmentTests.swift; sourceTree = "<group>"; };
 		124CD4FB86723F8CA70D24C4 /* PassportProofUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofUITests.swift; sourceTree = "<group>"; };
 		CDAC857F76ADA2D887487466 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CEE758DCE401EC8FFA4892D6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E863363863A0B658325A5728 /* AssessmentAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssessmentAssets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -338,7 +344,10 @@
 		4A633AA5950C04D7472E6A77 /* PassportProofTests */ = {
 			isa = PBXGroup;
 			children = (
+				E863363863A0B658325A5728 /* AssessmentAssets.xcassets */,
+				2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */,
 				95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */,
+				CA91B0AF243B6D7FA51535E2 /* PortraitAssessmentTests.swift */,
 			);
 			path = PassportProofTests;
 			sourceTree = "<group>";
@@ -474,6 +483,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				62DFB061A1CC369FD9991266 /* AssessmentAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -533,7 +543,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				40EF49084A84A0F14DC69064 /* AssessmentDiagnosticsTests.swift in Sources */,
 				AC6E7BB9129E64A64D41B172 /* PassportProofTests.swift in Sources */,
+				59C51B405BE6B73239A1A0E3 /* PortraitAssessmentTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
