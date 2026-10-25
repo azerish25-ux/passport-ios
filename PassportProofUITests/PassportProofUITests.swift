@@ -37,6 +37,7 @@ final class PassportProofUITests: XCTestCase {
 
         XCTAssertTrue(app.buttons["library.start"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.buttons["library.privacy"].isHittable)
+        scrollToHittable(app.buttons["library.start"], in: app)
         capture(app, named: "05-library-accessibility-text")
     }
 

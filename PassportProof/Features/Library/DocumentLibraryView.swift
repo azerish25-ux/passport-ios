@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct DocumentLibraryView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showPrivacy = false
 
     var body: some View {
@@ -41,12 +42,14 @@ struct DocumentLibraryView: View {
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
-                Text("PRIVATE PHOTO STUDIO")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1.1)
-                    .foregroundStyle(Theme.inkSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Text("PRIVATE PHOTO STUDIO")
+                        .font(.caption2.weight(.semibold))
+                        .tracking(1.1)
+                        .foregroundStyle(Theme.inkSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                }
             }
             Spacer()
             Button {
