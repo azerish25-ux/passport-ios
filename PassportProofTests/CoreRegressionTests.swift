@@ -67,6 +67,15 @@ final class CoreRegressionTests: XCTestCase {
         XCTAssertLessThan(eye.y, chin.y, "Top-origin eyes must remain above the chin.")
     }
 
+    func testInvalidRawLandmarksCannotBecomeMeasurements() {
+        XCTAssertTrue(FaceAnalyzer.normalizedFacePointsAreValid([CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 1)]))
+        XCTAssertFalse(FaceAnalyzer.normalizedFacePointsAreValid([]))
+        for point in [CGPoint(x: CGFloat.nan, y: 0.5), CGPoint(x: 0.5, y: CGFloat.infinity),
+                      CGPoint(x: -0.001, y: 0.5), CGPoint(x: 0.5, y: 1.001)] {
+            XCTAssertFalse(FaceAnalyzer.normalizedFacePointsAreValid([point]))
+        }
+    }
+
     func testUncertainCrownDoesNotEraseMeasuredEyeLine() throws {
         let spec = try XCTUnwrap(DocumentCorpus.document(id: "us-visa"))
         let geometry = FaceGeometry(

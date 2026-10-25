@@ -3,8 +3,9 @@
 //  PassportProofUITests
 //
 //  Real navigation, PhotosPicker, image analysis, StoreKit and system sharing.
-//  CI seeds exactly one full-resolution portrait in the disposable simulator's
-//  Photos library. No photo fixture or entitlement bypass is added to the app.
+//  CI imports one full-resolution portrait into the disposable simulator's
+//  Photos library. Its historical sample photos may also be present. No photo
+//  fixture or entitlement bypass is added to the app.
 //  Run serially: StoreKitTest controls one shared environment per simulator.
 //
 
@@ -348,20 +349,24 @@ final class PassportProofUITests: XCTestCase {
         let library = app.buttons["capture.library"]
         scrollToHittable(library, in: app)
         library.tap()
-        // PhotosPicker accessibility varies with the runtime. Prefer its photo
-        // label; a single grid cell is unambiguous on the erased/seeded CI phone.
-        let photoLabel = NSPredicate(format: "label BEGINSWITH[c] 'Photo'")
-        let cell = app.cells.matching(photoLabel).firstMatch
-        let image = app.images.matching(photoLabel).firstMatch
-        let gridCells = app.collectionViews.cells
-        waitUntil(in: app, description: "PhotosPicker must expose the single seeded portrait; inspect the attached hierarchy if the runtime changed", timeout: 20) {
-            cell.exists || image.exists || gridCells.count == 1
+        // These identifiers come from the actual system-picker hierarchy. Its
+        // loading screen leaves the app's hidden photo.on.rectangle icon in the
+        // accessibility tree, so an app-wide 'Photo' image query is unsafe.
+        let picker = app.scrollViews["photosView_content_scroll_view"]
+        let grid = picker.otherElements.matching(identifier: "PXGGridLayout-Group").firstMatch
+        let assets = grid.images.matching(NSPredicate(
+            format: "identifier == %@ AND label BEGINSWITH %@", "PXGGridLayout-Info", "Photo, "
+        ))
+        let portrait = assets.firstMatch
+        waitUntil(in: app, description: "The system PhotosPicker must finish loading and expose its newest photo", timeout: 40) {
+            app.navigationBars["Photos"].exists && picker.exists && portrait.exists && portrait.isHittable
         }
+        // CI adds this portrait immediately after erasing the simulator. The
+        // picker sorts newest first; the runtime's sample assets are historical.
+        print("PHOTOS PICKER selecting newest asset: \(portrait.label); grid asset count: \(assets.count)")
         attachHierarchy(app, named: "\(evidencePrefix)-system-photos-picker")
         capture(app, named: "\(evidencePrefix)-photos-picker")
-        if cell.exists { cell.tap() }
-        else if image.exists { image.tap() }
-        else { gridCells.element(boundBy: 0).tap() }
+        portrait.tap()
     }
 
     @MainActor

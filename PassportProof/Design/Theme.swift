@@ -67,7 +67,7 @@ enum Theme {
 
     static let ink = adaptiveColor(light: 0x19312B, dark: 0xEFF3EA)
     static let inkSecondary = adaptiveColor(light: 0x52625A, dark: 0xB4C5B9)
-    static let inkTertiary = adaptiveColor(light: 0x66756C, dark: 0x9CAF9E)
+    static let inkTertiary = adaptiveColor(light: 0x5C6B62, dark: 0x9CAF9E)
 
     // MARK: Rules
 

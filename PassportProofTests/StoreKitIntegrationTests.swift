@@ -43,12 +43,69 @@ final class StoreKitIntegrationTests: XCTestCase {
         defer { environment.clearTransactions(); environment.resetToDefaultState() }
         let store = EntitlementStore()
         await store.refresh()
-        environment.failTransactionsEnabled = true
-        environment.failureError = .paymentCancelled
-        await store.purchase()
-        XCTAssertFalse(store.isUnlocked)
         XCTAssertEqual(store.state, .available)
+        // The legacy failureError API does not support paymentCancelled. Using
+        // that unsupported code can produce a different failure, not a canceled
+        // purchase. Inject the documented StoreKit 2 purchase error instead.
+        // https://developer.apple.com/documentation/storekittest/sktestsession/failureerror
+        // https://developer.apple.com/documentation/storekittest/sktestsession/setsimulatederror(_:forapi:)
+        // https://developer.apple.com/documentation/storekittest/sktestfailures/purchase/generic(_:)
+        try await environment.setSimulatedError(.generic(.userCancelled), forAPI: .purchase)
+        let configured = await environment.simulatedError(forAPI: .purchase)
+        XCTAssertEqual(configured, .generic(.userCancelled))
+        await store.purchase()
+        recordPurchaseDiagnostic(store, configured: String(describing: configured), name: "cancelled-purchase")
+        XCTAssertFalse(store.isUnlocked)
+        XCTAssertEqual(store.state, .available, store.lastPurchaseErrorDiagnostic ?? "No error was thrown")
         XCTAssertFalse(store.isWorking)
+        XCTAssertFalse(store.isPrototypeUnlock)
+    }
+
+    func testNonCancellationPurchaseFailureStaysLockedAndCanRetry() async throws {
+        let environment = try environment()
+        defer { environment.clearTransactions(); environment.resetToDefaultState() }
+        let store = EntitlementStore()
+        await store.refresh()
+        XCTAssertEqual(store.state, .available)
+        try await environment.setSimulatedError(.generic(.notAvailableInStorefront), forAPI: .purchase)
+        await store.purchase()
+        recordPurchaseDiagnostic(store, configured: "StoreKitError.notAvailableInStorefront", name: "non-cancellation-purchase")
+        XCTAssertFalse(store.isUnlocked)
+        XCTAssertFalse(store.isWorking)
+        guard case .failed = store.state else {
+            return XCTFail("An actual store failure must remain visible: \(store.state)")
+        }
+
+        try await environment.setSimulatedError(nil, forAPI: .purchase)
+        await store.purchase()
+        XCTAssertTrue(store.isUnlocked, "A supported retry must complete through verified StoreKit purchase")
+        XCTAssertEqual(store.state, .purchased)
+        XCTAssertFalse(store.isPrototypeUnlock)
+        XCTAssertNil(store.lastPurchaseErrorDiagnostic, "A successful new attempt must discard stale failure details")
+    }
+
+    func testCancellationRecognitionDoesNotHideOtherStoreErrors() {
+        let cancelled = NSError(domain: SKErrorDomain, code: SKError.Code.paymentCancelled.rawValue)
+        XCTAssertTrue(EntitlementStore.isCancellation(StoreKitError.userCancelled))
+        XCTAssertTrue(EntitlementStore.isCancellation(cancelled))
+        XCTAssertTrue(EntitlementStore.isCancellation(StoreKitError.systemError(cancelled)))
+        let wrapped = NSError(domain: "Test.StoreWrapper", code: 1,
+                              userInfo: [NSUnderlyingErrorKey: StoreKitError.systemError(cancelled)])
+        XCTAssertTrue(EntitlementStore.isCancellation(wrapped))
+
+        XCTAssertFalse(EntitlementStore.isCancellation(StoreKitError.unknown))
+        XCTAssertFalse(EntitlementStore.isCancellation(StoreKitError.networkError(URLError(.cancelled))))
+        XCTAssertFalse(EntitlementStore.isCancellation(StoreKitError.systemError(URLError(.notConnectedToInternet))))
+        let invalidPayment = NSError(domain: SKErrorDomain, code: SKError.Code.paymentInvalid.rawValue,
+                                     userInfo: [NSUnderlyingErrorKey: cancelled])
+        XCTAssertFalse(EntitlementStore.isCancellation(StoreKitError.systemError(invalidPayment)))
+        XCTAssertFalse(EntitlementStore.isCancellation(NSError(domain: "Test.Unrelated", code: cancelled.code,
+                                                              userInfo: [NSLocalizedDescriptionKey: "Payment canceled"])))
+        var deeplyWrapped: Error = cancelled
+        for _ in 0..<12 {
+            deeplyWrapped = NSError(domain: "Test.StoreWrapper", code: 1, userInfo: [NSUnderlyingErrorKey: deeplyWrapped])
+        }
+        XCTAssertFalse(EntitlementStore.isCancellation(deeplyWrapped), "Error-chain inspection must have a finite bound")
     }
 
     func testPendingPurchaseStaysLockedUntilApproval() async throws {
@@ -72,5 +129,20 @@ final class StoreKitIntegrationTests: XCTestCase {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         XCTAssertTrue(condition(), "StoreKit transaction update did not reach the app.", file: file, line: line)
+    }
+
+    private func recordPurchaseDiagnostic(_ store: EntitlementStore, configured: String, name: String) {
+        let summary = """
+        Configured error: \(configured)
+        Resulting state: \(store.state)
+        Unlocked: \(store.isUnlocked); working: \(store.isWorking)
+        Thrown error chain:
+        \(store.lastPurchaseErrorDiagnostic ?? "No thrown error; StoreKit returned a PurchaseResult")
+        """
+        print("STOREKIT DIAGNOSTIC \(name)\n\(summary)")
+        let attachment = XCTAttachment(string: summary)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

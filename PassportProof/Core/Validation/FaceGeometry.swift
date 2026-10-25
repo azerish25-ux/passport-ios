@@ -17,6 +17,7 @@
 
 import Foundation
 import CoreGraphics
+import CoreML
 import Vision
 
 /// Normalised face geometry. **All y values are 0 at the top of the image and
@@ -68,13 +69,55 @@ struct FaceGeometry: Sendable {
 
 enum FaceAnalyzer {
 
+    enum InferenceBackend: String {
+        case system
+        case cpu
+    }
+
+    private enum RequestConfigurationError: Error {
+        case noComputeStages
+        case cpuUnavailable(String)
+    }
+
+    /// Simulator inference uses supported CPU stages explicitly. It still runs
+    /// Apple's real Vision model. A physical device retains the native backend;
+    /// Simulator results do not establish accuracy or performance on hardware.
+    static var defaultBackend: InferenceBackend {
+        #if targetEnvironment(simulator)
+        return .cpu
+        #else
+        return .system
+        #endif
+    }
+
+    /// One request factory for production inference and runtime diagnostics.
+    /// A missing CPU stage is an error, never a silent fallback to invented data.
+    /// https://developer.apple.com/documentation/vision/vnrequest/supportedcomputestagedevices
+    /// https://developer.apple.com/documentation/vision/vnrequest/setcomputedevice(_:for:)
+    static func landmarkRequest(backend: InferenceBackend = defaultBackend) throws -> VNDetectFaceLandmarksRequest {
+        let request = VNDetectFaceLandmarksRequest()
+        if backend == .cpu {
+            let stages = try request.supportedComputeStageDevices
+            guard !stages.isEmpty else { throw RequestConfigurationError.noComputeStages }
+            for (stage, devices) in stages {
+                guard let cpu = devices.first(where: { device in
+                    if case .cpu = device { return true }
+                    return false
+                }) else { throw RequestConfigurationError.cpuUnavailable(String(describing: stage)) }
+                request.setComputeDevice(cpu, for: stage)
+            }
+        }
+        return request
+    }
+
     // MARK: - Geometry
 
     static func geometry(of image: CGImage) -> FaceGeometry? {
-        let request = VNDetectFaceLandmarksRequest()
+        let request: VNDetectFaceLandmarksRequest
         let handler = VNImageRequestHandler(cgImage: image, orientation: .up, options: [:])
 
         do {
+            request = try landmarkRequest()
             try handler.perform([request])
         } catch {
             return nil
@@ -84,7 +127,9 @@ enum FaceAnalyzer {
         // would silently discard evidence of a second person in the frame.
         guard let results = request.results, results.count == 1,
               let observation = results.first,
-              let landmarks = observation.landmarks else { return nil }
+              let landmarks = observation.landmarks,
+              let allPoints = landmarks.allPoints,
+              normalizedFacePointsAreValid(allPoints.normalizedPoints) else { return nil }
 
         let imageSize = CGSize(width: image.width, height: image.height)
         guard imageSize.width > 0, imageSize.height > 0 else { return nil }
@@ -204,13 +249,22 @@ enum FaceAnalyzer {
                 y: 1 - (boundingBox.minY + point.y * boundingBox.height))
     }
 
+    /// Reject broken framework output before it becomes a plausible-looking
+    /// crop or rule measurement. The documented face-normalized range is 0…1.
+    static func normalizedFacePointsAreValid(_ points: [CGPoint]) -> Bool {
+        !points.isEmpty && points.allSatisfy {
+            $0.x.isFinite && $0.y.isFinite
+                && (0...1).contains($0.x) && (0...1).contains($0.y)
+        }
+    }
+
     private static func topLeftPoints(
         of region: VNFaceLandmarkRegion2D?,
         in boundingBox: CGRect
     ) -> [CGPoint]? {
         guard let region else { return nil }
         let points = region.normalizedPoints
-        guard !points.isEmpty else { return nil }
+        guard normalizedFacePointsAreValid(points) else { return nil }
         return points.map { imagePoint(fromNormalizedFacePoint: $0, in: boundingBox) }
     }
 }

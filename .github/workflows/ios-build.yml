@@ -13,7 +13,7 @@ on:
 
 concurrency:
   group: ios-build-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -198,6 +198,9 @@ jobs:
         if: always()
         run: |
           mkdir -p build/assessment-diagnostics
+          if [ -f build/unit-test.log ]; then
+            cp build/unit-test.log build/assessment-diagnostics/unit-test.log
+          fi
           if [ -d build/UnitResults.xcresult ]; then
             xcrun xcresulttool export attachments \
               --path build/UnitResults.xcresult \

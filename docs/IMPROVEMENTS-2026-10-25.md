@@ -22,6 +22,12 @@ Reopening the crop uses the same full-screen workspace as the first edit. A sync
 
 The app declares `UIRequiresFullScreen` compatibility mode to match its existing restricted iPad orientations and address the device-build orientation warning. Device families and orientation lists are unchanged. This does not promise a literal full-screen presentation: Stage Manager and iPadOS 26 Windowed Apps can display a scaled scene alongside other apps. Apple deprecated this compatibility mode in iPadOS 26; builds using the iOS 27 SDK can resize discretely. The camera remains configured for portrait capture. Landscape camera behavior and resizable iPad workspaces have not been verified; this declaration is an interim compatibility measure, not that validation.
 
+## Vision repeatability
+
+Run `40167034370` exposed inconsistent raw face landmarks across sequential requests on the iOS 26.2 Simulator, including coordinates outside the documented face-normalized range. This does not establish an Apple-confirmed bug or a hardware failure. The next checkpoint explicitly chooses advertised CPU compute devices in Simulator builds, rejects invalid raw points before measuring, and requires repeated real-photo inference to stay bounded and consistent. Diagnostic attachments compare CPU and default inference and repeated reads of the same observation. Physical devices retain the native backend and need a separate accuracy/performance check. No coordinates or analysis results are fabricated.
+
+The cancellation integration test uses StoreKit Test's supported per-API simulated error. Its older `failureError = .paymentCancelled` setup was unsupported and did not prove a production cancellation defect. Non-cancellation failure, verified retry and bounded error-wrapper regressions preserve that distinction.
+
 ## Verification contract
 
 GitHub Actions builds the simulator and unsigned device Release app, runs unit tests, and exports real test attachments. A successful repair unit gate requires zero failed, skipped or expected-failure tests. UI tests use a real PhotosPicker input and local StoreKit transactions; no pre-approved PhotoAnalysis or debug entitlement is injected into the main-flow test.

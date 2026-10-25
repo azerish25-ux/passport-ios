@@ -27,7 +27,10 @@ struct DocumentLibraryView: View {
         .background(Theme.paper)
         .safeAreaInset(edge: .top, spacing: 0) { brandHeader }
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showPrivacy) { NavigationStack { PrivacyView() } }
+        .sheet(isPresented: $showPrivacy) {
+            NavigationStack { PrivacyView() }
+                .dynamicTypeSize(dynamicTypeSize)
+        }
     }
 
     private var brandHeader: some View {

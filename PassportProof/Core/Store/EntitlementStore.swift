@@ -31,6 +31,10 @@ final class EntitlementStore: ObservableObject {
     @Published private(set) var isWorking = false
     @Published private(set) var isPrototypeUnlock = false
 
+    /// Session-only diagnostics for a failed attempt. Contains error types,
+    /// domains and codes, never descriptions, account data or full userInfo.
+    private(set) var lastPurchaseErrorDiagnostic: String?
+
     private var product: Product?
     private var transactionUpdatesTask: Task<Void, Never>?
 
@@ -104,6 +108,7 @@ final class EntitlementStore: ObservableObject {
         }
 
         isWorking = true
+        lastPurchaseErrorDiagnostic = nil
         defer { isWorking = false }
 
         do {
@@ -127,6 +132,7 @@ final class EntitlementStore: ObservableObject {
                 state = .available
             }
         } catch {
+            lastPurchaseErrorDiagnostic = Self.purchaseErrorDiagnostic(error)
             if Self.isCancellation(error) {
                 state = isUnlocked ? .purchased : .available
             } else {
@@ -191,10 +197,48 @@ final class EntitlementStore: ObservableObject {
         return entitled
     }
 
-    private static func isCancellation(_ error: Error) -> Bool {
-        if let storeError = error as? StoreKitError, case .userCancelled = storeError { return true }
-        let nsError = error as NSError
-        return nsError.domain == SKErrorDomain && nsError.code == SKError.Code.paymentCancelled.rawValue
+    /// Recognize only Apple's cancellation values through documented wrappers.
+    /// A network cancellation is not evidence the customer canceled a purchase.
+    /// https://developer.apple.com/documentation/storekit/storekiterror/systemerror(_:)
+    /// https://developer.apple.com/documentation/foundation/nsunderlyingerrorkey
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        var current: Error = error
+        // A bounded walk also handles a malformed/cyclic NSError chain safely.
+        for _ in 0..<8 {
+            if let storeError = current as? StoreKitError {
+                switch storeError {
+                case .userCancelled: return true
+                case .systemError(let underlying):
+                    current = underlying
+                    continue
+                default: return false
+                }
+            }
+            let nsError = current as NSError
+            if nsError.domain == SKErrorDomain {
+                return nsError.code == SKError.Code.paymentCancelled.rawValue
+            }
+            guard let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error else { return false }
+            current = underlying
+        }
+        return false
+    }
+
+    nonisolated private static func purchaseErrorDiagnostic(_ error: Error) -> String {
+        var current: Error? = error
+        var chain: [String] = []
+        for _ in 0..<8 {
+            guard let failure = current else { break }
+            let nsError = failure as NSError
+            chain.append("\(String(reflecting: type(of: failure))) domain=\(nsError.domain) code=\(nsError.code)")
+            if let storeError = failure as? StoreKitError, case .systemError(let underlying) = storeError {
+                current = underlying
+            } else {
+                current = nsError.userInfo[NSUnderlyingErrorKey] as? Error
+            }
+        }
+        if current != nil { chain.append("Underlying chain truncated after eight errors") }
+        return chain.joined(separator: "\n")
     }
 
     private static func message(for error: Error) -> String {

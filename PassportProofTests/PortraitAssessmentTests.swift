@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import CoreML
 import Vision
 @testable import PassportProof
 
@@ -18,6 +19,29 @@ final class PortraitAssessmentTests: XCTestCase {
         XCTAssertGreaterThan(geometry.eyeY, 0)
         XCTAssertLessThanOrEqual(geometry.chinY, 1)
         XCTAssertNotNil(analysis.findings.first { $0.id == .eyeLine }?.measurement)
+    }
+
+    func testRepeatedFullResolutionGeometryIsBoundedAndStable() throws {
+        let source = try fixture(named: "FullResolutionPortrait")
+        var lines = ["Repeated production geometry; backend=\(FaceAnalyzer.defaultBackend.rawValue); real Vision, no injected measurements."]
+        defer { attachDiagnostic(lines, name: "repeated-production-geometry") }
+        var baseline: FaceGeometry?
+        for index in 0..<12 {
+            let geometry = FaceAnalyzer.geometry(of: source)
+            lines.append("request=\(index) geometry=\(String(describing: geometry))")
+            let measured = try XCTUnwrap(geometry, "Repeated request \(index) must retain valid real face measurements.")
+            XCTAssertTrue((0...1).contains(measured.eyeY))
+            XCTAssertTrue((0...1).contains(measured.chinY))
+            XCTAssertLessThan(measured.eyeY, measured.chinY)
+            if let first = baseline {
+                // Identical pixels should not drift between successive reads.
+                // This is a repeatability tolerance, not an issuer requirement.
+                XCTAssertEqual(measured.eyeY, first.eyeY, accuracy: 0.001, "request \(index)")
+                XCTAssertEqual(measured.chinY, first.chinY, accuracy: 0.001, "request \(index)")
+            } else {
+                baseline = measured
+            }
+        }
     }
 
     @MainActor
@@ -99,6 +123,62 @@ final class PortraitAssessmentTests: XCTestCase {
         XCTFail("No portrait established measurable, unconstrained source geometry, including the full-resolution fixture. The photographic crop regression was not exercised.")
     }
 
+    /// Keep the default-backend experiment after production-path tests. The
+    /// system backend is diagnostic on Simulator; the selected CPU path must
+    /// pass every assertion. On a physical device both paths are checked.
+    func testZZRawVisionBackendComparison() throws {
+        let source = try fixture(named: "FullResolutionPortrait")
+        var lines = ["Raw Vision backend comparison. Face contour is read three times from the SAME observation before any coordinate mapping."]
+        defer { attachDiagnostic(lines, name: "raw-vision-backend-comparison") }
+
+        for backend in [FaceAnalyzer.InferenceBackend.cpu, .system] {
+            var baseline: [CGPoint]?
+            let requiresValidOutput = backend == .cpu || FaceAnalyzer.defaultBackend == .system
+            for index in 0..<8 {
+                do {
+                    let request = try FaceAnalyzer.landmarkRequest(backend: backend)
+                    let handler = VNImageRequestHandler(cgImage: source, orientation: .up, options: [:])
+                    try handler.perform([request])
+                    let faces = request.results ?? []
+                    lines.append("backend=\(backend.rawValue) revision=\(request.revision) devices=\(computeDescription(for: request)) request=\(index) faces=\(faces.count)")
+                    guard faces.count == 1, let face = faces.first,
+                          let contour = face.landmarks?.faceContour else {
+                        lines.append("no single face contour")
+                        if requiresValidOutput { XCTFail("\(backend.rawValue) request \(index) did not produce one face contour.") }
+                        continue
+                    }
+                    // Copy values into new Swift storage, so later framework
+                    // reads cannot alter the snapshots we compare.
+                    let reads = (0..<3).map { _ in
+                        contour.normalizedPoints.map { CGPoint(x: $0.x, y: $0.y) }
+                    }
+                    let first = reads[0]
+                    lines.append("box=\(face.boundingBox) before-mapping \(normalizedRange(first))")
+                    for (readIndex, points) in reads.enumerated() {
+                        let readDelta = maximumPointDelta(first, points)
+                        lines.append("same-observation-read=\(readIndex) \(normalizedRange(points)) deltaFromFirst=\(readDelta)")
+                        if requiresValidOutput {
+                            XCTAssertTrue(FaceAnalyzer.normalizedFacePointsAreValid(points), "\(backend.rawValue) request \(index) raw normalized landmarks are invalid.")
+                            XCTAssertLessThanOrEqual(readDelta, 0.000_001, "A repeated getter read must not mutate one observation.")
+                        }
+                    }
+                    if let previous = baseline {
+                        let requestDelta = maximumPointDelta(previous, first)
+                        lines.append("deltaFromFirstRequest=\(requestDelta)")
+                        if requiresValidOutput {
+                            XCTAssertLessThanOrEqual(requestDelta, 0.001, "\(backend.rawValue) request \(index) drifted on identical pixels.")
+                        }
+                    } else {
+                        baseline = first
+                    }
+                } catch {
+                    lines.append("backend=\(backend.rawValue) request=\(index) error=\(error)")
+                    if requiresValidOutput { XCTFail("Real \(backend.rawValue) Vision request failed: \(error)") }
+                }
+            }
+        }
+    }
+
     private func fixture(named name: String) throws -> CGImage {
         let image = try XCTUnwrap(UIImage(named: name, in: Bundle(for: Self.self), compatibleWith: nil), "Missing assessment asset: \(name)")
         return try XCTUnwrap(ImageBridge.cgImage(from: image), "Could not decode assessment asset: \(name)")
@@ -170,13 +250,14 @@ final class PortraitAssessmentTests: XCTestCase {
     }
 
     private func rawVisionSummary(image: CGImage) -> String {
-        let request = VNDetectFaceLandmarksRequest()
         let handler = VNImageRequestHandler(cgImage: image, orientation: .up, options: [:])
         do {
+            let request = try FaceAnalyzer.landmarkRequest()
             try handler.perform([request])
             let faces = request.results ?? []
-            var summary = "rawVisionLandmarkFaceCount=\(faces.count) facesWithLandmarks=\(faces.filter { $0.landmarks != nil }.count) (separate diagnostic request; app geometry may reject a detected face)"
+            var summary = "rawVisionLandmarkFaceCount=\(faces.count) facesWithLandmarks=\(faces.filter { $0.landmarks != nil }.count) backend=\(FaceAnalyzer.defaultBackend.rawValue) revision=\(request.revision) devices=\(computeDescription(for: request)) (separate diagnostic request; app geometry may reject a detected face)"
             if let face = faces.first, let landmarks = face.landmarks {
+                summary += " raw-before-mapping \(normalizedRange(landmarks.allPoints?.normalizedPoints ?? []))"
                 let eyePoints = (landmarks.leftEye?.normalizedPoints ?? []) + (landmarks.rightEye?.normalizedPoints ?? [])
                 let mappedEyes = eyePoints.map { FaceAnalyzer.imagePoint(fromNormalizedFacePoint: $0, in: face.boundingBox) }
                 let mappedChin = landmarks.faceContour?.normalizedPoints.map {
@@ -189,5 +270,47 @@ final class PortraitAssessmentTests: XCTestCase {
         } catch {
             return "rawVisionLandmarkError=\(error.localizedDescription)"
         }
+    }
+
+    private func normalizedRange(_ points: [CGPoint]) -> String {
+        let finite = points.filter { $0.x.isFinite && $0.y.isFinite }
+        return "count=\(points.count) finite=\(finite.count) x=\(finite.map(\.x).min() as Any)...\(finite.map(\.x).max() as Any) y=\(finite.map(\.y).min() as Any)...\(finite.map(\.y).max() as Any)"
+    }
+
+    private func maximumPointDelta(_ first: [CGPoint], _ second: [CGPoint]) -> Double {
+        guard !first.isEmpty, first.count == second.count else { return .infinity }
+        var maximum = 0.0
+        for (lhs, rhs) in zip(first, second) {
+            guard lhs.x.isFinite, lhs.y.isFinite, rhs.x.isFinite, rhs.y.isFinite else { return .infinity }
+            maximum = max(maximum, Double(max(abs(lhs.x - rhs.x), abs(lhs.y - rhs.y))))
+        }
+        return maximum
+    }
+
+    private func computeDescription(for request: VNRequest) -> String {
+        guard let stages = try? request.supportedComputeStageDevices else { return "unavailable" }
+        return stages.keys.map { stage in
+            let name: String
+            if let device = request.computeDevice(for: stage) {
+                switch device {
+                case .cpu: name = "cpu"
+                case .gpu: name = "gpu"
+                case .neuralEngine: name = "neuralEngine"
+                @unknown default: name = "unknown"
+                }
+            } else {
+                name = "automatic"
+            }
+            return "\(stage)=\(name)"
+        }.sorted().joined(separator: ",")
+    }
+
+    private func attachDiagnostic(_ lines: [String], name: String) {
+        let summary = lines.joined(separator: "\n")
+        print(summary)
+        let attachment = XCTAttachment(string: summary)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
