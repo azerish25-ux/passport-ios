@@ -211,12 +211,17 @@ private struct CameraPreview: UIViewRepresentable {
         view.backgroundColor = .black
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
-        view.previewLayer.connection?.videoOrientation = .portrait
+        configurePortrait(view.previewLayer.connection)
         return view
     }
 
     func updateUIView(_ view: CameraPreviewUIView, context: Context) {
-        view.previewLayer.connection?.videoOrientation = .portrait
+        configurePortrait(view.previewLayer.connection)
+    }
+
+    private func configurePortrait(_ connection: AVCaptureConnection?) {
+        guard let connection, connection.isVideoRotationAngleSupported(90) else { return }
+        connection.videoRotationAngle = 90
     }
 }
 
@@ -304,7 +309,10 @@ private final class CameraSessionController: NSObject {
                 return
             }
             session.addOutput(videoOutput)
-            videoOutput.connection(with: .video)?.videoOrientation = .portrait
+            if let connection = videoOutput.connection(with: .video),
+               connection.isVideoRotationAngleSupported(90) {
+                connection.videoRotationAngle = 90
+            }
 
             guard session.canAddOutput(photoOutput) else {
                 report("Photo capture could not be configured on this device.")

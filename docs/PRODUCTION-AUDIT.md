@@ -4,6 +4,27 @@
 **Audit date:** 24 October 2026  
 **Verification baseline:** GitHub Actions run `40145475669` succeeded on macOS 15: simulator build, 23 unit tests, and unsigned Release device build. This proves compilation and the existing tests, not product correctness or App Store acceptance.
 
+## Remediation status
+
+The audit above is the baseline, not the current state. The production pass
+addressed the code-side findings:
+
+| Baseline finding | Current implementation |
+|---|---|
+| Analysis and export used different pixels | One aspect-locked, user-reviewed crop feeds preview, Vision, print and JPEG; a 2048 px analysis bound preserves output quality without processing a 12 MP source |
+| Camera gate ran after the shutter | Custom `AVCaptureSession` preview analyses the document-aspect frame and disables the shutter until framing/background checks pass |
+| Release prototype unlock | Bypass and its UI are inside `#if DEBUG`; CI audits the compiled Release binary for its strings |
+| Contradictory UK/output rules | Launch scope narrowed to three complete US workflows with output-specific rules and byte limits |
+| Failed checks could export | Export requires a matching face geometry, no failed applicable rule, all four visual confirmations and StoreKit entitlement |
+| Stale async results/lifecycle | Session revisions guard analysis; crop/export tasks are cancellable; staging is owned and removed on share completion |
+| Entitlement accumulated forever | Verified entitlements are recomputed offline first, live transaction updates are observed, pending/restore states are explicit |
+| Dense, fixed-type UI and weak accessibility | Card-based hierarchy, semantic Dynamic Type, 4.5:1 contrast test, labelled controls, hidden decorative overlays, Reduce Motion, large-text UI smoke test |
+| Shallow verification | Unit coverage expanded for crop/export consistency, byte ceilings, applicable rules, future EXIF dates, session export gating and contrast; XCUITest covers library, privacy, capture entry and unlock with screenshots |
+
+The current release status and external residuals are tracked in
+[`RELEASE.md`](RELEASE.md). A CI link and exact test count are added after the
+final verified run; no signed/TestFlight/App Review claim is made here.
+
 ## Executive finding
 
 The repository has a thoughtful measurement model and a coherent visual seed, but it is still a prototype rather than a submission candidate. The highest-risk defect is architectural: the image that is measured is not the image that is exported. Release claims must remain scoped to build configuration until the issues below are resolved and device QA is complete.

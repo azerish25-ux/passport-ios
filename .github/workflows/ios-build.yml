@@ -82,6 +82,21 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             -quiet
 
+      - name: Build test bundles
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            -quiet
+
       - name: Resolve an available iPhone simulator
         id: sim
         run: |
@@ -117,7 +132,7 @@ jobs:
           # Unit and UI tests are separate steps so a simulator automation issue
           # cannot hide a unit-test result (or vice versa).
           set +e
-          xcodebuild test \
+          xcodebuild test-without-building \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
             -configuration Debug \
@@ -125,8 +140,10 @@ jobs:
             -derivedDataPath build \
             -resultBundlePath build/UnitResults.xcresult \
             -only-testing:PassportProofTests \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
+            -skip-testing:PassportProofUITests \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             2>&1 | tee build/unit-test.log
           STATUS=${PIPESTATUS[0]}
           set -e
@@ -155,7 +172,7 @@ jobs:
         timeout-minutes: 20
         run: |
           set +e
-          xcodebuild test \
+          xcodebuild test-without-building \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
             -configuration Debug \
@@ -163,8 +180,10 @@ jobs:
             -derivedDataPath build \
             -resultBundlePath build/UIResults.xcresult \
             -only-testing:PassportProofUITests \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
+            -skip-testing:PassportProofTests \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             2>&1 | tee build/ui-test.log
           STATUS=${PIPESTATUS[0]}
           set -e

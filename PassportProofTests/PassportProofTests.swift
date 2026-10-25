@@ -45,7 +45,6 @@ final class PassportProofTests: XCTestCase {
     // MARK: - Shared crop geometry
 
     func testCropIsAspectLockedAndClampedInsideSource() {
-        let image = makeImage(width: 1200, height: 900)
         let spec = DocumentCorpus.documents[0]
         let identityRect = PhotoCrop.cropRect(
             imageSize: CGSize(width: 1200, height: 900),

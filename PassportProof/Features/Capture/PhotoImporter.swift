@@ -29,7 +29,7 @@ struct PhotoImporter: View {
     /// Sources larger than this on the long side are downsampled on decode.
     /// The resolution rule's floor is 1200 px on the short side, so this cap
     /// never turns a compliant photo into a failing one.
-    static let maximumDecodedDimension: CGFloat = 4096
+    nonisolated static let maximumDecodedDimension: CGFloat = 4096
 
     @State private var item: PhotosPickerItem?
     @State private var isLoading = false
@@ -105,7 +105,7 @@ struct PhotoImporter: View {
 
     /// Decodes image data to a `UIImage` with its EXIF capture date, when the
     /// file carries one. Returns nil when the data is not a readable image.
-    static func decodeImage(from data: Data) -> (image: UIImage, captureDate: Date?)? {
+    nonisolated static func decodeImage(from data: Data) -> (image: UIImage, captureDate: Date?)? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             return nil
         }
@@ -143,7 +143,7 @@ struct PhotoImporter: View {
 
     /// EXIF orientation 1–8 → `UIImage.Orientation`. The cases share names and
     /// indices one to one; anything outside 1–8 reads as upright.
-    private static func uiOrientation(fromExif value: Int) -> UIImage.Orientation {
+    nonisolated private static func uiOrientation(fromExif value: Int) -> UIImage.Orientation {
         switch value {
         case 2: return .upMirrored
         case 3: return .down
@@ -158,7 +158,7 @@ struct PhotoImporter: View {
 
     /// Reads the image at a bounded pixel size. `CreateThumbnailWithTransform`
     /// applies the EXIF rotation, so the pixels come out display-ready.
-    private static func downsampledImage(from source: CGImageSource, maxDimension: CGFloat) -> CGImage? {
+    nonisolated private static func downsampledImage(from source: CGImageSource, maxDimension: CGFloat) -> CGImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -169,7 +169,7 @@ struct PhotoImporter: View {
 
     /// Parses EXIF's `yyyy:MM:dd HH:mm:ss`. Returns nil for anything else —
     /// a malformed date is "unknown", never a guess.
-    static func parseExifDate(_ string: String) -> Date? {
+    nonisolated static func parseExifDate(_ string: String) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current
