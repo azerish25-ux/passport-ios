@@ -233,6 +233,8 @@ final class PassportProofUITests: XCTestCase {
         XCTAssertEqual(export.label, "Export JPEG", "The verified purchase and real review must unlock the digital export")
         assertManualStatus(in: app, identifier: "export.manualStatus")
         XCTAssertTrue(app.descendants(matching: .any)["export.preview"].exists)
+        let digitalPreview = app.images["Your complete reviewed crop, without any additional cropping"]
+        scrollToHittable(digitalPreview, in: app, within: exportViewport(in: app, title: "Visa"))
         capture(app, named: "08-digital-export-preview")
         export.tap()
 
@@ -289,9 +291,9 @@ final class PassportProofUITests: XCTestCase {
         ]
         for (index, layout) in layouts.enumerated() {
             // Reveal the regular heading before querying its lazy grid cells.
-            scrollToHittable(app.staticTexts["Choose your paper"], in: app)
+            scrollToHittable(app.staticTexts["Choose your paper"], in: app, within: exportViewport(in: app, title: "Passport"))
             let choice = app.buttons["layout.\(layout.identifier)"]
-            scrollToHittable(choice, in: app)
+            scrollToHittable(choice, in: app, within: exportViewport(in: app, title: "Passport"))
             if index == 0 {
                 XCTAssertTrue(choice.isSelected, "The initial sheet must be the default 4 × 6 inch layout")
             } else {
@@ -305,7 +307,7 @@ final class PassportProofUITests: XCTestCase {
             let previewLabel = "Preview of the actual \(layout.title) PDF with \(layout.copies) copies of your reviewed photo"
             let preview = app.images[previewLabel]
             require(preview, in: app, timeout: 25)
-            scrollToHittable(preview, in: app, towardTop: true)
+            scrollToHittable(preview, in: app, towardTop: true, within: exportViewport(in: app, title: "Passport"))
             XCTAssertTrue(app.staticTexts["\(layout.title) · \(layout.copies) photos · print at 100%"].exists)
             capture(app, named: "09-print-preview-\(layout.identifier)")
         }
@@ -555,12 +557,17 @@ final class PassportProofUITests: XCTestCase {
         // the full screen, is the actual gesture and visibility region.
         let scroll = app.scrollViews.containing(.slider, identifier: "manual.top").firstMatch
         let save = app.buttons["manual.confirm"]
+        let preview = app.images["manual.preview"]
         require(scroll, in: app)
         require(save, in: app)
+        require(preview, in: app)
         let hint = app.staticTexts.matching(NSPredicate(format: "label IN %@", [
             "Confirm all four statements to continue.", "Adjust the guide positions to continue."
         ])).firstMatch
-        let top = scroll.frame.minY + 8
+        // AX may report a ScrollView frame larger than its visible content.
+        // Below the pinned image, the default-text layout has a 10pt gap,
+        // 22pt active-guide caption and 12pt padding. Add 10pt clearance.
+        let top = max(scroll.frame.minY + 8, preview.frame.maxY + 54)
         let bottom = min(scroll.frame.maxY, hint.exists ? hint.frame.minY : save.frame.minY) - 12
         return CGRect(x: scroll.frame.minX, y: top, width: scroll.frame.width, height: bottom - top)
     }
@@ -581,6 +588,16 @@ final class PassportProofUITests: XCTestCase {
         let footer = app.buttons.matching(NSPredicate(format: "identifier IN %@", [
             "analysis.adjust", "analysis.manualStart", "analysis.continue"
         ])).firstMatch
+        require(navigation, in: app)
+        require(footer, in: app)
+        let top = navigation.frame.maxY + 8
+        return CGRect(x: app.frame.minX, y: top, width: app.frame.width, height: footer.frame.minY - 20 - top)
+    }
+
+    @MainActor
+    private func exportViewport(in app: XCUIApplication, title: String) -> CGRect {
+        let navigation = app.navigationBars[title]
+        let footer = app.buttons["export.primary"]
         require(navigation, in: app)
         require(footer, in: app)
         let top = navigation.frame.maxY + 8
@@ -619,17 +636,33 @@ final class PassportProofUITests: XCTestCase {
         func isReachable() -> Bool {
             element.exists && element.isHittable && (viewport?.contains(element.frame) ?? true)
         }
+        let cropZoom = app.sliders["crop.zoom"]
+        let isCropEditor = app.buttons["crop.cancel"].exists && cropZoom.exists
         var attempts = 0
         while !isReachable() && attempts < 9 {
-            // The crop preview owns its drag gesture. Scroll in the outer
-            // padding so reaching its controls never reframes the photograph.
             let upward = viewport.map { element.frame.minY < $0.minY } ?? towardTop
             let gestureFrame = viewport ?? app.frame
             let top = gestureFrame.minY + gestureFrame.height * (viewport == nil ? 0.32 : 0.2)
             let bottom = gestureFrame.minY + gestureFrame.height * (viewport == nil ? 0.72 : 0.8)
+            // The outer 20pt blank page margin did not receive scrolling in
+            // the recorded crop failure. Start inside the visible card's
+            // padding, beyond the right edge of its sliders/toggles.
+            var x = min(app.frame.maxX, gestureFrame.maxX) - 30
+            var startY = upward ? top : bottom
+            if isCropEditor {
+                // Starting over the photo would move its pixels. The observed
+                // zoom row stays visible above the footer; its adjacent card
+                // padding is a real scroll surface with no competing gesture.
+                let zoomFrame = cropZoom.frame
+                x = min(zoomFrame.maxX + 10, gestureFrame.maxX - 20)
+                startY = zoomFrame.midY
+                XCTAssertTrue(gestureFrame.contains(CGPoint(x: x, y: startY)),
+                              "Crop scrolling must begin in visible controls, outside the photo")
+            }
             let origin = app.coordinate(withNormalizedOffset: .zero)
-            let start = origin.withOffset(CGVector(dx: app.frame.width * 0.97, dy: (upward ? top : bottom) - app.frame.minY))
-            let end = origin.withOffset(CGVector(dx: app.frame.width * 0.97, dy: (upward ? bottom : top) - app.frame.minY))
+            let start = origin.withOffset(CGVector(dx: x - app.frame.minX, dy: startY - app.frame.minY))
+            let end = origin.withOffset(CGVector(dx: x - app.frame.minX, dy: (upward ? bottom : top) - app.frame.minY))
+            print("UI SCROLL \(element.identifier): frame=\(element.frame), viewport=\(gestureFrame), start=(\(x),\(startY)), direction=\(upward ? "toward top" : "toward bottom")")
             start.press(forDuration: 0.05, thenDragTo: end)
             attempts += 1
         }
