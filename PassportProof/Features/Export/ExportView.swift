@@ -31,6 +31,7 @@ struct ExportView: View {
 
     private var layout: PrintSheetLayout { session.layout }
     private var isReady: Bool { session.canExport(for: spec) }
+    private var isManuallyFramed: Bool { session.manualFraming(for: spec) != nil }
     private var reviewCount: Int { session.analysis?.unresolved.count ?? 0 }
     private var previewKey: String { "\(session.revision.uuidString)-\(spec.id)-\(layout.rawValue)" }
 
@@ -73,7 +74,7 @@ struct ExportView: View {
     private var introduction: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             StudioEyebrow(title: "The finishing step")
-            Text(isReady ? (spec.supportsPrintSheet ? "Ready for paper." : "Ready for your application.") : "Prepare your file.")
+            Text(isReady ? (isManuallyFramed ? "Ready to format." : (spec.supportsPrintSheet ? "Ready for paper." : "Ready for your application.")) : "Prepare your file.")
                 .font(.system(.largeTitle, design: .serif))
                 .tracking(-0.7)
                 .foregroundStyle(Theme.ink)
@@ -84,6 +85,19 @@ struct ExportView: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if isManuallyFramed {
+                Label("Manually framed", systemImage: "slider.horizontal.3")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.signalVerify)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Theme.verifyWash, in: Capsule())
+                    .accessibilityIdentifier("export.manualStatus")
+                Text("Framing comes from guides you placed. Automatic face measurements were unavailable.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -166,14 +180,16 @@ struct ExportView: View {
                 .font(.title3)
                 .foregroundStyle(needsAttention ? Theme.signalVerify : Theme.signalPass)
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(!isReady ? "Photo checks need attention" : (reviewCount > 0 ? "Ready, with review notes" : "Ready to export"))
+                Text(!isReady ? "Photo checks need attention" : (isManuallyFramed ? "Your guides. Your final review." : (reviewCount > 0 ? "Ready, with review notes" : "Ready to export")))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.ink)
                 Text(!isReady
                      ? "Return to your photo check and address failed rules and outstanding visual confirmations."
-                     : (reviewCount > 0
+                     : (isManuallyFramed
+                        ? "Your guide positions meet this workflow’s size ranges. Automatic face and quality checks remain unverified; compare your photo with the issuer’s guidance before submitting."
+                        : (reviewCount > 0
                         ? "\(reviewCount) check\(reviewCount == 1 ? "" : "s") still needs your judgment. Review those notes before submitting."
-                        : "Your required confirmations are complete and no measured rule is failing. The issuer makes the final decision."))
+                        : "Your required confirmations are complete and no measured rule is failing. The issuer makes the final decision.")))
                     .font(.caption)
                     .foregroundStyle(Theme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)

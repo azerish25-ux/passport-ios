@@ -1,9 +1,11 @@
 # Manual QA — device, purchase and print checks
 
-CI proves that the project compiles, that logic/imaging tests pass, that the UI
-smoke tests can navigate the simulator, and that the Release bundle excludes the
-DEBUG unlock. It cannot prove camera behavior, printer fidelity, sandbox
-purchases, VoiceOver usability or App Review acceptance.
+Consult the exact commit's CI result for compilation, individual logic/imaging
+tests, Simulator UI navigation and the Release bundle audit. Automatic landmark
+regressions currently fail on the tested Simulators and remain an open blocker;
+a successful manual-framing export is not proof of automatic accuracy. CI cannot
+prove camera behavior, printer fidelity, live sandbox purchases, VoiceOver
+usability or App Review acceptance.
 
 Run this checklist on a current iPhone with iOS 17 or later before submission.
 
@@ -58,6 +60,26 @@ Use a sandbox Apple Account on a development build:
 6. Launch purchased while offline. Confirm StoreKit current entitlements still
    unlock export.
 7. Inspect a Release build. No prototype/debug unlock UI may exist.
+
+## Manual-framing recovery
+
+1. On a crop with unavailable automatic measurements, open **Set framing manually**.
+   The guides are illustrative starting positions, not detected facial points.
+2. Place the upper guide at the skull crown for passport photos, or the top of
+   the head including hair for visa/DV. Place chin, eye line and centre guides
+   on their actual features. Never move guides away from the subject merely to
+   make a range pass; adjust the crop or use another photo instead.
+3. Move a guide outside a required range or above/below its valid ordering.
+   Confirmation must remain unavailable. Check all four manual review switches.
+4. Save valid guide positions and complete the ordinary four visual checks.
+   Analysis and export must both say **Manually framed**. Automatic findings
+   must remain unresolved, and the limitation must be visible before purchase.
+5. Cancel a reopened manual editor and a reopened crop editor. The accepted
+   record must remain intact. Accept a changed crop; all approvals must clear.
+6. Confirm that failed crop resolution and other actual failed rules still block
+   manual confirmation/export. Manual review cannot override those failures.
+7. Repeat with VoiceOver and large text. Inspect every exported photo against
+   the original; guide lines and review labels must never appear in the file.
 
 ## 5. Privacy and lifecycle
 

@@ -57,6 +57,7 @@ final class PhotoSession: ObservableObject {
     @Published var gate: CaptureGateResult?
     @Published private(set) var analysis: PhotoAnalysis?
     @Published private(set) var analyzedDocumentID: String?
+    @Published private(set) var manualFraming: ManualFramingRecord?
     @Published var layout: PrintSheetLayout = .fourBySix
 
     var hasPhoto: Bool { cgImage != nil }
@@ -117,6 +118,10 @@ final class PhotoSession: ObservableObject {
               expectedRevision == nil || expectedRevision == revision else { return false }
         self.analysis = analysis
         self.analyzedDocumentID = documentID
+        // A new diagnosis must never inherit a confirmation made against an
+        // earlier set of findings. Updating the ordinary review does not rerun
+        // analysis or change this separately labelled manual record.
+        manualFraming = nil
         if acceptedDocumentID == nil { acceptedDocumentID = documentID }
         return true
     }
@@ -130,13 +135,42 @@ final class PhotoSession: ObservableObject {
         self.analysis = analysis
     }
 
+    /// Returns only a current, explicitly confirmed manual record. It does not
+    /// turn missing automatic landmarks or quality signals into passing rules.
+    func manualFraming(for spec: DocumentSpec) -> ManualFramingRecord? {
+        guard hasPhoto(for: spec), analyzedDocumentID == spec.id,
+              let analysis, analysis.geometry == nil, analysis.failures.isEmpty,
+              let record = manualFraming,
+              record.documentID == spec.id, record.revision == revision,
+              record.review.allConfirmed,
+              ManualFramingAssessment(guides: record.guides, spec: spec).isValid else { return nil }
+        return record
+    }
+
+    @discardableResult
+    func confirmManualFraming(
+        guides: ManualFramingGuides,
+        review: ManualFramingReview,
+        for spec: DocumentSpec,
+        revision expectedRevision: UUID
+    ) -> Bool {
+        guard hasPhoto(for: spec), analyzedDocumentID == spec.id,
+              expectedRevision == revision,
+              let analysis, analysis.geometry == nil,
+              analysis.failures.isEmpty, review.allConfirmed,
+              ManualFramingAssessment(guides: guides, spec: spec).isValid else { return false }
+        manualFraming = ManualFramingRecord(guides: guides, review: review,
+                                           documentID: spec.id, revision: revision)
+        return true
+    }
+
     func canExport(for spec: DocumentSpec) -> Bool {
         guard hasPhoto(for: spec),
               analyzedDocumentID == spec.id,
               review.allConfirmed,
               let analysis,
-              analysis.geometry != nil else { return false }
-        return analysis.failures.isEmpty
+              analysis.failures.isEmpty else { return false }
+        return analysis.geometry != nil || manualFraming(for: spec) != nil
     }
 
     func clear() {
@@ -155,6 +189,7 @@ final class PhotoSession: ObservableObject {
         gate = nil
         analysis = nil
         analyzedDocumentID = nil
+        manualFraming = nil
         review = .pending
         revision = UUID()
     }

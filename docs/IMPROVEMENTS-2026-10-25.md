@@ -35,6 +35,27 @@ Run `40171387997` rejected that candidate: 57 of 61 unit tests passed, with four
 
 `Tools/VisionProbe.swift` and the separate **Isolated Vision diagnostic** workflow remove application code, UIKit, asset catalogues and pixel sampling from the experiment. Each native process decodes the unchanged JPEG using ImageIO and performs 12 strict real-image requests. Independent processes compare the default detection pipeline with documented explicit face-rectangle observations on macOS, iOS 18.5 and iOS 26.2. Every failed check remains a nonzero process/job result, with logs uploaded. These diagnostics do not replace the app's unit/UI gates.
 
+The bounded control results are:
+
+| Target and mode | Requests passing the complete measurement/repeatability checks | Actions evidence |
+|---|---:|---|
+| Native macOS arm64, revision 3 direct / explicit rectangles | 12/12 in each mode | [40172454108](https://github.com/azerish25-ux/passport-ios/actions/runs/40172454108) |
+| iOS 18.5 arm64, revision 3 direct / explicit rectangles | 0/12 in each mode | [40172454108](https://github.com/azerish25-ux/passport-ios/actions/runs/40172454108) |
+| iOS 26.2 arm64, revision 3 direct / explicit rectangles | 0/12 in each mode | [40172454108](https://github.com/azerish25-ux/passport-ios/actions/runs/40172454108) |
+| iOS 18.5 Intel, revision 3 direct / explicit rectangles | 0/12 in each mode | [40173253252](https://github.com/azerish25-ux/passport-ios/actions/runs/40173253252) |
+| iOS 26.2 arm64, modern async API (selected revision 3) | 0/12 | [40173808352](https://github.com/azerish25-ux/passport-ios/actions/runs/40173808352) |
+| iOS 26.2 arm64, legacy revision 1 / 65 points | 0/12 | [40173808352](https://github.com/azerish25-ux/passport-ios/actions/runs/40173808352) |
+
+Every mode above compiled and executed. Failed Simulator requests still found exactly one face but produced incorrect or drifting landmarks. There is no supported basis for another speculative runner, compute or API switch. This evidence localizes the reproduced behavior to these Simulator executions; it does not establish an Apple-confirmed root cause or verify a physical iPhone.
+
+## Transparent manual recovery
+
+When automatic geometry is unavailable and no actual rule is failing, the user can place normalized head, chin, eye and centre guides on the accepted photo. The upper reference follows the selected workflow: anatomical skull crown for passport, head including hair for visa/DV. The editor shows calculated dimensions as **From your guides**, validates finite bounds/order and the applicable ranges, and requires explicit guide, face/pose, background/lighting and limitation confirmations.
+
+The separate manual record is bound to the document and accepted-photo revision. It never creates `FaceGeometry`, changes a failed rule to a pass, or supplies a synthetic face box to pixel analysis. A low-resolution crop still blocks export. All ordinary visual confirmations remain required. Accepting a new crop, receiving a new diagnosis or clearing the session removes manual approval; cancelled edits preserve the previous accepted state.
+
+Analysis and export display **Manually framed**, including before the purchase route. Automatic findings remain unresolved and available to review. The guide overlay is only an editing aid and is not rendered into the exported photograph. Unit coverage exercises invalid guides, confirmation requirements, stale records and resolution failures. The UI journey explicitly chooses this manual path using the real photo picker and guide controls; it is not an automatic-analysis success test. The strict photographic automatic regressions remain unchanged and retain their failed status.
+
 The cancellation integration test uses StoreKit Test's supported per-API simulated error. Its older `failureError = .paymentCancelled` setup was unsupported and did not prove a production cancellation defect. Cancellation passed in run `40168821550`; the failure-to-retry scenario instead received an Xcode test-server error after disabling the simulated failure. The retry test restores documented test-server defaults, verifies the simulated error is cleared, and follows the UI's refresh-then-purchase recovery path using the same app store instance and transaction history. All five StoreKit integration tests passed in run `40170019707`, including verified retry. No error is treated as success.
 
 The real Photos picker reached crop and analysis in run `40170019707`. Its accessibility hierarchy exposed a section identifier overriding the four review-toggle identifiers. Section markers now belong to their headings, preserving each actionable control's identity. The same pattern is removed from the export preview. The UI tests retain all individual confirmation and state-preservation assertions.

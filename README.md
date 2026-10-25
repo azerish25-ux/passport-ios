@@ -2,7 +2,7 @@
 
 [![iOS Build](https://github.com/azerish25-ux/passport-ios/actions/workflows/ios-build.yml/badge.svg)](https://github.com/azerish25-ux/passport-ios/actions/workflows/ios-build.yml)
 
-PassportProof is a native SwiftUI photo workflow for US passport, visa and DV Lottery applications. It guides capture, diagnoses the prepared photograph against published issuer requirements, asks for the visual checks software cannot prove, and exports the exact reviewed crop as a print sheet or portal-ready JPEG.
+PassportProof is a native SwiftUI photo workflow for US passport, visa and DV Lottery applications. It guides capture, checks the prepared photograph where reliable measurements are available, asks for visual review, and formats the exact reviewed crop as a print sheet or JPEG. A separately labelled manual-framing path is available when automatic face measurements are unavailable.
 
 Analysis and export happen on device. There is no account, analytics SDK, application backend or photo upload.
 
@@ -20,8 +20,8 @@ The catalogue deliberately contains only complete workflows. The earlier UK entr
 
 1. **Capture or import.** A custom `AVCaptureSession` camera evaluates background, crown contrast and framing before enabling its shutter. Library images go through the same crop step.
 2. **Review one crop.** A face-aware starting crop is adjustable with pan, zoom, quarter-turn rotation, reset and auto framing. The original stays in memory so users can return from analysis and edit it. Only the accepted crop feeds diagnosis and export; accepting a new crop resets its review.
-3. **Diagnose the prepared pixels.** Vision supplies face geometry; pixel analysis supplies background, shadow and glare signals. Findings are `pass`, `fail` or `review`. White/off-white screening is separate from uniformity; unknown crown measurements and ambiguous natural edges remain unresolved.
-4. **Confirm human checks.** Expression, glasses/eye visibility, recency and original-source status require explicit visual confirmation. They update the cached diagnosis without rerunning Vision.
+3. **Check the prepared pixels.** Vision attempts face geometry; pixel analysis uses reliable geometry for background, shadow and glare signals. Findings are `pass`, `fail` or `review`. White/off-white screening is separate from uniformity; unavailable geometry, unknown crown measurements and ambiguous natural edges remain unresolved.
+4. **Review framing and human checks.** When automatic geometry is unavailable, the user can place head, chin, eye and centre guides on the actual crop. Manual dimensions must meet the selected workflow's ranges and require explicit confirmations of guide placement, one front-facing subject, background/lighting and the limits of manual formatting. This record never becomes detected geometry, and automatic findings stay unresolved. Expression, glasses/eye visibility, recency and original-source status still require their four separate confirmations. A new crop clears both reviews.
 5. **Export safely.** Failed applicable checks block export. Digital files are compressed within the issuer's byte ceiling, and print sheets carry exact page geometry plus a free calibration page. Print preview uses the actual PDF renderer. Protected share staging is removed on completion or cancellation, with abandoned files cleaned at the next launch.
 
 ## Privacy
@@ -83,7 +83,9 @@ The GitHub Actions workflow runs on `macos-15` and:
 
 ## Release status
 
-The app is undergoing a correctness and interaction redesign. Use the Actions result for the exact commit as build/test evidence; do not infer camera reliability, issuer acceptance or live App Store product availability from a green simulator run. Local StoreKit Test transactions are simulated and never charge real money. Signing, the live App Store Connect product, hosted privacy/support URLs and submission remain release steps documented in [`docs/RELEASE.md`](docs/RELEASE.md).
+The redesign and manual recovery path are implemented, but automatic landmark accuracy remains an open release blocker. Strict real-photo regressions fail on the tested GitHub iOS Simulators; the guard withholds unusable geometry. Isolated Apple-framework probes reproduce incorrect and drifting landmarks on both arm64 and Intel Simulators, while the native macOS control is stable. Neither the modern async API nor legacy revision 1 resolves the Simulator failures. This does not establish an Apple-confirmed cause or prove behavior on an iPhone. The automatic tests remain strict and failing rather than being skipped or reclassified as expected failures.
+
+Use the Actions result for the exact commit as build/test evidence; do not infer camera reliability, issuer acceptance or live App Store product availability from compilation or a successful manual export. Local StoreKit Test transactions are simulated and never charge real money. Signing, the live App Store Connect product, hosted privacy/support URLs and submission remain release steps documented in [`docs/RELEASE.md`](docs/RELEASE.md).
 
 The measurement engine labels app-selected thresholds separately from issuer rules. It does not promise approval, and the final decision always belongs to the issuing authority. Physical-camera and printer calibration still require real-device QA, as recorded in [`docs/MANUAL-QA.md`](docs/MANUAL-QA.md).
 

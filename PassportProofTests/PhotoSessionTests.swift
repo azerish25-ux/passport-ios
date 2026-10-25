@@ -109,6 +109,120 @@ final class PhotoSessionTests: XCTestCase {
         XCTAssertEqual(reopenedOriginal.cgImage?.height, 4096)
     }
 
+    @MainActor
+    func testManualFramingRetainsUnavailableAutomaticFindingsAndRequiresBothReviews() throws {
+        let spec = try XCTUnwrap(DocumentCorpus.document(id: "us-visa"))
+        let session = PhotoSession()
+        session.adopt(UIImage(cgImage: try makeImage(width: 900, height: 900)), for: spec)
+        storeUnavailableMeasurements(session, spec: spec)
+        let unresolved = try XCTUnwrap(session.analysis).unresolved.map(\.id)
+        let guides = ManualFramingGuides(topY: 0.10, chinY: 0.70, eyeY: 0.38, centerX: 0.5)
+        XCTAssertFalse(session.canExport(for: spec))
+        XCTAssertFalse(session.confirmManualFraming(guides: guides, review: .pending,
+                                                   for: spec, revision: session.revision))
+        XCTAssertNil(session.manualFraming)
+        XCTAssertTrue(session.confirmManualFraming(guides: guides, review: confirmedManualReview,
+                                                  for: spec, revision: session.revision))
+        XCTAssertFalse(session.canExport(for: spec), "The ordinary four visual confirmations are still required")
+
+        session.updateReview(PhotoReview(expressionConfirmed: true, glassesConfirmed: true,
+                                         originalUneditedConfirmed: true, recentPhotoConfirmed: true))
+        XCTAssertTrue(session.canExport(for: spec))
+        XCTAssertNil(session.analysis?.geometry, "Manual guides must never masquerade as detected landmarks")
+        let currentUnresolved = try XCTUnwrap(session.analysis).unresolved.map(\.id)
+        for id in unresolved where ![RuleID.expression, .glasses, .photoAge, .noManipulation].contains(id) {
+            XCTAssertTrue(currentUnresolved.contains(id), "Missing automatic signals must stay unresolved")
+        }
+        XCTAssertNotNil(session.manualFraming(for: spec))
+        let passport = try XCTUnwrap(DocumentCorpus.document(id: "us-passport"))
+        XCTAssertNil(session.manualFraming(for: passport))
+        XCTAssertFalse(session.canExport(for: passport))
+    }
+
+    @MainActor
+    func testManualFramingCannotOverrideFailedResolutionOrInvalidGuides() throws {
+        let spec = try XCTUnwrap(DocumentCorpus.document(id: "us-visa"))
+        let session = PhotoSession()
+        let guides = ManualFramingGuides(topY: 0.10, chinY: 0.70, eyeY: 0.38, centerX: 0.5)
+        session.adopt(UIImage(cgImage: try makeImage(width: 120, height: 120)), for: spec)
+        storeUnavailableMeasurements(session, spec: spec)
+        XCTAssertTrue(session.analysis?.failures.contains(where: { $0.id == .resolution }) == true)
+        XCTAssertFalse(session.confirmManualFraming(guides: guides, review: confirmedManualReview,
+                                                   for: spec, revision: session.revision))
+        XCTAssertFalse(session.canExport(for: spec))
+
+        session.adopt(UIImage(cgImage: try makeImage(width: 900, height: 900)), for: spec)
+        storeUnavailableMeasurements(session, spec: spec)
+        let outsideFrame = ManualFramingGuides(topY: -0.1, chinY: 0.70, eyeY: 0.38, centerX: 0.5)
+        XCTAssertFalse(session.confirmManualFraming(guides: outsideFrame, review: confirmedManualReview,
+                                                   for: spec, revision: session.revision))
+        XCTAssertNil(session.manualFraming)
+    }
+
+    @MainActor
+    func testManualFramingCancellationPreservesRecordAndNewCropRejectsStaleConfirmation() throws {
+        let spec = try XCTUnwrap(DocumentCorpus.document(id: "us-visa"))
+        let source = try makeImage(width: 1200, height: 1200)
+        let session = PhotoSession()
+        XCTAssertTrue(session.acceptCrop(try prepared(source, spec: spec, zoom: 1), for: spec, captureDate: nil))
+        storeUnavailableMeasurements(session, spec: spec)
+        let guides = ManualFramingGuides(topY: 0.10, chinY: 0.70, eyeY: 0.38, centerX: 0.5)
+        let oldRevision = session.revision
+        XCTAssertTrue(session.confirmManualFraming(guides: guides, review: confirmedManualReview,
+                                                  for: spec, revision: oldRevision))
+        let record = try XCTUnwrap(session.manualFraming(for: spec))
+        _ = try XCTUnwrap(session.cropEditingContext(for: spec))
+        // Editors change local drafts. Discarding either editor must preserve
+        // the accepted record; no confirmation is written until Save.
+        XCTAssertEqual(session.manualFraming(for: spec), record)
+        XCTAssertEqual(session.revision, oldRevision)
+
+        XCTAssertTrue(session.acceptCrop(try prepared(source, spec: spec, zoom: 1.2), for: spec, captureDate: nil))
+        XCTAssertNil(session.manualFraming)
+        XCTAssertEqual(session.review, .pending)
+        storeUnavailableMeasurements(session, spec: spec)
+        XCTAssertFalse(session.confirmManualFraming(guides: guides, review: confirmedManualReview,
+                                                   for: spec, revision: oldRevision))
+        XCTAssertFalse(session.canExport(for: spec))
+        XCTAssertTrue(session.confirmManualFraming(guides: guides, review: confirmedManualReview,
+                                                  for: spec, revision: session.revision))
+        session.clear()
+        XCTAssertNil(session.manualFraming)
+        XCTAssertNil(session.manualFraming(for: spec))
+    }
+
+    @MainActor
+    func testNewDiagnosisInvalidatesPreviousManualApproval() throws {
+        let spec = try XCTUnwrap(DocumentCorpus.document(id: "us-visa"))
+        let session = PhotoSession()
+        session.adopt(UIImage(cgImage: try makeImage(width: 900, height: 900)), for: spec)
+        storeUnavailableMeasurements(session, spec: spec)
+        let guides = ManualFramingGuides(topY: 0.10, chinY: 0.70, eyeY: 0.38, centerX: 0.5)
+        XCTAssertTrue(session.confirmManualFraming(guides: guides, review: confirmedManualReview,
+                                                  for: spec, revision: session.revision))
+        storeUnavailableMeasurements(session, spec: spec)
+        XCTAssertNil(session.manualFraming)
+        XCTAssertFalse(session.canExport(for: spec))
+    }
+
+    private var confirmedManualReview: ManualFramingReview {
+        ManualFramingReview(guidesConfirmed: true, singleFaceAndPoseConfirmed: true,
+                            backgroundAndLightingConfirmed: true, limitationsAccepted: true)
+    }
+
+    /// Isolates the manual approval state machine using the real rule layer.
+    /// No geometry is supplied and every unavailable measurement stays nil.
+    @MainActor
+    private func storeUnavailableMeasurements(_ session: PhotoSession, spec: DocumentSpec) {
+        let pixels = CGSize(width: session.cgImage?.width ?? 0, height: session.cgImage?.height ?? 0)
+        let findings = ValidationEngine.findings(geometry: nil, background: nil, spec: spec,
+                                                 imagePixelSize: pixels, captureDate: nil)
+        let analysis = PhotoAnalysis(findings: findings, geometry: nil, background: nil,
+                                     overall: ValidationEngine.overall(for: findings), imagePixelSize: pixels,
+                                     captureDate: nil, shadowDelta: nil, glareSuspected: false, review: .pending)
+        XCTAssertTrue(session.store(analysis, for: spec.id, revision: session.revision))
+    }
+
     private func prepared(_ source: CGImage, spec: DocumentSpec, zoom: CGFloat) throws -> PreparedPhotoCrop {
         let transform = CropTransform(zoom: zoom, center: CGPoint(x: 0.5, y: 0.5))
         let crop = try XCTUnwrap(PhotoCrop.croppedCGImage(from: source, transform: transform, spec: spec))

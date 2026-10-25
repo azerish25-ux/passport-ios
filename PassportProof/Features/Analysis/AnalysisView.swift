@@ -16,6 +16,7 @@ struct AnalysisView: View {
     @State private var showExportReview = false
     @State private var showMeasurements = false
     @State private var editContext: PhotoEditContext?
+    @State private var manualContext: ManualFramingEditContext?
     @State private var filter: FindingFilter = .attention
 
     private enum FindingFilter: String, CaseIterable {
@@ -39,6 +40,7 @@ struct AnalysisView: View {
         [session.review.expressionConfirmed, session.review.glassesConfirmed,
          session.review.recentPhotoConfirmed, session.review.originalUneditedConfirmed].filter { $0 }.count
     }
+    private var manualRecord: ManualFramingRecord? { session.manualFraming(for: spec) }
 
     var body: some View {
         ScrollView {
@@ -84,11 +86,25 @@ struct AnalysisView: View {
                 editContext = nil
             }, onCancel: { editContext = nil })
         }
-        .alert("Review the uncertain measurements", isPresented: $showExportReview) {
+        .fullScreenCover(item: $manualContext) { context in
+            ManualFramingView(image: context.image, spec: spec, revision: context.revision,
+                              existing: context.existing, onConfirm: { guides, review, revision in
+                let saved = session.confirmManualFraming(guides: guides, review: review,
+                                                        for: spec, revision: revision)
+                if saved { manualContext = nil }
+                return saved
+            }, onCancel: { manualContext = nil })
+            .dynamicTypeSize(dynamicTypeSize)
+        }
+        .alert(manualRecord == nil ? "Review the uncertain measurements" : "Review the unverified checks", isPresented: $showExportReview) {
             Button("Continue to export") { goToExport = true }
             Button("Keep reviewing", role: .cancel) {}
         } message: {
-            Text("Still uncertain: \(result?.unresolved.map(\.title).joined(separator: ", ") ?? "some measurements"). Compare these with the issuer's guidance. Export formats the photo; it does not certify acceptance.")
+            if manualRecord != nil {
+                Text("Framing comes from your manual guides. Automatic face measurements remain unavailable. Still unverified: \(result?.unresolved.map(\.title).joined(separator: ", ") ?? "some photo requirements"). Export formats the photo; it does not certify acceptance.")
+            } else {
+                Text("Still uncertain: \(result?.unresolved.map(\.title).joined(separator: ", ") ?? "some measurements"). Compare these with the issuer's guidance. Export formats the photo; it does not certify acceptance.")
+            }
         }
     }
 
@@ -124,6 +140,18 @@ struct AnalysisView: View {
                     StudioEyebrow(title: "Your prepared photo")
                     Text("\(Int(analysis.imagePixelSize.width)) × \(Int(analysis.imagePixelSize.height)) px")
                         .font(.caption.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+                    if analysis.geometry == nil {
+                        if manualRecord != nil {
+                            Text("Manually framed")
+                                .font(.caption.weight(.semibold)).foregroundStyle(Theme.signalVerify)
+                                .accessibilityIdentifier("analysis.manualStatus")
+                        } else {
+                            Text("Automatic measurements unavailable")
+                                .font(.caption.weight(.medium)).foregroundStyle(Theme.signalVerify)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("analysis.automaticUnavailable")
+                        }
+                    }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 if let image = session.image {
                     Group {
@@ -140,10 +168,24 @@ struct AnalysisView: View {
                     .accessibilityIdentifier("analysis.photo")
                 }
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { editButton; measurementsButton }
-                    VStack(spacing: 8) { editButton; measurementsButton }
+                    HStack(spacing: 12) { editButton; photoGuideButton(analysis) }
+                    VStack(spacing: 8) { editButton; photoGuideButton(analysis) }
                 }
             }
+        }
+    }
+    @ViewBuilder private func photoGuideButton(_ analysis: PhotoAnalysis) -> some View {
+        if analysis.geometry == nil && analysis.failures.isEmpty {
+            Button(action: openManualFraming) {
+                Label(manualRecord == nil ? "Place guides" : "Review guides", systemImage: "slider.horizontal.3")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.accent)
+            .disabled(isMeasuring)
+            .accessibilityIdentifier("analysis.manualFraming")
+        } else {
+            measurementsButton
         }
     }
     private var editButton: some View {
@@ -171,7 +213,9 @@ struct AnalysisView: View {
     }
 
     private func verdict(_ analysis: PhotoAnalysis) -> some View {
-        let presentation = VerdictPresentation(status: analysis.overall)
+        let presentation = VerdictPresentation(status: analysis.overall,
+                                               hasFaceMeasurements: analysis.geometry != nil,
+                                               isManuallyFramed: manualRecord != nil)
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: presentation.icon).font(.title2)
@@ -282,11 +326,17 @@ struct AnalysisView: View {
     }
     private var bottomBar: some View {
         VStack(spacing: 8) {
-            if let analysis = result, analysis.geometry == nil || !analysis.failures.isEmpty {
+            if let analysis = result, !analysis.failures.isEmpty {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) { correctionActions }
                     VStack(spacing: 8) { correctionActions }
                 }
+            } else if !isMeasuring, let analysis = result, analysis.geometry == nil, manualRecord == nil {
+                PrimaryButton(title: "Set framing manually", action: openManualFraming)
+                    .accessibilityIdentifier("analysis.manualStart")
+                Text("Place your own guides, or edit the crop above.")
+                    .font(.caption).foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 PrimaryButton(title: "Continue to export", isEnabled: !isMeasuring && session.canExport(for: spec)) {
                     if result?.unresolved.isEmpty == false { showExportReview = true }
@@ -310,6 +360,12 @@ struct AnalysisView: View {
         PrimaryButton(title: "Adjust framing", isEnabled: session.cropEditingContext(for: spec) != nil) {
             editContext = session.cropEditingContext(for: spec)
         }.accessibilityIdentifier("analysis.adjust")
+    }
+    private func openManualFraming() {
+        guard !isMeasuring, let analysis = result, analysis.geometry == nil,
+              analysis.failures.isEmpty, let image = session.image else { return }
+        manualContext = ManualFramingEditContext(image: image, revision: session.revision,
+                                                existing: manualRecord)
     }
     private func reviewBinding(_ keyPath: WritableKeyPath<PhotoReview, Bool>) -> Binding<Bool> {
         Binding(get: { session.review[keyPath: keyPath] }, set: { value in
@@ -345,12 +401,35 @@ struct AnalysisView: View {
     }
 }
 
+private struct ManualFramingEditContext: Identifiable {
+    let id = UUID()
+    let image: UIImage
+    let revision: UUID
+    let existing: ManualFramingRecord?
+}
+
 private struct VerdictPresentation {
     let title: String
     let message: String
     let icon: String
     let tint: Color
-    init(status: FindingStatus) {
+    init(status: FindingStatus, hasFaceMeasurements: Bool, isManuallyFramed: Bool) {
+        // An objective failure remains blocking even if automatic geometry is
+        // also unavailable. Manual framing never overrides that result.
+        if status == .fail {
+            title = "A few details to adjust"
+            message = "Review the highlighted findings before exporting. Your original is available to reframe."
+            icon = "exclamationmark.circle.fill"; tint = Theme.signalFail
+            return
+        }
+        guard hasFaceMeasurements else {
+            title = isManuallyFramed ? "Your guides set the framing" : "Measurements unavailable"
+            message = isManuallyFramed
+                ? "You confirmed the guide positions. Automatic face measurements remain unavailable, and the unresolved checks below still need your judgment."
+                : "This crop couldn’t be measured reliably. Place the framing guides yourself, adjust the crop, or choose a clearer, front-facing original. Export requires confirmed manual framing when automatic measurements are unavailable."
+            icon = "exclamationmark.circle.fill"; tint = Theme.signalVerify
+            return
+        }
         switch status {
         case .pass:
             title = "Ready for your next step"

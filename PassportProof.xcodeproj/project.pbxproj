@@ -22,6 +22,7 @@
 		A11F8291B5F5E873C0B24CA9 /* PhotoCrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A20D479B25AAC82D6259B6A /* PhotoCrop.swift */; };
 		898C48E56B1CCB3285C67CFC /* DocumentSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */; };
 		61EAC08883745609FBA75664 /* Finding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9858B801B42B297EE1FE77E /* Finding.swift */; };
+		AEEC482FFD87820A9DEED8AB /* ManualFraming.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39FA3A3988536BF517BF0D3 /* ManualFraming.swift */; };
 		3DDC576B7CC068F627FBE671 /* PhotoReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B062EDF079A0B6E2C0272B1 /* PhotoReview.swift */; };
 		73020240678CAAC104BBFB96 /* PrintSheetLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011AC093578B2F487407BA85 /* PrintSheetLayout.swift */; };
 		81819337B46BB2B9A6486917 /* EntitlementStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 616447732891C1A8B5912FC1 /* EntitlementStore.swift */; };
@@ -34,6 +35,7 @@
 		CF23C630D6AE2576E7410D45 /* AnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9918E44415B666EA756BCD6 /* AnalysisView.swift */; };
 		FDFD0D9D06327C37C2637357 /* FaceOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C09349B904C89E212332E0 /* FaceOverlayView.swift */; };
 		C8B876D90ACFDC6AE228AA6A /* FindingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED92962E7738D7864F214B9 /* FindingRow.swift */; };
+		7E17392BF5946162B84762A8 /* ManualFramingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA6137F43EE71BEAA5B1BF8B /* ManualFramingView.swift */; };
 		CF51DD82AC8AAC520B04E5AD /* MeasurementBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */; };
 		AE27F486AB7DF1AE3D99A846 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6426D138BFBACF3E99A81689 /* CameraPicker.swift */; };
 		073E654FF57DBAD621B4ED8A /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */; };
@@ -50,6 +52,7 @@
 		40EF49084A84A0F14DC69064 /* AssessmentDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */; };
 		CE992BE5DFA1400ADAAF1D56 /* CoreRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523FDE8AA4667380EBDBA5A1 /* CoreRegressionTests.swift */; };
 		5C812E09B777C674D5BE057F /* ExportStagingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6AEE0F4A67A9DD6C90359F /* ExportStagingTests.swift */; };
+		A213ED968F564CA4A318378F /* ManualFramingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 278C30E0B1EE502B43038192 /* ManualFramingTests.swift */; };
 		AC6E7BB9129E64A64D41B172 /* PassportProofTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */; };
 		59320539FD9476E70FBF656A /* PhotoSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C9B5B2AA22124267FF60E8 /* PhotoSessionTests.swift */; };
 		59C51B405BE6B73239A1A0E3 /* PortraitAssessmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA91B0AF243B6D7FA51535E2 /* PortraitAssessmentTests.swift */; };
@@ -96,6 +99,7 @@
 		2A20D479B25AAC82D6259B6A /* PhotoCrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCrop.swift; sourceTree = "<group>"; };
 		8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSpec.swift; sourceTree = "<group>"; };
 		C9858B801B42B297EE1FE77E /* Finding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finding.swift; sourceTree = "<group>"; };
+		D39FA3A3988536BF517BF0D3 /* ManualFraming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualFraming.swift; sourceTree = "<group>"; };
 		4B062EDF079A0B6E2C0272B1 /* PhotoReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoReview.swift; sourceTree = "<group>"; };
 		011AC093578B2F487407BA85 /* PrintSheetLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintSheetLayout.swift; sourceTree = "<group>"; };
 		616447732891C1A8B5912FC1 /* EntitlementStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementStore.swift; sourceTree = "<group>"; };
@@ -108,6 +112,7 @@
 		C9918E44415B666EA756BCD6 /* AnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisView.swift; sourceTree = "<group>"; };
 		05C09349B904C89E212332E0 /* FaceOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceOverlayView.swift; sourceTree = "<group>"; };
 		4ED92962E7738D7864F214B9 /* FindingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindingRow.swift; sourceTree = "<group>"; };
+		BA6137F43EE71BEAA5B1BF8B /* ManualFramingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualFramingView.swift; sourceTree = "<group>"; };
 		3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementBar.swift; sourceTree = "<group>"; };
 		6426D138BFBACF3E99A81689 /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
 		EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
@@ -122,6 +127,7 @@
 		2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssessmentDiagnosticsTests.swift; sourceTree = "<group>"; };
 		523FDE8AA4667380EBDBA5A1 /* CoreRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreRegressionTests.swift; sourceTree = "<group>"; };
 		4E6AEE0F4A67A9DD6C90359F /* ExportStagingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportStagingTests.swift; sourceTree = "<group>"; };
+		278C30E0B1EE502B43038192 /* ManualFramingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualFramingTests.swift; sourceTree = "<group>"; };
 		95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofTests.swift; sourceTree = "<group>"; };
 		23C9B5B2AA22124267FF60E8 /* PhotoSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSessionTests.swift; sourceTree = "<group>"; };
 		CA91B0AF243B6D7FA51535E2 /* PortraitAssessmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortraitAssessmentTests.swift; sourceTree = "<group>"; };
@@ -251,6 +257,7 @@
 			children = (
 				8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */,
 				C9858B801B42B297EE1FE77E /* Finding.swift */,
+				D39FA3A3988536BF517BF0D3 /* ManualFraming.swift */,
 				4B062EDF079A0B6E2C0272B1 /* PhotoReview.swift */,
 			);
 			path = Models;
@@ -310,6 +317,7 @@
 				C9918E44415B666EA756BCD6 /* AnalysisView.swift */,
 				05C09349B904C89E212332E0 /* FaceOverlayView.swift */,
 				4ED92962E7738D7864F214B9 /* FindingRow.swift */,
+				BA6137F43EE71BEAA5B1BF8B /* ManualFramingView.swift */,
 				3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */,
 			);
 			path = Analysis;
@@ -369,6 +377,7 @@
 				2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */,
 				523FDE8AA4667380EBDBA5A1 /* CoreRegressionTests.swift */,
 				4E6AEE0F4A67A9DD6C90359F /* ExportStagingTests.swift */,
+				278C30E0B1EE502B43038192 /* ManualFramingTests.swift */,
 				95B4B0DE436AF17BCCFF937E /* PassportProofTests.swift */,
 				23C9B5B2AA22124267FF60E8 /* PhotoSessionTests.swift */,
 				CA91B0AF243B6D7FA51535E2 /* PortraitAssessmentTests.swift */,
@@ -543,6 +552,7 @@
 				A11F8291B5F5E873C0B24CA9 /* PhotoCrop.swift in Sources */,
 				898C48E56B1CCB3285C67CFC /* DocumentSpec.swift in Sources */,
 				61EAC08883745609FBA75664 /* Finding.swift in Sources */,
+				AEEC482FFD87820A9DEED8AB /* ManualFraming.swift in Sources */,
 				3DDC576B7CC068F627FBE671 /* PhotoReview.swift in Sources */,
 				73020240678CAAC104BBFB96 /* PrintSheetLayout.swift in Sources */,
 				81819337B46BB2B9A6486917 /* EntitlementStore.swift in Sources */,
@@ -555,6 +565,7 @@
 				CF23C630D6AE2576E7410D45 /* AnalysisView.swift in Sources */,
 				FDFD0D9D06327C37C2637357 /* FaceOverlayView.swift in Sources */,
 				C8B876D90ACFDC6AE228AA6A /* FindingRow.swift in Sources */,
+				7E17392BF5946162B84762A8 /* ManualFramingView.swift in Sources */,
 				CF51DD82AC8AAC520B04E5AD /* MeasurementBar.swift in Sources */,
 				AE27F486AB7DF1AE3D99A846 /* CameraPicker.swift in Sources */,
 				073E654FF57DBAD621B4ED8A /* CaptureView.swift in Sources */,
@@ -576,6 +587,7 @@
 				40EF49084A84A0F14DC69064 /* AssessmentDiagnosticsTests.swift in Sources */,
 				CE992BE5DFA1400ADAAF1D56 /* CoreRegressionTests.swift in Sources */,
 				5C812E09B777C674D5BE057F /* ExportStagingTests.swift in Sources */,
+				A213ED968F564CA4A318378F /* ManualFramingTests.swift in Sources */,
 				AC6E7BB9129E64A64D41B172 /* PassportProofTests.swift in Sources */,
 				59320539FD9476E70FBF656A /* PhotoSessionTests.swift in Sources */,
 				59C51B405BE6B73239A1A0E3 /* PortraitAssessmentTests.swift in Sources */,

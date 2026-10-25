@@ -103,6 +103,14 @@ for review.
 
 ## 4. Honest open limitations
 
+- Automatic face measurements are not validated for release. Strict real-photo
+  tests currently fail on the tested iOS Simulators; isolated native macOS
+  controls pass, but that does not prove physical iPhone behavior. Resolve the
+  measurement defect or validate the actual device path before representing
+  automatic checking as reliable. Manual-framing success is separate evidence.
+- Manual framing calculates dimensions from user-placed guides and retains all
+  unavailable automatic findings. Its explicit review and revision checks do
+  not establish issuer acceptance or a population accuracy result.
 - The live camera gate must still be verified on a physical device.
 - Print fidelity must be measured on real printers using the calibration sheet.
 - Expression, glasses, recency and original-source status rely on explicit user

@@ -14,6 +14,7 @@ import StoreKitTest
 
 final class PassportProofUITests: XCTestCase {
     private let productIdentifier = "com.passportproof.app.unlock"
+    private let manualReviewIDs = ["manual.review.guides", "manual.review.face", "manual.review.background", "manual.review.limitations"]
     private var storeSession: SKTestSession!
     private var testedApp: XCUIApplication?
 
@@ -139,8 +140,8 @@ final class PassportProofUITests: XCTestCase {
     }
 
     @MainActor
-    func testRealPhotoImportReviewCanceledEditAndDigitalShare() throws {
-        executionTimeAllowance = 300
+    func testManualFramingFromRealPhotoPreservesEditsAndSharesJPEG() throws {
+        executionTimeAllowance = 480
         // This transaction uses Apple's local StoreKit environment. The separate
         // purchase test above exercises the application's purchase button.
         try storeSession.buyProduct(productIdentifier: productIdentifier)
@@ -151,6 +152,7 @@ final class PassportProofUITests: XCTestCase {
         let confirmCrop = app.buttons["crop.confirm"]
         require(confirmCrop, in: app, timeout: 30)
         waitUntil(in: app, description: "The original photo must finish preparing", timeout: 30) { confirmCrop.isEnabled }
+        includeWholeHeadInManualCrop(in: app)
         capture(app, named: "08-real-photo-crop")
         confirmCrop.tap()
 
@@ -159,22 +161,25 @@ final class PassportProofUITests: XCTestCase {
         capture(app, named: "08-real-photo-analysis")
         attachHierarchy(app, named: "08-real-analysis-findings")
 
+        manuallyFramePortrait(in: app, printedPassport: false, evidencePrefix: "08")
         let reviewIDs = confirmVisualReview(in: app)
+        try verifyManualDraftCancellation(in: app, reviewIDs: reviewIDs)
 
         // A draft rotation/reset must not destroy the accepted photo or its
         // completed review when the user cancels. Session unit tests additionally
         // verify original pixel retention and accepted-crop revision isolation.
         let edit = app.buttons["analysis.editCrop"]
-        scrollToHittable(edit, in: app, towardTop: true)
+        scrollToHittable(edit, in: app, towardTop: true, within: analysisViewport(in: app))
         edit.tap()
         require(app.buttons["crop.cancel"], in: app)
         waitUntil(in: app, description: "The retained original must reopen for editing", timeout: 30) {
             app.buttons["crop.confirm"].isEnabled
         }
         let rotate = app.buttons["crop.rotate"]
-        scrollToHittable(rotate, in: app)
+        scrollToHittable(rotate, in: app, within: cropViewport(in: app))
         rotate.tap()
         waitUntil(in: app, description: "Rotation must finish", timeout: 30) { app.buttons["crop.reset"].isEnabled }
+        scrollToHittable(app.buttons["crop.reset"], in: app, within: cropViewport(in: app))
         app.buttons["crop.reset"].tap()
         waitUntil(in: app, description: "Reset must finish", timeout: 30) { app.buttons["crop.confirm"].isEnabled }
 
@@ -182,7 +187,7 @@ final class PassportProofUITests: XCTestCase {
         // draft zoom makes a silently recreated editor observable. This does not
         // inspect or make claims about the system's private app-switcher image.
         let zoom = app.sliders["crop.zoom"]
-        scrollToHittable(zoom, in: app, towardTop: true)
+        scrollToHittable(zoom, in: app, towardTop: true, within: cropViewport(in: app))
         let resetZoom = try XCTUnwrap(zoom.value as? String)
         zoom.adjust(toNormalizedSliderPosition: 0.2)
         waitUntil(in: app, description: "The draft zoom must change before testing restoration", timeout: 5) {
@@ -207,25 +212,26 @@ final class PassportProofUITests: XCTestCase {
         capture(app, named: "08-real-photo-draft-edit")
         app.buttons["crop.cancel"].tap()
         require(photo, in: app)
+        assertManualStatus(in: app, identifier: "analysis.manualStatus")
         for identifier in reviewIDs {
             XCTAssertEqual(app.switches[identifier].value as? String, "1", "Canceling a crop must preserve the accepted photo's review")
         }
 
         let next = app.buttons["analysis.continue"]
-        // A genuine detected failure is a failed regression with its findings
-        // attached, never a skipped test or a fabricated passing analysis.
+        // This exercises the disclosed manual product path. The separate
+        // automatic-landmark regressions remain strict and are not bypassed.
         require(next, in: app, timeout: 10)
-        waitUntil(in: app, description: "The actual fixture findings must allow export after human review", timeout: 10) { next.isEnabled }
+        waitUntil(in: app, description: "Explicit manual framing and visual review must enable the digital export", timeout: 10) { next.isEnabled }
         next.tap()
-        let uncertain = app.alerts["Review the uncertain measurements"]
-        if uncertain.waitForExistence(timeout: 2) {
-            capture(app, named: "08-uncertain-measurements-disclosure")
-            uncertain.buttons["Continue to export"].tap()
-        }
+        let uncertain = app.alerts["Review the unverified checks"]
+        require(uncertain, in: app)
+        capture(app, named: "08-manual-measurements-disclosure")
+        uncertain.buttons["Continue to export"].tap()
 
         let export = app.buttons["export.primary"]
         require(export, in: app, timeout: 15)
         XCTAssertEqual(export.label, "Export JPEG", "The verified purchase and real review must unlock the digital export")
+        assertManualStatus(in: app, identifier: "export.manualStatus")
         XCTAssertTrue(app.descendants(matching: .any)["export.preview"].exists)
         capture(app, named: "08-digital-export-preview")
         export.tap()
@@ -239,8 +245,8 @@ final class PassportProofUITests: XCTestCase {
     }
 
     @MainActor
-    func testRealPassportPhotoPrintLayoutsAndPDFShare() throws {
-        executionTimeAllowance = 300
+    func testManualPassportFramingPrintLayoutsAndPDFShare() throws {
+        executionTimeAllowance = 480
         try storeSession.buyProduct(productIdentifier: productIdentifier)
         let app = launchApp()
         openCapture(in: app, documentID: "us-passport")
@@ -249,26 +255,28 @@ final class PassportProofUITests: XCTestCase {
         let confirmCrop = app.buttons["crop.confirm"]
         require(confirmCrop, in: app, timeout: 30)
         waitUntil(in: app, description: "The passport crop must finish preparing", timeout: 30) { confirmCrop.isEnabled }
+        includeWholeHeadInManualCrop(in: app)
         capture(app, named: "09-passport-crop")
         confirmCrop.tap()
         require(app.images["analysis.photo"], in: app, timeout: 40)
         capture(app, named: "09-passport-analysis")
         attachHierarchy(app, named: "09-real-passport-findings")
+        manuallyFramePortrait(in: app, printedPassport: true, evidencePrefix: "09", checkInvalidGuides: true)
         confirmVisualReview(in: app)
 
         let next = app.buttons["analysis.continue"]
         require(next, in: app, timeout: 10)
-        waitUntil(in: app, description: "The real passport findings and confirmations must permit export", timeout: 10) { next.isEnabled }
+        waitUntil(in: app, description: "The manually framed passport and explicit confirmations must permit export", timeout: 10) { next.isEnabled }
         next.tap()
-        let uncertain = app.alerts["Review the uncertain measurements"]
-        if uncertain.waitForExistence(timeout: 2) {
-            capture(app, named: "09-passport-review-disclosure")
-            uncertain.buttons["Continue to export"].tap()
-        }
+        let uncertain = app.alerts["Review the unverified checks"]
+        require(uncertain, in: app)
+        capture(app, named: "09-passport-manual-disclosure")
+        uncertain.buttons["Continue to export"].tap()
 
         let export = app.buttons["export.primary"]
         require(export, in: app, timeout: 15)
         XCTAssertEqual(export.label, "Export PDF", "The reviewed passport crop and verified purchase must enable PDF export")
+        assertManualStatus(in: app, identifier: "export.manualStatus")
         XCTAssertTrue(app.buttons["export.calibration"].exists)
 
         // Exercise the four actual supported layouts, including the dense
@@ -388,6 +396,197 @@ final class PassportProofUITests: XCTestCase {
         require(app.buttons["crop.confirm"], in: app, timeout: 30)
     }
 
+    // MARK: - Explicit manual framing with the real imported photograph
+
+    @MainActor
+    private func includeWholeHeadInManualCrop(in app: XCUIApplication) {
+        // The unmodified fixture is 1062x1210. A centered square removes 74px
+        // at the top and clips the hairstyle. Reset zoom, then move the actual
+        // image down until the square reaches the source's top boundary.
+        let reset = app.buttons["crop.reset"]
+        scrollToHittable(reset, in: app, within: cropViewport(in: app))
+        reset.tap()
+        waitUntil(in: app, description: "The full-resolution original must finish resetting", timeout: 30) {
+            app.buttons["crop.confirm"].isEnabled
+        }
+        let preview = app.descendants(matching: .any)["crop.preview"]
+        scrollToHittable(preview, in: app, towardTop: true, within: cropViewport(in: app))
+        let start = preview.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        let end = preview.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        print("MANUAL QA: source top aligned through the real crop gesture; \(app.descendants(matching: .any)["crop.dimensions"].label)")
+    }
+
+    @MainActor
+    private func manuallyFramePortrait(in app: XCUIApplication, printedPassport: Bool,
+                                      evidencePrefix: String, checkInvalidGuides: Bool = false) {
+        require(app.staticTexts["analysis.automaticUnavailable"], in: app)
+        XCTAssertFalse(app.staticTexts["analysis.manualStatus"].exists)
+        openManualFraming(in: app)
+        require(app.staticTexts["manual.automaticUnavailable"], in: app)
+        let save = app.buttons["manual.confirm"]
+        XCTAssertFalse(save.isEnabled, "Suggested positions must never grant manual approval")
+
+        // These are visual estimates on the inspected, unretouched source, now
+        // anchored at y=0 in a 1062px square. The skull is under the hairstyle;
+        // the anatomical chin is above the beard tip. This is a manual workflow
+        // test, not landmark ground truth or evidence of issuer acceptance.
+        let top: CGFloat = printedPassport ? 110.0 / 1062.0 : 40.0 / 1062.0
+        let positions: [(String, CGFloat)] = [
+            ("manual.top", checkInvalidGuides ? 0.95 : top),
+            ("manual.chin", 710.0 / 1062.0),
+            ("manual.eyes", 390.0 / 1062.0),
+            ("manual.center", 560.0 / 1062.0),
+        ]
+        for (identifier, position) in positions {
+            setManualGuide(identifier, to: position, in: app)
+        }
+        if checkInvalidGuides {
+            // Negative gate: all attestations cannot make a top-below-chin
+            // guide set valid. No invalid state is saved or exported.
+            require(app.staticTexts["manual.issues"], in: app)
+            confirmManualReview(in: app, validGuides: false)
+            XCTAssertFalse(save.isEnabled)
+            capture(app, named: "\(evidencePrefix)-manual-invalid-guides-blocked")
+            attachHierarchy(app, named: "\(evidencePrefix)-manual-invalid-guides-blocked")
+            setManualGuide("manual.top", to: top, in: app)
+            for identifier in manualReviewIDs {
+                XCTAssertEqual(app.switches[identifier].value as? String, "0", "Changing a guide must invalidate its prior attestations")
+            }
+        }
+        XCTAssertFalse(app.staticTexts["manual.issues"].exists, "The manually placed guide estimates must satisfy the published dimensions")
+        XCTAssertFalse(save.isEnabled, "Valid guide numbers still require explicit review")
+        require(app.images["manual.preview"], in: app)
+        capture(app, named: "\(evidencePrefix)-manual-guide-placement")
+        confirmManualReview(in: app, validGuides: true)
+        capture(app, named: "\(evidencePrefix)-manual-confirmations")
+        attachHierarchy(app, named: "\(evidencePrefix)-manual-confirmations")
+        save.tap()
+        require(app.images["analysis.photo"], in: app)
+        assertManualStatus(in: app, identifier: "analysis.manualStatus")
+        require(app.buttons["analysis.continue"], in: app)
+        XCTAssertFalse(app.buttons["analysis.continue"].isEnabled,
+                       "Manual framing does not replace the four ordinary visual checks")
+        capture(app, named: "\(evidencePrefix)-analysis-manually-framed")
+    }
+
+    @MainActor
+    private func setManualGuide(_ identifier: String, to position: CGFloat, in app: XCUIApplication) {
+        let slider = app.sliders[identifier]
+        scrollToHittable(slider, in: app, within: manualViewport(in: app))
+        slider.adjust(toNormalizedSliderPosition: position)
+        let value = slider.value as? String ?? ""
+        let numeric = value.split(separator: " ").first.flatMap { Double($0) }
+        XCTAssertNotNil(numeric, "Each guide must expose its position as an accessible numeric value")
+        if let numeric {
+            XCTAssertEqual(numeric / 100, Double(position), accuracy: 0.015,
+                           "The UI guide must reach the inspected position, not merely become valid")
+        }
+        print("MANUAL GUIDE \(identifier): requested=\(position), actual=\(value)")
+    }
+
+    @MainActor
+    private func confirmManualReview(in app: XCUIApplication, validGuides: Bool) {
+        for (index, identifier) in manualReviewIDs.enumerated() {
+            let toggle = app.switches[identifier]
+            scrollToHittable(toggle, in: app, within: manualViewport(in: app))
+            XCTAssertEqual(toggle.value as? String, "0")
+            toggle.tap()
+            waitUntil(in: app, description: "Manual confirmation must persist: \(identifier)", timeout: 5) {
+                toggle.exists && toggle.value as? String == "1"
+            }
+            if !validGuides || index < manualReviewIDs.count - 1 {
+                XCTAssertFalse(app.buttons["manual.confirm"].isEnabled)
+            }
+        }
+        if validGuides {
+            waitUntil(in: app, description: "Valid guides plus all four manual confirmations must enable saving", timeout: 5) {
+                app.buttons["manual.confirm"].isEnabled
+            }
+        }
+    }
+
+    @MainActor
+    private func verifyManualDraftCancellation(in app: XCUIApplication, reviewIDs: [String]) throws {
+        openManualFraming(in: app)
+        let center = app.sliders["manual.center"]
+        scrollToHittable(center, in: app, within: manualViewport(in: app))
+        let acceptedCenter = try XCTUnwrap(center.value as? String)
+        XCTAssertTrue(app.buttons["manual.confirm"].isEnabled)
+        setManualGuide("manual.center", to: 0.8, in: app)
+        XCTAssertNotEqual(center.value as? String, acceptedCenter)
+        XCTAssertFalse(app.buttons["manual.confirm"].isEnabled)
+        app.buttons["manual.cancel"].tap()
+        assertManualStatus(in: app, identifier: "analysis.manualStatus")
+        for identifier in reviewIDs {
+            XCTAssertEqual(app.switches[identifier].value as? String, "1", "Canceling manual guide edits must preserve ordinary review")
+        }
+        openManualFraming(in: app)
+        scrollToHittable(center, in: app, within: manualViewport(in: app))
+        XCTAssertEqual(center.value as? String, acceptedCenter, "Cancel must retain the accepted guide, not its edited draft")
+        for identifier in manualReviewIDs {
+            XCTAssertEqual(app.switches[identifier].value as? String, "1", "Cancel must preserve the accepted manual attestations")
+        }
+        XCTAssertTrue(app.buttons["manual.confirm"].isEnabled)
+        capture(app, named: "08-manual-draft-cancel-preserved")
+        app.buttons["manual.cancel"].tap()
+        assertManualStatus(in: app, identifier: "analysis.manualStatus")
+    }
+
+    @MainActor
+    private func openManualFraming(in app: XCUIApplication) {
+        let entry = app.buttons["analysis.manualFraming"]
+        scrollToHittable(entry, in: app, towardTop: true, within: analysisViewport(in: app))
+        entry.tap()
+        require(app.buttons["manual.cancel"], in: app)
+        require(app.buttons["manual.confirm"], in: app)
+    }
+
+    @MainActor
+    private func assertManualStatus(in app: XCUIApplication, identifier: String) {
+        let status = app.staticTexts[identifier]
+        require(status, in: app)
+        XCTAssertEqual(status.label, "Manually framed", "The interface must never label manual input as an automatic pass")
+    }
+
+    @MainActor
+    private func manualViewport(in app: XCUIApplication) -> CGRect {
+        // The photo is pinned outside this ScrollView. Its frame, rather than
+        // the full screen, is the actual gesture and visibility region.
+        let scroll = app.scrollViews.containing(.slider, identifier: "manual.top").firstMatch
+        let save = app.buttons["manual.confirm"]
+        require(scroll, in: app)
+        require(save, in: app)
+        let hint = app.staticTexts.matching(NSPredicate(format: "label IN %@", [
+            "Confirm all four statements to continue.", "Adjust the guide positions to continue."
+        ])).firstMatch
+        let top = scroll.frame.minY + 8
+        let bottom = min(scroll.frame.maxY, hint.exists ? hint.frame.minY : save.frame.minY) - 12
+        return CGRect(x: scroll.frame.minX, y: top, width: scroll.frame.width, height: bottom - top)
+    }
+
+    @MainActor
+    private func cropViewport(in app: XCUIApplication) -> CGRect {
+        let cancel = app.buttons["crop.cancel"]
+        let save = app.buttons["crop.confirm"]
+        require(cancel, in: app)
+        require(save, in: app)
+        let top = cancel.frame.maxY + 12
+        return CGRect(x: app.frame.minX, y: top, width: app.frame.width, height: save.frame.minY - 20 - top)
+    }
+
+    @MainActor
+    private func analysisViewport(in app: XCUIApplication) -> CGRect {
+        let navigation = app.navigationBars["Photo review"]
+        let footer = app.buttons.matching(NSPredicate(format: "identifier IN %@", [
+            "analysis.adjust", "analysis.manualStart", "analysis.continue"
+        ])).firstMatch
+        require(navigation, in: app)
+        require(footer, in: app)
+        let top = navigation.frame.maxY + 8
+        return CGRect(x: app.frame.minX, y: top, width: app.frame.width, height: footer.frame.minY - 20 - top)
+    }
+
     @MainActor
     @discardableResult
     private func confirmVisualReview(in app: XCUIApplication) -> [String] {
@@ -396,30 +595,46 @@ final class PassportProofUITests: XCTestCase {
         let identifiers = ["review.expression", "review.glasses", "review.recent", "review.original"]
         for identifier in identifiers {
             let toggle = app.switches[identifier]
-            scrollToHittable(toggle, in: app)
+            // A switch behind the sticky action bar can report isHittable=true.
+            // The recorded failure tapped Choose another instead of the fourth
+            // switch. Keep the entire row below navigation and above the bar's
+            // 12pt top padding, with another 8pt of clearance before tapping.
+            let viewport = analysisViewport(in: app)
+            scrollToHittable(toggle, in: app, within: viewport)
+            print("VISUAL REVIEW \(identifier): frame=\(toggle.frame); safeViewport=\(viewport)")
             XCTAssertEqual(toggle.value as? String, "0")
             toggle.tap()
             waitUntil(in: app, description: "The visual confirmation must persist: \(identifier)", timeout: 5) {
-                toggle.value as? String == "1"
+                toggle.exists && toggle.value as? String == "1"
             }
         }
+        capture(app, named: "visual-review-confirmed")
+        attachHierarchy(app, named: "visual-review-confirmed")
         return identifiers
     }
 
     @MainActor
-    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication, towardTop: Bool = false) {
+    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication, towardTop: Bool = false, within viewport: CGRect? = nil) {
         require(element, in: app)
+        func isReachable() -> Bool {
+            element.exists && element.isHittable && (viewport?.contains(element.frame) ?? true)
+        }
         var attempts = 0
-        while !element.isHittable && attempts < 9 {
+        while !isReachable() && attempts < 9 {
             // The crop preview owns its drag gesture. Scroll in the outer
             // padding so reaching its controls never reframes the photograph.
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: towardTop ? 0.32 : 0.72))
-            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: towardTop ? 0.72 : 0.32))
+            let upward = viewport.map { element.frame.minY < $0.minY } ?? towardTop
+            let gestureFrame = viewport ?? app.frame
+            let top = gestureFrame.minY + gestureFrame.height * (viewport == nil ? 0.32 : 0.2)
+            let bottom = gestureFrame.minY + gestureFrame.height * (viewport == nil ? 0.72 : 0.8)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: app.frame.width * 0.97, dy: (upward ? top : bottom) - app.frame.minY))
+            let end = origin.withOffset(CGVector(dx: app.frame.width * 0.97, dy: (upward ? bottom : top) - app.frame.minY))
             start.press(forDuration: 0.05, thenDragTo: end)
             attempts += 1
         }
-        if !element.isHittable { failureEvidence(app, named: "unreachable-element") }
-        XCTAssertTrue(element.isHittable, "Element should be reachable by scrolling: \(element)")
+        if !isReachable() { failureEvidence(app, named: "unreachable-element") }
+        XCTAssertTrue(isReachable(), "Element should be reachable inside its unobscured viewport: \(element)")
     }
 
     @MainActor
