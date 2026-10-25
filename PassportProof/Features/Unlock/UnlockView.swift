@@ -257,31 +257,3 @@ private struct BenefitRow: View {
         }
     }
 }
-
-private struct NoticeCard: View {
-    let icon: String
-    let title: String
-    let message: String
-    let tint: Color
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.m) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(Theme.ink)
-                Text(message)
-                    .typeStyle(Typography.bodySmall)
-                    .foregroundStyle(Theme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(Theme.Spacing.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityElement(children: .combine)
-    }
-}

@@ -158,18 +158,7 @@ final class PassportProofUITests: XCTestCase {
         capture(app, named: "08-real-photo-analysis")
         attachHierarchy(app, named: "08-real-analysis-findings")
 
-        // These interactions test the required human confirmations; they do not
-        // claim that this public QA portrait is an accepted application photo.
-        let reviewIDs = ["review.expression", "review.glasses", "review.recent", "review.original"]
-        for identifier in reviewIDs {
-            let toggle = app.switches[identifier]
-            scrollToHittable(toggle, in: app)
-            XCTAssertEqual(toggle.value as? String, "0")
-            toggle.tap()
-            waitUntil(in: app, description: "The visual confirmation must persist: \(identifier)", timeout: 5) {
-                toggle.value as? String == "1"
-            }
-        }
+        let reviewIDs = confirmVisualReview(in: app)
 
         // A draft rotation/reset must not destroy the accepted photo or its
         // completed review when the user cancels. Session unit tests additionally
@@ -248,6 +237,81 @@ final class PassportProofUITests: XCTestCase {
         attachHierarchy(app, named: "08-system-share-file-details")
     }
 
+    @MainActor
+    func testRealPassportPhotoPrintLayoutsAndPDFShare() throws {
+        executionTimeAllowance = 300
+        try storeSession.buyProduct(productIdentifier: productIdentifier)
+        let app = launchApp()
+        openCapture(in: app, documentID: "us-passport")
+        importSeededPortrait(in: app, evidencePrefix: "09")
+
+        let confirmCrop = app.buttons["crop.confirm"]
+        require(confirmCrop, in: app, timeout: 30)
+        waitUntil(in: app, description: "The passport crop must finish preparing", timeout: 30) { confirmCrop.isEnabled }
+        capture(app, named: "09-passport-crop")
+        confirmCrop.tap()
+        require(app.images["analysis.photo"], in: app, timeout: 40)
+        capture(app, named: "09-passport-analysis")
+        attachHierarchy(app, named: "09-real-passport-findings")
+        confirmVisualReview(in: app)
+
+        let next = app.buttons["analysis.continue"]
+        require(next, in: app, timeout: 10)
+        waitUntil(in: app, description: "The real passport findings and confirmations must permit export", timeout: 10) { next.isEnabled }
+        next.tap()
+        let uncertain = app.alerts["Review the uncertain measurements"]
+        if uncertain.waitForExistence(timeout: 2) {
+            capture(app, named: "09-passport-review-disclosure")
+            uncertain.buttons["Continue to export"].tap()
+        }
+
+        let export = app.buttons["export.primary"]
+        require(export, in: app, timeout: 15)
+        XCTAssertEqual(export.label, "Export PDF", "The reviewed passport crop and verified purchase must enable PDF export")
+        XCTAssertTrue(app.buttons["export.calibration"].exists)
+
+        // Exercise the four actual supported layouts, including the dense
+        // Letter sheet. The image label only exists after PDF rasterization.
+        let layouts: [(identifier: String, title: String, copies: Int)] = [
+            ("fourBySix", "4 × 6 in", 4),
+            ("fiveBySeven", "5 × 7 in", 6),
+            ("letter12", "Letter — 12-up", 12),
+            ("letter20", "Letter — 20-up", 20),
+        ]
+        for (index, layout) in layouts.enumerated() {
+            // Reveal the regular heading before querying its lazy grid cells.
+            scrollToHittable(app.staticTexts["Choose your paper"], in: app)
+            let choice = app.buttons["layout.\(layout.identifier)"]
+            scrollToHittable(choice, in: app)
+            if index == 0 {
+                XCTAssertTrue(choice.isSelected, "The initial sheet must be the default 4 × 6 inch layout")
+            } else {
+                choice.tap()
+                waitUntil(in: app, description: "The selected paper must update to \(layout.title)", timeout: 10) { choice.isSelected }
+            }
+            for other in layouts where other.identifier != layout.identifier {
+                XCTAssertFalse(app.buttons["layout.\(other.identifier)"].isSelected, "Only the current paper choice may be selected")
+            }
+
+            let previewLabel = "Preview of the actual \(layout.title) PDF with \(layout.copies) copies of your reviewed photo"
+            let preview = app.images[previewLabel]
+            require(preview, in: app, timeout: 25)
+            scrollToHittable(preview, in: app, towardTop: true)
+            XCTAssertTrue(app.staticTexts["\(layout.title) · \(layout.copies) photos · print at 100%"].exists)
+            capture(app, named: "09-print-preview-\(layout.identifier)")
+        }
+
+        XCTAssertEqual(export.label, "Export PDF")
+        XCTAssertTrue(export.isEnabled)
+        export.tap()
+        waitUntil(in: app, description: "The generated passport PDF must reach the system activity sheet", timeout: 25) {
+            app.buttons["Save to Files"].exists || app.buttons["Copy"].exists ||
+                app.otherElements["ActivityListView"].exists
+        }
+        capture(app, named: "09-passport-pdf-share-sheet")
+        attachHierarchy(app, named: "09-passport-pdf-file-details")
+    }
+
     // MARK: - Navigation and evidence
 
     @MainActor
@@ -261,8 +325,8 @@ final class PassportProofUITests: XCTestCase {
     }
 
     @MainActor
-    private func openCapture(in app: XCUIApplication) {
-        let document = app.buttons["library.document.us-visa"]
+    private func openCapture(in app: XCUIApplication, documentID: String = "us-visa") {
+        let document = app.buttons["library.document.\(documentID)"]
         scrollToHittable(document, in: app)
         document.tap()
         let measure = app.buttons["detail.measure"]
@@ -280,7 +344,7 @@ final class PassportProofUITests: XCTestCase {
     }
 
     @MainActor
-    private func importSeededPortrait(in app: XCUIApplication) {
+    private func importSeededPortrait(in app: XCUIApplication, evidencePrefix: String = "08") {
         let library = app.buttons["capture.library"]
         scrollToHittable(library, in: app)
         library.tap()
@@ -293,11 +357,29 @@ final class PassportProofUITests: XCTestCase {
         waitUntil(in: app, description: "PhotosPicker must expose the single seeded portrait; inspect the attached hierarchy if the runtime changed", timeout: 20) {
             cell.exists || image.exists || gridCells.count == 1
         }
-        attachHierarchy(app, named: "08-system-photos-picker")
-        capture(app, named: "08-photos-picker")
+        attachHierarchy(app, named: "\(evidencePrefix)-system-photos-picker")
+        capture(app, named: "\(evidencePrefix)-photos-picker")
         if cell.exists { cell.tap() }
         else if image.exists { image.tap() }
         else { gridCells.element(boundBy: 0).tap() }
+    }
+
+    @MainActor
+    @discardableResult
+    private func confirmVisualReview(in app: XCUIApplication) -> [String] {
+        // These interactions exercise required human confirmations; they do not
+        // certify that the public QA portrait is an accepted application photo.
+        let identifiers = ["review.expression", "review.glasses", "review.recent", "review.original"]
+        for identifier in identifiers {
+            let toggle = app.switches[identifier]
+            scrollToHittable(toggle, in: app)
+            XCTAssertEqual(toggle.value as? String, "0")
+            toggle.tap()
+            waitUntil(in: app, description: "The visual confirmation must persist: \(identifier)", timeout: 5) {
+                toggle.value as? String == "1"
+            }
+        }
+        return identifiers
     }
 
     @MainActor

@@ -17,6 +17,7 @@ struct CameraPicker: View {
     let onCapture: (UIImage) -> Void
     let onCancel: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var model: CameraModel
 
     init(
@@ -91,7 +92,7 @@ struct CameraPicker: View {
             Image(systemName: model.gate?.canCapture == true ? "checkmark.circle.fill" : "viewfinder")
                 .font(.title3)
                 .foregroundStyle(model.gate?.canCapture == true ? Color.green : Color.white)
-                .symbolEffect(.pulse, isActive: model.gate?.canCapture != true)
+                .symbolEffect(.pulse, isActive: !reduceMotion && model.gate?.canCapture != true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.gate?.canCapture == true ? "Ready to capture" : "Setting up your shot")
