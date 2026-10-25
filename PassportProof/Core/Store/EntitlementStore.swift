@@ -2,81 +2,99 @@
 //  EntitlementStore.swift
 //  PassportProof
 //
-//  One non-consumable, no subscription, no server. Entitlement is whatever
-//  StoreKit reports; there is no receipt check of our own to fall back on.
-//
-//  A prototype build with no App Store Connect record gets an empty product
-//  list. In that case the store says so and offers an explicitly labelled
-//  prototype unlock. It never reports `.purchased` for that path.
+//  StoreKit 2, one non-consumable, no server. Entitlement is recomputed from
+//  verified current transactions, including launch, restore and live updates.
+//  The demonstration bypass exists only in DEBUG and has no Release symbol.
 //
 
 import Foundation
 import Combine
 import StoreKit
 
-// MARK: - State
-
 enum EntitlementState: Equatable, Sendable {
     case loading
     case available
     case purchased
+    case pending
     case unavailable(String)
     case failed(String)
 }
 
-// MARK: - Store
-
 @MainActor
 final class EntitlementStore: ObservableObject {
-
     static let productIdentifier = "com.passportproof.app.unlock"
-    static let prototypePrice = "$17.99"
+    static let fallbackPrice = "$17.99"
 
-    @Published private(set) var isUnlocked: Bool
-    @Published private(set) var displayPrice: String
-    @Published private(set) var state: EntitlementState
-    /// True only after `unlockForPrototype()`. The UI must label it as such.
-    @Published private(set) var isPrototypeUnlock: Bool
+    @Published private(set) var isUnlocked = false
+    @Published private(set) var displayPrice = EntitlementStore.fallbackPrice
+    @Published private(set) var state: EntitlementState = .loading
+    @Published private(set) var isWorking = false
+    @Published private(set) var isPrototypeUnlock = false
 
     private var product: Product?
+    private var transactionUpdatesTask: Task<Void, Never>?
 
     init() {
-        isUnlocked = false
-        displayPrice = EntitlementStore.prototypePrice
-        state = .loading
-        isPrototypeUnlock = false
+        transactionUpdatesTask = Task { [weak self] in
+            for await result in Transaction.updates {
+                guard let self else { return }
+                guard case .verified(let transaction) = result else { continue }
+                guard transaction.productID == EntitlementStore.productIdentifier else { continue }
+                let entitled = await self.refreshEntitlements()
+                self.state = entitled ? .purchased : .available
+                await transaction.finish()
+            }
+        }
+    }
+
+    deinit {
+        transactionUpdatesTask?.cancel()
     }
 
     // MARK: - Loading
 
     func refresh() async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
         state = .loading
+
         do {
-            let products = try await Product.products(for: [EntitlementStore.productIdentifier])
+            let products = try await Product.products(for: [Self.productIdentifier])
             guard let product = products.first else {
                 self.product = nil
-                displayPrice = EntitlementStore.prototypePrice
-                state = .unavailable("No StoreKit product configured — prototype build")
+                displayPrice = Self.fallbackPrice
+                _ = await refreshEntitlements()
+                if !isUnlocked {
+                    #if DEBUG
+                    state = .unavailable("StoreKit has no product configured. A debug-only demonstration unlock is available.")
+                    #else
+                    state = .unavailable("The one-time unlock is not available yet. Check your connection and try again shortly.")
+                    #endif
+                }
                 return
             }
+
             self.product = product
             displayPrice = product.displayPrice
-            await refreshEntitlements()
-            if !isUnlocked {
-                state = .available
-            }
+            let entitled = await refreshEntitlements()
+            state = entitled ? .purchased : .available
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(Self.message(for: error))
         }
     }
 
     // MARK: - Purchase
 
     func purchase() async {
-        guard let product = self.product else {
-            state = .unavailable("No StoreKit product configured — prototype build")
+        guard !isWorking else { return }
+        guard let product else {
+            state = .unavailable("The one-time unlock is not available yet. Try again shortly.")
             return
         }
+
+        isWorking = true
+        defer { isWorking = false }
 
         do {
             let result = try await product.purchase()
@@ -88,67 +106,77 @@ final class EntitlementStore: ObservableObject {
                     isPrototypeUnlock = false
                     state = .purchased
                     await transaction.finish()
-                case .unverified(_, _):
-                    // Do not grant on an unverified transaction.
-                    state = .failed("The purchase could not be verified on this device.")
+                case .unverified:
+                    state = .failed("The purchase could not be verified on this device. Nothing was unlocked.")
                 }
             case .userCancelled:
-                state = .available
+                state = isUnlocked ? .purchased : .available
             case .pending:
-                state = .failed("The purchase is pending and has not completed.")
+                state = .pending
             @unknown default:
                 state = .available
             }
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(Self.message(for: error))
         }
     }
 
     // MARK: - Restore
 
     func restore() async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+
         do {
             try await AppStore.sync()
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(Self.message(for: error))
             return
         }
-        await refreshEntitlements()
-        if !isUnlocked {
-            if product == nil {
-                state = .unavailable("No StoreKit product configured — prototype build")
-            } else {
-                state = .available
-            }
+
+        let entitled = await refreshEntitlements()
+        if entitled {
+            state = .purchased
+        } else {
+            state = .failed("No previous PassportProof purchase was found for this Apple Account.")
         }
     }
 
-    // MARK: - Prototype bypass
-
-    /// Clearly labelled bypass for builds with no StoreKit configuration.
-    /// Sets `isPrototypeUnlock` so the UI can say "prototype unlock — no
-    /// purchase was made" next to it. Never sets `.purchased`.
+    #if DEBUG
+    /// Demonstration only. This declaration is absent from Release builds.
     func unlockForPrototype() {
         isUnlocked = true
         isPrototypeUnlock = true
-        state = .unavailable("Prototype unlock — no purchase was made and no StoreKit product is configured.")
+        state = .unavailable("Debug demonstration unlock — no purchase was made.")
     }
+    #endif
 
-    // MARK: - Private
+    // MARK: - Entitlements
 
-    private func refreshEntitlements() async {
+    @discardableResult
+    private func refreshEntitlements() async -> Bool {
         var entitled = false
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }
-            if transaction.productID == EntitlementStore.productIdentifier,
+            if transaction.productID == Self.productIdentifier,
                transaction.revocationDate == nil {
                 entitled = true
             }
         }
-        if entitled {
-            isUnlocked = true
-            isPrototypeUnlock = false
-            state = .purchased
+
+        #if DEBUG
+        isUnlocked = entitled || isPrototypeUnlock
+        #else
+        isUnlocked = entitled
+        #endif
+        return entitled
+    }
+
+    private static func message(for error: Error) -> String {
+        if error is StoreKitError {
+            return "The App Store could not complete that request. Check your connection and try again."
         }
+        return "The App Store is unavailable right now. Try again shortly."
     }
 }

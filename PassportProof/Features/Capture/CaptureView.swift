@@ -2,15 +2,9 @@
 //  CaptureView.swift
 //  PassportProof
 //
-//  Two entry points: camera and library. Both funnel into the same review: the
-//  still is shown, `CaptureGate` is evaluated on it, and the accept control is
-//  disabled until the gate returns `canCapture == true`. The gate's own message
-//  is printed beneath the control — it is the gate talking, not a paraphrase.
-//
-//  Honest limitation, stated on screen: `UIImagePickerController` does not
-//  expose frames, so the gate cannot run on the live feed in this build. It runs
-//  on the captured still, and the shutter that matters — the one that lets a
-//  photo into the diagnosis — is the one this screen disables.
+//  Camera or library → one aspect-locked crop → diagnosis. The custom camera
+//  enforces its gate before capture; imported photos go through the same crop
+//  and complete rule engine without pretending a shutter existed.
 //
 
 import AVFoundation
@@ -22,362 +16,273 @@ struct CaptureView: View {
     let spec: DocumentSpec
 
     @EnvironmentObject private var session: PhotoSession
-
-    @State private var showCamera = false
+    @State private var flow: CaptureFlow?
     @State private var goToAnalysis = false
-
     @State private var pendingImage: UIImage?
-    @State private var gate: CaptureGateResult?
-    @State private var isEvaluating = false
-    @State private var pendingSource: FrameSource = .library
-
-    /// The camera cannot open: permission denied, or the device restricts it.
-    /// Stated on screen with a way out, never a black screen.
+    @State private var pendingCaptureDate: Date?
     @State private var cameraDenied = false
 
-    /// The frame was adopted but could not be measured. The old build left the
-    /// gate at "Not evaluated" with no way forward; this states the failure.
-    @State private var gateFailure: String?
-
-    /// The capture date belonging to the pending frame: "now" for the camera
-    /// path, the EXIF date for a library import. Held outside the session until
-    /// the frame is accepted, so a discard leaves no trace.
-    @State private var pendingCaptureDate: Date?
-
-    /// Where the pending frame came from. The gate governs the shutter, and a
-    /// library import has no shutter: it is a frame that already exists. So the
-    /// gate blocks the camera path outright and is reported as information on
-    /// the import path — otherwise a photo with a busy background could never
-    /// reach the diagnosis at all, which is the only path the simulator has.
-    enum FrameSource {
+    private enum CaptureFlow: String, Identifiable {
         case camera
-        case library
-    }
-
-    private var canProceed: Bool {
-        guard let gate else { return false }
-        return gate.canCapture || pendingSource == .library
+        case crop
+        var id: String { rawValue }
     }
 
     private var cameraAvailable: Bool {
-        UIImagePickerController.isSourceTypeAvailable(.camera)
-    }
-
-    private var guideAspect: CGFloat {
-        CGFloat(spec.widthMM / spec.heightMM)
+        AVCaptureDevice.default(for: .video) != nil
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-
                 ScreenTitle(
                     title: "Capture",
-                    subtitle: spec.displayName
+                    subtitle: "\(spec.displayName) · \(spec.workflow.title)"
                 )
 
-                Theme.SectionHeader(
-                    title: "Framing",
-                    trailing: Format.sizeMM(width: spec.widthMM, height: spec.heightMM)
-                )
+                Theme.SectionHeader(title: "Your setup")
+                setupGuide
 
-                FramingOverlay(spec: spec)
-                    .aspectRatio(guideAspect, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
+                Theme.SectionHeader(title: "Choose a source")
+                sourceCard
 
-                framingNote
-
-                Theme.SectionHeader(title: "Target")
-                targets
-
-                Theme.SectionHeader(title: "Source")
-                cameraRow
                 if cameraDenied {
-                    cameraDeniedRow
-                }
-                Theme.Rule()
-                PhotoImporter(title: "Choose from library") { image, captureDate in
-                    adopt(image, from: .library, captureDate: captureDate)
-                }
-                Theme.Rule()
-
-                if let pendingImage {
-                    Theme.SectionHeader(
-                        title: "Captured frame",
-                        trailing: isEvaluating ? "checking" : nil
-                    )
-                    reviewBlock(image: pendingImage)
+                    cameraDeniedCard
                 }
 
-                Spacer(minLength: Theme.Spacing.xxxl)
+                privacyNote
+
+                if session.hasPhoto {
+                    currentPhoto
+                }
             }
+            .padding(.bottom, Theme.Spacing.xxxl)
         }
         .background(Theme.paper)
         .navigationTitle(spec.documentName)
         .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(
-                spec: spec,
-                onCapture: { image in
-                    showCamera = false
-                    adopt(image, from: .camera, captureDate: Date())
-                },
-                onCancel: { showCamera = false }
-            )
-            .ignoresSafeArea()
+        .fullScreenCover(item: $flow) { flow in
+            switch flow {
+            case .camera:
+                CameraPicker(
+                    spec: spec,
+                    onCapture: { image in
+                        pendingImage = image
+                        pendingCaptureDate = Date()
+                        self.flow = .crop
+                    },
+                    onCancel: { self.flow = nil }
+                )
+            case .crop:
+                if let pendingImage {
+                    CropEditorView(
+                        sourceImage: pendingImage,
+                        spec: spec,
+                        onComplete: acceptCrop,
+                        onCancel: discardPending
+                    )
+                }
+            }
         }
         .navigationDestination(isPresented: $goToAnalysis) {
             AnalysisView(spec: spec)
         }
     }
 
-    // MARK: Notes
+    private var setupGuide: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            FramingOverlay(spec: spec)
+                .aspectRatio(CGFloat(spec.aspectRatio), contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .accessibilityLabel("Example framing guide")
+                .accessibilityHidden(true)
 
-    private var framingNote: some View {
-        Text("The band is this document's head-height clause, drawn on its photo geometry. The gate is evaluated on the frame you take, not on the live feed — this build does not sample video.")
-            .typeStyle(Typography.meta)
-            .foregroundStyle(Theme.inkTertiary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.m)
-    }
-
-    // MARK: Targets
-
-    private var targets: some View {
-        ReadoutStrip(columns: [
-            ReadoutStrip.Column(
-                id: "head",
-                value: Typography.inlineValue(
-                    "\(Format.decimal(spec.headHeightMM.lowerBound))–\(Format.decimal(spec.headHeightMM.upperBound))",
-                    unit: "mm"
-                ),
-                caption: "required head"
-            ),
-            ReadoutStrip.Column(
-                id: "cell",
-                value: Typography.inlineValue(
-                    "\(Format.compact(spec.widthMM)) × \(Format.compact(spec.heightMM))",
-                    unit: "mm"
-                ),
-                caption: "cell"
-            ),
-            ReadoutStrip.Column(
-                id: "source",
-                value: Typography.inlineValue("1200 × 1200", unit: "px"),
-                caption: "min source"
-            )
-        ])
-    }
-
-    // MARK: Camera
-
-    private var cameraRow: some View {
-        Button {
-            openCamera()
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    Typography.button.text("Open camera")
-                        .foregroundStyle(cameraAvailable ? Theme.ink : Theme.inkTertiary)
-
-                    Text(cameraAvailable
-                         ? "The shutter is released only when the frame passes the gate."
-                         : "No camera on this device. The simulator has none — use a photo from the library below.")
-                        .typeStyle(Typography.meta)
-                        .foregroundStyle(Theme.inkTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: Theme.Spacing.m)
-
-                Typography.unit.text(cameraAvailable ? "ready" : "none")
-                    .foregroundStyle(Theme.inkTertiary)
+            HStack(spacing: Theme.Spacing.m) {
+                SetupItem(icon: "square.on.square", title: "Plain background", detail: spec.backgroundDescription)
+                SetupItem(icon: "sun.max", title: "Even light", detail: "Face one light source; avoid shadows")
             }
-            .frame(minHeight: Theme.Metrics.tapTarget, alignment: .leading)
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.m)
-            .contentShape(Rectangle())
+
+            HStack(spacing: Theme.Spacing.m) {
+                SetupItem(icon: "person.crop.rectangle", title: "Head & shoulders", detail: "Look directly at the camera")
+                SetupItem(icon: "hand.raised", title: "Hold still", detail: "Live guidance helps with framing")
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!cameraAvailable)
+        .padding(.horizontal, Theme.Spacing.margin)
+        .padding(.top, Theme.Spacing.m)
     }
 
-    /// Shown only when the camera was denied or restricted. The permission
-    /// string lives in Info.plist; this is the recovery path.
-    private var cameraDeniedRow: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text("Camera access is turned off for PassportProof. Turn it on in Settings to capture a frame; the library path below works without it.")
-                .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.signalFail)
-                .fixedSize(horizontal: false, vertical: true)
+    private var sourceCard: some View {
+        VStack(spacing: 0) {
+            Button(action: openCamera) {
+                SourceRow(
+                    icon: "camera.fill",
+                    title: "Use live camera",
+                    subtitle: cameraAvailable
+                        ? "Real-time framing and background guidance"
+                        : "No camera available on this device",
+                    isEnabled: cameraAvailable
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!cameraAvailable)
+            .accessibilityIdentifier("capture.camera")
 
+            Theme.Rule()
+                .padding(.leading, 64)
+
+            PhotoImporter(title: "Choose from library") { image, captureDate in
+                pendingImage = image
+                pendingCaptureDate = captureDate
+                flow = .crop
+            }
+            .padding(.horizontal, Theme.Spacing.m)
+            .accessibilityIdentifier("capture.library")
+        }
+        .background(Theme.paperRaised)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Theme.rule, lineWidth: 0.5)
+        }
+        .padding(.horizontal, Theme.Spacing.margin)
+        .padding(.top, Theme.Spacing.m)
+    }
+
+    private var cameraDeniedCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            Label("Camera access is off", systemImage: "camera.metering.partial")
+                .font(.headline)
+                .foregroundStyle(Theme.signalFail)
+            Text("Enable camera access in Settings, or continue with a photo from your library. Your choice does not prevent the rest of the app from working.")
+                .typeStyle(Typography.bodySmall)
+                .foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             SecondaryAction(title: "Open Settings") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 UIApplication.shared.open(url)
             }
         }
+        .padding(Theme.Spacing.l)
+        .background(Theme.failWash)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.vertical, Theme.Spacing.m)
+        .padding(.top, Theme.Spacing.m)
     }
 
-    // MARK: Camera permission
+    private var privacyNote: some View {
+        Label("Your photo is processed on this device and never uploaded.", systemImage: "lock.shield")
+            .typeStyle(Typography.meta)
+            .foregroundStyle(Theme.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.xl)
+    }
+
+    private var currentPhoto: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            Theme.SectionHeader(title: "Current session")
+            if let image = session.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 180, maxHeight: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .accessibilityLabel("Current prepared photo")
+            }
+            SecondaryAction(title: "Review current diagnosis") { goToAnalysis = true }
+            SecondaryAction(title: "Start over") { session.clear() }
+        }
+        .padding(.horizontal, Theme.Spacing.margin)
+        .padding(.top, Theme.Spacing.m)
+    }
 
     private func openCamera() {
         guard cameraAvailable else { return }
-
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             cameraDenied = false
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showCamera = true
-
+            flow = .camera
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 Task { @MainActor in
-                    if granted {
-                        cameraDenied = false
-                        showCamera = true
-                    } else {
-                        cameraDenied = true
-                    }
+                    cameraDenied = !granted
+                    if granted { flow = .camera }
                 }
             }
-
         default:
             cameraDenied = true
         }
     }
 
-    // MARK: Review
-
-    private func reviewBlock(image: UIImage) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("The captured frame, awaiting review")
-                .padding(.horizontal, Theme.Spacing.margin)
-                .padding(.top, Theme.Spacing.m)
-
-            gateBlock
-                .padding(.horizontal, Theme.Spacing.margin)
-                .padding(.top, Theme.Spacing.m)
-
-            PrimaryButton(
-                title: "Use this photo",
-                isEnabled: canProceed
-            ) {
-                accept(image)
-            }
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.l)
-
-            if pendingSource == .library, gate?.canCapture == false {
-                Text("The shutter gate was not applied to this imported frame. Background and lighting are measured on the image exactly as imported, so a busy background will read as a FAIL on those rules.")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Theme.Spacing.margin)
-                    .padding(.top, Theme.Spacing.s)
-            }
-
-            SecondaryAction(title: "Discard") {
-                discard()
-            }
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.s)
-            .padding(.bottom, Theme.Spacing.xl)
-        }
-    }
-
-    private var gateBlock: some View {
-        let failed = gateFailure != nil
-        let passed = !failed && gate?.canCapture == true
-        let tint = failed ? Theme.signalFail : (passed ? Theme.signalPass : Theme.signalFail)
-        let wash = passed ? Theme.paper : Theme.failWash
-        let headline: String = {
-            if let gateFailure { return "Frame could not be measured" }
-            if isEvaluating { return "Evaluating the frame" }
-            guard let gate else { return "Not evaluated" }
-            if gate.canCapture { return "Gate passed" }
-            return pendingSource == .camera ? "Gate failed — retake required" : "Gate failed"
-        }()
-        let message: String = {
-            if let gateFailure { return gateFailure }
-            if isEvaluating {
-                return "Background uniformity and crown contrast are being measured on the captured frame."
-            }
-            return gate?.message ?? "No gate result."
-        }()
-
-        return VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Typography.findingLabel.text(headline)
-                .foregroundStyle(tint)
-
-            Text(message)
-                .typeStyle(Typography.bodySmall)
-                .foregroundStyle(Theme.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, Theme.Stroke.statusRail + Theme.Spacing.m)
-        .padding(.trailing, Theme.Spacing.m)
-        .padding(.vertical, Theme.Spacing.m)
-        .background(wash)
-        // The rail is an overlay, not an HStack child: a flexible Rectangle in a
-        // vertical ScrollView takes its ideal height, not the row's.
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(tint)
-                .frame(width: Theme.Stroke.statusRail)
-        }
-    }
-
-    // MARK: Actions
-
-    private func adopt(_ image: UIImage, from source: FrameSource, captureDate: Date?) {
-        pendingImage = image
-        pendingSource = source
-        pendingCaptureDate = captureDate
-        gate = nil
-        gateFailure = nil
-        isEvaluating = true
-
-        guard let cgImage = ImageBridge.cgImage(from: image) else {
-            isEvaluating = false
-            gateFailure = "The frame could not be read as measurable pixels. Try a different photo."
-            return
-        }
-
-        Task {
-            let result = await Task.detached(priority: .userInitiated) {
-                CaptureGate.evaluate(frame: cgImage, spec: spec)
-            }.value
-
-            await MainActor.run {
-                self.gate = result
-                self.isEvaluating = false
-            }
-        }
-    }
-
-    private func accept(_ image: UIImage) {
-        guard canProceed else { return }
-
+    private func acceptCrop(_ image: UIImage) {
         session.adopt(image, captureDate: pendingCaptureDate)
-        session.gate = gate
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        pendingImage = nil
+        pendingCaptureDate = nil
+        flow = nil
         goToAnalysis = true
     }
 
-    private func discard() {
+    private func discardPending() {
         pendingImage = nil
-        gate = nil
-        gateFailure = nil
-        isEvaluating = false
         pendingCaptureDate = nil
+        flow = nil
+    }
+}
+
+private struct SetupItem: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.s) {
+            Image(systemName: icon)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
+                Text(detail)
+                    .typeStyle(Typography.meta)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SourceRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    var isEnabled = true
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.m) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(isEnabled ? Theme.accent : Theme.inkTertiary)
+                .frame(width: 36, height: 36)
+                .background(Theme.accent.opacity(isEnabled ? 0.12 : 0.04), in: Circle())
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(isEnabled ? Theme.ink : Theme.inkTertiary)
+                Text(subtitle)
+                    .typeStyle(Typography.meta)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.inkTertiary)
+        }
+        .padding(Theme.Spacing.m)
+        .frame(minHeight: 72)
+        .contentShape(Rectangle())
     }
 }

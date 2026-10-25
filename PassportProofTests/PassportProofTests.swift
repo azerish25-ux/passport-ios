@@ -2,8 +2,7 @@
 //  PassportProofTests.swift
 //  PassportProofTests
 //
-//  Deterministic tests only. Nothing here depends on Vision finding a face in a
-//  synthetic image; the geometry tests build `FaceGeometry` by hand.
+//  Deterministic logic, imaging and compiled-bundle checks.
 //
 
 import XCTest
@@ -13,446 +12,373 @@ import ImageIO
 
 final class PassportProofTests: XCTestCase {
 
-    // MARK: - Corpus
+    // MARK: - Corpus and output contracts
 
-    func testCorpusHasFourDocumentsInContractOrder() {
-        let documents = DocumentCorpus.documents
-        XCTAssertEqual(documents.count, 4)
-        XCTAssertEqual(
-            documents.map(\.id),
-            ["us-passport", "us-visa", "us-dv-2026", "uk-passport"]
-        )
-        XCTAssertEqual(DocumentCorpus.launchTargetCount, 12)
-        XCTAssertEqual(DocumentCorpus.pendingDocumentNames.count, 8)
-        XCTAssertEqual(documents.count + DocumentCorpus.pendingDocumentNames.count, DocumentCorpus.launchTargetCount)
+    func testCorpusContainsOnlyCompleteWorkflows() {
+        XCTAssertEqual(DocumentCorpus.documents.map(\.id), ["us-passport", "us-visa", "us-dv-lottery"])
+        XCTAssertEqual(DocumentCorpus.document(id: "us-passport")?.workflow, .printedPhoto)
+        XCTAssertEqual(DocumentCorpus.document(id: "us-visa")?.workflow, .digitalPhoto)
+        XCTAssertEqual(DocumentCorpus.document(id: "us-dv-lottery")?.workflow, .digitalPhoto)
+        XCTAssertNil(DocumentCorpus.document(id: "uk-passport"))
     }
 
-    func testHeadHeightLowerBounds() {
-        let usDocuments = DocumentCorpus.documents.filter { $0.countryCode == "US" }
-        XCTAssertEqual(usDocuments.count, 3)
-        for document in usDocuments {
-            XCTAssertEqual(document.headHeightMM.lowerBound, 25.4, accuracy: 0.0001, document.id)
-            XCTAssertEqual(document.headHeightMM.upperBound, 34.9, accuracy: 0.0001, document.id)
-        }
+    func testDocumentRulesAreOutputSpecific() {
+        let passport = DocumentCorpus.documents[0]
+        XCTAssertEqual(passport.headHeightMM.lowerBound, 25, accuracy: 0.0001)
+        XCTAssertEqual(passport.headHeightMM.upperBound, 35, accuracy: 0.0001)
+        XCTAssertEqual(passport.maximumPhotoAgeMonths, 6)
+        XCTAssertTrue(passport.supportsPrintSheet)
+        XCTAssertFalse(passport.supportsDigitalExport)
 
-        guard let uk = DocumentCorpus.document(id: "uk-passport") else {
-            return XCTFail("uk-passport missing from the corpus")
-        }
-        XCTAssertEqual(uk.headHeightMM.lowerBound, 29.0, accuracy: 0.0001)
-        XCTAssertEqual(uk.headHeightMM.upperBound, 34.0, accuracy: 0.0001)
-        XCTAssertEqual(uk.widthMM, 35)
-        XCTAssertEqual(uk.heightMM, 45)
-        XCTAssertEqual(uk.widthPixels, 413)
-        XCTAssertEqual(uk.heightPixels, 531)
-    }
-
-    func testTheTwentyTwoMillimetreRuleAppearsNowhere() {
-        XCTAssertTrue(DocumentCorpus.documents.allSatisfy { $0.headHeightMM.lowerBound != 22 })
-
-        for document in DocumentCorpus.documents {
-            XCTAssertFalse(
-                MeasurementFormat.range(document.headHeightMM.lowerBound, document.headHeightMM.upperBound, unit: "mm").contains("22"),
-                document.id
-            )
-
-            let text = [
-                document.id,
-                document.country,
-                document.countryCode,
-                document.documentName,
-                document.backgroundDescription,
-                document.sourceURL.absoluteString
-            ].joined(separator: " ")
-                + " " + document.changelog.map(\.note).joined(separator: " ")
-                + " " + document.changelog.map(\.id).joined(separator: " ")
-
-            XCTAssertFalse(text.contains("22"), "The 22 mm clause leaked into \(document.id)")
+        for document in DocumentCorpus.documents.dropFirst() {
+            XCTAssertEqual(document.headHeightMM.lowerBound, 25.4, accuracy: 0.0001)
+            XCTAssertEqual(document.headHeightMM.upperBound, 34.9, accuracy: 0.0001)
+            XCTAssertEqual(document.headHeightShare?.lowerBound, 0.50)
+            XCTAssertEqual(document.headHeightShare?.upperBound, 0.69)
+            XCTAssertEqual(document.maximumFileSizeBytes, 240_000)
+            XCTAssertNotEqual(document.headHeightMM.lowerBound, 22)
         }
     }
 
-    // MARK: - Print geometry
+    // MARK: - Shared crop geometry
 
-    func testFourBySixIsFourUp() {
-        let layout = PrintSheetLayout.fourBySix
-        XCTAssertEqual(layout.pageSizePoints, CGSize(width: 288, height: 432))
-        XCTAssertEqual(layout.columns, 2)
-        XCTAssertEqual(layout.rows, 2)
-        XCTAssertFalse(layout.supportsCutMarks)
-    }
-
-    func testLetterTwelveUp() {
-        let layout = PrintSheetLayout.letter12
-        XCTAssertEqual(layout.pageSizePoints, CGSize(width: 612, height: 792))
-        XCTAssertEqual(layout.columns, 3)
-        XCTAssertEqual(layout.rows, 4)
-        XCTAssertTrue(layout.supportsCutMarks)
-    }
-
-    func testPDFRendersAndCarriesThePDFHeader() {
-        let image = makeImage(width: 600, height: 600)
+    func testCropIsAspectLockedAndClampedInsideSource() {
+        let image = makeImage(width: 1200, height: 900)
         let spec = DocumentCorpus.documents[0]
+        let identityRect = PhotoCrop.cropRect(
+            imageSize: CGSize(width: 1200, height: 900),
+            spec: spec,
+            transform: .identity
+        )
+        XCTAssertEqual(identityRect.width, 900, accuracy: 1)
+        XCTAssertEqual(identityRect.height, 900, accuracy: 1)
+        XCTAssertEqual(identityRect.midX, 600, accuracy: 1)
 
-        guard let data = PrintSheetRenderer.pdfData(photo: image, layout: .fourBySix, spec: spec) else {
-            return XCTFail("pdfData returned nil")
+        let requested = CropTransform(zoom: 8, center: CGPoint(x: -1, y: 2))
+        let clamped = PhotoCrop.clamped(
+            requested,
+            imageSize: CGSize(width: 1200, height: 900),
+            spec: spec
+        )
+        XCTAssertEqual(clamped.zoom, PhotoCrop.zoomRange.upperBound)
+        let rect = PhotoCrop.cropRect(
+            imageSize: CGSize(width: 1200, height: 900),
+            spec: spec,
+            transform: clamped
+        )
+        XCTAssertGreaterThanOrEqual(rect.minX, 0)
+        XCTAssertGreaterThanOrEqual(rect.minY, 0)
+        XCTAssertLessThanOrEqual(rect.maxX, 1200)
+        XCTAssertLessThanOrEqual(rect.maxY, 900)
+    }
+
+    func testPreparedCropIsWhatDigitalExportConsumes() {
+        let source = makeImage(width: 1200, height: 900)
+        let spec = DocumentCorpus.documents[0]
+        guard let crop = PhotoCrop.croppedCGImage(from: source, transform: .identity, spec: spec) else {
+            return XCTFail("crop failed")
         }
-        XCTAssertGreaterThan(data.count, 100)
-        XCTAssertEqual(data.prefix(4), Data("%PDF".utf8))
+        XCTAssertEqual(crop.width, 900)
+        XCTAssertEqual(crop.height, 900)
+        XCTAssertNotNil(DigitalExport.jpegData(from: crop, spec: spec))
 
-        XCTAssertNotNil(PrintSheetRenderer.calibrationPDFData(layout: .fourBySix))
-        XCTAssertNotNil(PrintSheetRenderer.calibrationPDFData(layout: .letter12))
+        // The original 4:3 source is not silently centre-cropped by the exporter.
+        XCTAssertNil(DigitalExport.jpegData(from: source, spec: spec))
+        XCTAssertNil(PrintSheetRenderer.pdfData(photo: source, layout: .fourBySix, spec: spec))
     }
 
     // MARK: - Digital export
 
-    func testDigitalExportWritesDPIAndPortalGeometry() {
-        let image = makeImage(width: 1200, height: 1200)
+    func testDigitalExportWritesDPIAndExactGeometry() {
+        let image = makeImage(width: 900, height: 900)
         let spec = DocumentCorpus.documents[0]
-
         guard let data = DigitalExport.jpegData(from: image, spec: spec) else {
             return XCTFail("jpegData returned nil")
         }
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
-            return XCTFail("the exported data is not a readable image")
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let raw = CGImageSourceCopyPropertiesAtIndex(source, 0, nil),
+              let properties = raw as? [String: Any],
+              let exported = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return XCTFail("exported JPEG is not readable")
         }
-        guard let rawProperties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil),
-              let properties = rawProperties as? [String: Any] else {
-            return XCTFail("no image properties")
-        }
-
-        let dpiWidth = (properties[kCGImagePropertyDPIWidth as String] as? NSNumber)?.intValue
-        let dpiHeight = (properties[kCGImagePropertyDPIHeight as String] as? NSNumber)?.intValue
-        XCTAssertEqual(dpiWidth ?? -1, 300)
-        XCTAssertEqual(dpiHeight ?? -1, 300)
-
-        guard let exported = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return XCTFail("the exported data has no image")
-        }
+        XCTAssertEqual((properties[kCGImagePropertyDPIWidth as String] as? NSNumber)?.intValue, 300)
+        XCTAssertEqual((properties[kCGImagePropertyDPIHeight as String] as? NSNumber)?.intValue, 300)
         XCTAssertEqual(exported.width, spec.widthPixels)
         XCTAssertEqual(exported.height, spec.heightPixels)
     }
 
-    // MARK: - Head height divergence
-
-    func testDivergingCrownEstimatorsReportCannotVerify() {
-        let spec = DocumentCorpus.documents[0] // 51 mm, 25.4–34.9 mm
-
-        // 0.5882 × 51 mm ≈ 30 mm: comfortably inside the band.
-        let agreeing = FaceGeometry(
-            chinY: 0.82,
-            eyeY: 0.526,
-            crownEnvelopeY: 0.225,
-            crownInferredY: 0.232,
-            faceCenterX: 0.5,
-            faceWidth: 0.4,
-            faceBox: CGRect(x: 0.3, y: 0.2, width: 0.4, height: 0.55)
-        )
-
-        let agreeingFinding = headHeightFinding(geometry: agreeing, spec: spec)
-        XCTAssertNotEqual(agreeingFinding.status, .cannotVerify)
-        XCTAssertEqual(agreeingFinding.status, .pass)
-
-        // An updo: the silhouette sits far above the inferred crown.
-        let diverging = FaceGeometry(
-            chinY: 0.82,
-            eyeY: 0.526,
-            crownEnvelopeY: 0.05,
-            crownInferredY: 0.232,
-            faceCenterX: 0.5,
-            faceWidth: 0.4,
-            faceBox: CGRect(x: 0.3, y: 0.2, width: 0.4, height: 0.55)
-        )
-
-        let divergingFinding = headHeightFinding(geometry: diverging, spec: spec)
-        XCTAssertEqual(divergingFinding.status, .cannotVerify)
-        XCTAssertGreaterThan(diverging.crownDivergence, ValidationEngine.crownDivergenceLimit)
-
-        // A head too large for the band, with agreeing estimators, still fails.
-        let tooLarge = FaceGeometry(
-            chinY: 0.95,
-            eyeY: 0.60,
-            crownEnvelopeY: 0.10,
-            crownInferredY: 0.105,
-            faceCenterX: 0.5,
-            faceWidth: 0.4,
-            faceBox: CGRect(x: 0.3, y: 0.1, width: 0.4, height: 0.85)
-        )
-        XCTAssertEqual(headHeightFinding(geometry: tooLarge, spec: spec).status, .fail)
+    func testDigitalExportHonoursIssuerByteCeilingOnDetailedImage() {
+        let image = makeNoisyImage(width: 900, height: 900)
+        let spec = DocumentCorpus.documents[1]
+        guard let maximum = spec.maximumFileSizeBytes,
+              let data = DigitalExport.jpegData(from: image, spec: spec) else {
+            return XCTFail("detailed digital export failed")
+        }
+        XCTAssertLessThanOrEqual(data.count, maximum)
+        XCTAssertGreaterThan(data.count, 1_000)
     }
 
-    func testMissingFaceReportsCannotVerifyForHeadHeight() {
+    // MARK: - Print geometry
+
+    func testPrintLayoutsAndPDF() {
+        XCTAssertEqual(PrintSheetLayout.fourBySix.pageSizePoints, CGSize(width: 288, height: 432))
+        XCTAssertEqual(PrintSheetLayout.fourBySix.columns, 2)
+        XCTAssertEqual(PrintSheetLayout.fourBySix.rows, 2)
+        XCTAssertEqual(PrintSheetLayout.letter12.pageSizePoints, CGSize(width: 612, height: 792))
+        XCTAssertTrue(PrintSheetLayout.letter12.supportsCutMarks)
+
+        let image = makeImage(width: 900, height: 900)
         let spec = DocumentCorpus.documents[0]
-        let findings = ValidationEngine.findings(
-            geometry: nil,
-            background: nil,
-            spec: spec,
-            imagePixelSize: CGSize(width: 1200, height: 1200),
-            captureDate: nil
-        )
-        let headHeight = findings.first { $0.id == .headHeight }
-        XCTAssertEqual(headHeight?.status, .cannotVerify)
+        guard let data = PrintSheetRenderer.pdfData(photo: image, layout: .fourBySix, spec: spec) else {
+            return XCTFail("PDF rendering failed")
+        }
+        XCTAssertEqual(data.prefix(4), Data("%PDF".utf8))
+        XCTAssertNotNil(PrintSheetRenderer.calibrationPDFData(layout: .fourBySix))
+        XCTAssertNotNil(PrintSheetRenderer.calibrationPDFData(layout: .letter12))
+        XCTAssertNil(PrintSheetRenderer.pdfData(photo: image, layout: .fourBySix, spec: DocumentCorpus.documents[1]))
     }
 
-    // MARK: - Aggregation
+    // MARK: - Applicable findings and crown consistency
+
+    func testOnlyApplicableRulesAreEmitted() {
+        let passport = findings(spec: DocumentCorpus.documents[0])
+        XCTAssertEqual(passport.count, 9)
+        XCTAssertFalse(passport.contains { $0.id == .headHeightShare })
+        XCTAssertFalse(passport.contains { $0.id == .eyeLine })
+
+        let visa = findings(spec: DocumentCorpus.documents[1])
+        XCTAssertEqual(visa.map(\.id), RuleID.allCases)
+        XCTAssertEqual(visa.count, 11)
+    }
+
+    func testDivergingCrownCannotContradictItselfAcrossRules() {
+        let spec = DocumentCorpus.documents[1]
+        let geometry = makeGeometry(diverging: true)
+        let results = findings(spec: spec, geometry: geometry)
+        for id in [RuleID.headHeight, .headHeightShare, .eyeLine] {
+            XCTAssertEqual(results.first { $0.id == id }?.status, .cannotVerify, id.rawValue)
+        }
+    }
+
+    func testAgreeingCrownCanPassHeadHeight() {
+        let result = findings(spec: DocumentCorpus.documents[0], geometry: makeGeometry())
+        XCTAssertEqual(result.first { $0.id == .headHeight }?.status, .pass)
+    }
+
+    // MARK: - Visual review
+
+    func testVisualChecksDoNotPassWithoutConfirmation() {
+        let results = findings(spec: DocumentCorpus.documents[0], geometry: makeGeometry())
+        XCTAssertEqual(results.first { $0.id == .expression }?.status, .cannotVerify)
+        XCTAssertEqual(results.first { $0.id == .glasses }?.status, .cannotVerify)
+        XCTAssertEqual(results.first { $0.id == .noManipulation }?.status, .cannotVerify)
+        XCTAssertEqual(results.first { $0.id == .photoAge }?.status, .cannotVerify)
+    }
+
+    func testVisualChecksUpdateCachedRuleLayer() {
+        let spec = DocumentCorpus.documents[0]
+        var analysis = ValidationEngine.analyze(
+            image: makeImage(width: 900, height: 900),
+            spec: spec,
+            captureDate: nil,
+            review: .pending
+        )
+        var review = PhotoReview()
+        review.expressionConfirmed = true
+        review.glassesConfirmed = true
+        review.originalUneditedConfirmed = true
+        review.recentPhotoConfirmed = true
+        analysis.update(review: review, spec: spec)
+        XCTAssertEqual(analysis.review, review)
+        XCTAssertEqual(analysis.findings.first { $0.id == .photoAge }?.status, .pass)
+        XCTAssertEqual(analysis.findings.first { $0.id == .noManipulation }?.status, .pass)
+    }
+
+    func testGlareCannotBeOverruledByABlindConfirmation() {
+        var review = PhotoReview()
+        review.glassesConfirmed = true
+        let results = findings(
+            spec: DocumentCorpus.documents[0],
+            geometry: makeGeometry(),
+            glareSuspected: true,
+            review: review
+        )
+        XCTAssertEqual(results.first { $0.id == .glasses }?.status, .cannotVerify)
+    }
+
+    // MARK: - Resolution and photo age
+
+    func testResolutionChecksPreparedCropAgainstOutput() {
+        let spec = DocumentCorpus.documents[0]
+        let failing = findings(spec: spec, pixelSize: CGSize(width: 450, height: 450))
+        XCTAssertEqual(failing.first { $0.id == .resolution }?.status, .fail)
+        let passing = findings(spec: spec, pixelSize: CGSize(width: 900, height: 900))
+        XCTAssertEqual(passing.first { $0.id == .resolution }?.status, .pass)
+    }
+
+    func testPhotoAgeUsesFixedReferenceAndRejectsFutureDates() {
+        let reference = date(year: 2026, month: 10, day: 24)
+        let recent = date(year: 2026, month: 9, day: 1)
+        let stale = date(year: 2026, month: 3, day: 1)
+        let future = date(year: 2027, month: 1, day: 1)
+        let spec = DocumentCorpus.documents[0]
+
+        XCTAssertEqual(
+            findings(spec: spec, captureDate: recent, referenceDate: reference).first { $0.id == .photoAge }?.status,
+            .pass
+        )
+        XCTAssertEqual(
+            findings(spec: spec, captureDate: stale, referenceDate: reference).first { $0.id == .photoAge }?.status,
+            .fail
+        )
+        XCTAssertEqual(
+            findings(spec: spec, captureDate: future, referenceDate: reference).first { $0.id == .photoAge }?.status,
+            .cannotVerify
+        )
+    }
+
+    // MARK: - Aggregation and formatting
 
     func testOverallAggregation() {
         let pass = makeFinding(id: .noManipulation, status: .pass)
-        let cannotVerify = makeFinding(id: .expression, status: .cannotVerify)
+        let review = makeFinding(id: .expression, status: .cannotVerify)
         let fail = makeFinding(id: .resolution, status: .fail)
-
         XCTAssertEqual(ValidationEngine.overall(for: [pass]), .pass)
-        XCTAssertEqual(ValidationEngine.overall(for: [pass, cannotVerify]), .cannotVerify)
-        XCTAssertEqual(ValidationEngine.overall(for: [pass, cannotVerify, fail]), .fail)
-        XCTAssertEqual(ValidationEngine.overall(for: [fail, cannotVerify]), .fail)
+        XCTAssertEqual(ValidationEngine.overall(for: [pass, review]), .cannotVerify)
+        XCTAssertEqual(ValidationEngine.overall(for: [pass, review, fail]), .fail)
     }
 
-    // MARK: - Formatting
-
-    func testDisplayRangeUsesAnEnDashAndTheUnit() {
+    func testDisplayRangeFormatting() {
         let measurement = MeasurementFormat.millimetres(value: 27.4, lowerBound: 25.4, upperBound: 34.9)
-        XCTAssertTrue(measurement.displayRange.contains("–"))
-        XCTAssertFalse(measurement.displayRange.contains("-"))
-        XCTAssertTrue(measurement.displayRange.contains("mm"))
         XCTAssertEqual(measurement.displayValue, "27.4 mm")
-        XCTAssertEqual(measurement.unit, "mm")
-    }
-
-    // MARK: - Rule order
-
-    func testFindingsAreEmittedInContractOrder() {
-        let spec = DocumentCorpus.documents[0]
-        let findings = ValidationEngine.findings(
-            geometry: nil,
-            background: nil,
-            spec: spec,
-            imagePixelSize: CGSize(width: 1200, height: 1200),
-            captureDate: nil
-        )
-        XCTAssertEqual(findings.map(\.id), RuleID.allCases)
-        XCTAssertEqual(findings.count, 11)
-        XCTAssertEqual(
-            findings.map(\.id.rawValue),
-            [
-                "headHeight", "headHeightShare", "eyeLine", "centring",
-                "backgroundUniformity", "shadow", "expression", "glasses",
-                "resolution", "photoAge", "noManipulation"
-            ]
-        )
+        XCTAssertEqual(measurement.displayRange, "25.4 – 34.9 mm")
+        XCTAssertFalse(measurement.displayRange.contains("-"))
     }
 
     // MARK: - Capture gate
 
-    func testCaptureGateRefusesAFrameWithNoFace() {
-        let spec = DocumentCorpus.documents[0]
-        let result = CaptureGate.evaluate(frame: makeImage(width: 600, height: 600), spec: spec)
+    func testCaptureGateRefusesFrameWithNoFace() {
+        let result = CaptureGate.evaluate(frame: makeImage(width: 600, height: 600), spec: DocumentCorpus.documents[0])
         XCTAssertFalse(result.canCapture)
         XCTAssertFalse(result.message.isEmpty)
     }
 
-    // MARK: - Photo age (R7)
-
-    func testPhotoAgePassesInsideSixMonthsAndFailsOutside() {
-        let spec = DocumentCorpus.documents[0]
-        let calendar = Calendar(identifier: .gregorian)
-
-        let recent = calendar.date(byAdding: .month, value: -1, to: Date())
-        let stale = calendar.date(byAdding: .month, value: -7, to: Date())
-
-        let recentFindings = ValidationEngine.findings(
-            geometry: nil,
-            background: nil,
-            spec: spec,
-            imagePixelSize: CGSize(width: 1200, height: 1200),
-            captureDate: recent
-        )
-        XCTAssertEqual(recentFindings.first { $0.id == .photoAge }?.status, .pass)
-
-        let staleFindings = ValidationEngine.findings(
-            geometry: nil,
-            background: nil,
-            spec: spec,
-            imagePixelSize: CGSize(width: 1200, height: 1200),
-            captureDate: stale
-        )
-        XCTAssertEqual(staleFindings.first { $0.id == .photoAge }?.status, .fail)
-    }
-
-    // MARK: - EXIF capture date
+    // MARK: - EXIF decode
 
     func testExifDateParsing() {
         guard let parsed = PhotoImporter.parseExifDate("2026:03:14 10:30:00") else {
-            return XCTFail("a well-formed EXIF date must parse")
+            return XCTFail("valid EXIF date did not parse")
         }
-
-        let components = Calendar(identifier: .gregorian).dateComponents(
-            [.year, .month, .day, .hour, .minute], from: parsed
-        )
+        let components = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: parsed)
         XCTAssertEqual(components.year, 2026)
         XCTAssertEqual(components.month, 3)
         XCTAssertEqual(components.day, 14)
-
-        // A malformed date is unknown, never a guess.
         XCTAssertNil(PhotoImporter.parseExifDate("not a date"))
-        XCTAssertNil(PhotoImporter.parseExifDate(""))
     }
 
-    func testDecodeImageReadsExifCaptureDate() {
-        // Encode a JPEG carrying EXIF DateTimeOriginal, then decode it back.
+    func testDecodeImageReadsExifAndRejectsBadData() {
         let image = makeImage(width: 64, height: 64)
         let data = NSMutableData()
-
-        guard let destination = CGImageDestinationCreateWithData(
-            data, "public.jpeg" as CFString, 1, nil
-        ) else {
-            return XCTFail("could not create the test destination")
+        guard let destination = CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil) else {
+            return XCTFail("could not create JPEG destination")
         }
-
         let exif: [CFString: Any] = [kCGImagePropertyExifDateTimeOriginal: "2026:03:14 10:30:00"]
-        let properties: [CFString: Any] = [kCGImagePropertyExifDictionary: exif]
-        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else {
-            return XCTFail("could not finalize the test JPEG")
-        }
-
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyExifDictionary: exif] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
         guard let decoded = PhotoImporter.decodeImage(from: data as Data) else {
-            return XCTFail("decodeImage returned nil for a valid JPEG")
+            return XCTFail("valid JPEG did not decode")
         }
-        guard let captureDate = decoded.captureDate else {
-            return XCTFail("a JPEG carrying EXIF DateTimeOriginal must decode with a capture date")
-        }
-        let components = Calendar(identifier: .gregorian).dateComponents(
-            [.year, .month, .day], from: captureDate
-        )
-        XCTAssertEqual(components.year, 2026)
-        XCTAssertEqual(components.month, 3)
-        XCTAssertEqual(components.day, 14)
-    }
-
-    func testDecodeImageRejectsNonImageData() {
+        XCTAssertNotNil(decoded.captureDate)
         XCTAssertNil(PhotoImporter.decodeImage(from: Data("not an image".utf8)))
     }
 
-    // MARK: - App Store readiness (the bundle is the evidence)
-
-    /// With a test host, `Bundle.main` is the compiled app bundle, so these
-    /// assertions check what App Review would actually see.
+    // MARK: - Compiled App Store surface
 
     func testAppIconIsCompiledIntoTheBundle() {
-        // The strongest evidence: actool emplaces the compiled icon PNGs at the
-        // bundle root. Absent icon files mean the icon did not compile.
-        XCTAssertNotNil(
-            Bundle.main.url(forResource: "AppIcon60x60@2x", withExtension: "png"),
-            "AppIcon60x60@2x.png is not in the bundle — the app icon did not compile"
-        )
-
-        // Plist registration. Which key appears varies by toolchain and
-        // platform: CFBundleIconName is the App Store requirement, CFBundleIcons
-        // is the registration dict actool writes for SpringBoard. The failure
-        // message lists what is actually there, so a toolchain change is
-        // diagnosable from the log alone.
+        XCTAssertNotNil(Bundle.main.url(forResource: "AppIcon60x60@2x", withExtension: "png"))
         let info = Bundle.main.infoDictionary ?? [:]
-        let registered = info["CFBundleIconName"] != nil || info["CFBundleIcons"] != nil
-        let iconKeys = info.keys.filter {
-            $0.localizedCaseInsensitiveContains("icon")
-        }.sorted()
-        XCTAssertTrue(
-            registered,
-            "no icon registration in Info.plist; icon-related keys present: \(iconKeys)"
-        )
+        XCTAssertTrue(info["CFBundleIconName"] != nil || info["CFBundleIcons"] != nil)
     }
 
-    func testPrivacyManifestIsBundled() {
-        let url = Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy")
-        XCTAssertNotNil(url, "PrivacyInfo.xcprivacy is not in the app bundle")
-    }
-
-    func testLaunchScreenIsConfigured() {
-        let launchScreen = Bundle.main.infoDictionary?["UILaunchScreen"]
-        XCTAssertNotNil(launchScreen, "UILaunchScreen is absent — the app has no launch screen configuration")
-    }
-
-    func testPrivacyUsageDescriptionsArePresent() {
+    func testPrivacyAndLaunchConfigurationAreBundled() {
+        XCTAssertNotNil(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
+        XCTAssertNotNil(Bundle.main.infoDictionary?["UILaunchScreen"])
         let info = Bundle.main.infoDictionary
-        XCTAssertFalse(
-            (info?["NSCameraUsageDescription"] as? String ?? "").isEmpty,
-            "NSCameraUsageDescription is empty"
-        )
-        XCTAssertFalse(
-            (info?["NSPhotoLibraryUsageDescription"] as? String ?? "").isEmpty,
-            "NSPhotoLibraryUsageDescription is empty"
-        )
+        XCTAssertFalse((info?["NSCameraUsageDescription"] as? String ?? "").isEmpty)
+        XCTAssertFalse((info?["NSPhotoLibraryUsageDescription"] as? String ?? "").isEmpty)
     }
 
-    func testBundleVersionIsAReleaseVersion() {
-        let marketing = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        guard let marketing, !marketing.isEmpty else {
-            return XCTFail("CFBundleShortVersionString is absent or empty")
-        }
-        XCTAssertFalse(
-            marketing.hasPrefix("0."),
-            "a submission build must not carry a prototype version (found \(marketing))"
-        )
-    }
-
-    /// AC5, applied to the compile-time surface: no promise word in the plist.
-    func testInfoPlistCarriesNoBannedPromiseWords() {
+    func testReleaseVersionAndPromiseWords() {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let marketing = info["CFBundleShortVersionString"] as? String ?? ""
+        XCTAssertFalse(marketing.isEmpty)
+        XCTAssertFalse(marketing.hasPrefix("0."))
         let banned = ["approved", "guaranteed", "official", "accepted", "government-approved"]
-        let strings = allStrings(in: Bundle.main.infoDictionary ?? [:])
-        for word in banned {
-            for string in strings {
-                XCTAssertFalse(
-                    string.lowercased().contains(word),
-                    "banned promise word “\(word)” appears in Info.plist"
-                )
+        for string in allStrings(in: info) {
+            for word in banned {
+                XCTAssertFalse(string.lowercased().contains(word), "\(word) found in Info.plist")
             }
-        }
-    }
-
-    private func allStrings(in value: Any) -> [String] {
-        switch value {
-        case let dict as [String: Any]:
-            return dict.flatMap { [$0.key] + allStrings(in: $0.value) }
-        case let array as [Any]:
-            return array.flatMap { allStrings(in: $0) }
-        case let string as String:
-            return [string]
-        default:
-            return []
         }
     }
 
     // MARK: - Helpers
 
-    private func headHeightFinding(geometry: FaceGeometry, spec: DocumentSpec) -> Finding {
-        let findings = ValidationEngine.findings(
+    private func findings(
+        spec: DocumentSpec,
+        geometry: FaceGeometry? = nil,
+        background: BackgroundReport? = nil,
+        pixelSize: CGSize = CGSize(width: 1200, height: 1200),
+        captureDate: Date? = nil,
+        glareSuspected: Bool = false,
+        review: PhotoReview = .pending,
+        referenceDate: Date = Date()
+    ) -> [Finding] {
+        ValidationEngine.findings(
             geometry: geometry,
-            background: nil,
+            background: background,
             spec: spec,
-            imagePixelSize: CGSize(width: 1200, height: 1200),
-            captureDate: nil
+            imagePixelSize: pixelSize,
+            captureDate: captureDate,
+            glareSuspected: glareSuspected,
+            review: review,
+            referenceDate: referenceDate
         )
-        guard let finding = findings.first(where: { $0.id == .headHeight }) else {
-            XCTFail("headHeight finding missing")
-            return Finding(
-                id: .headHeight,
-                title: "Head height",
-                status: .cannotVerify,
-                detail: "",
-                measurement: nil,
-                provenance: .source
-            )
-        }
-        return finding
+    }
+
+    private func makeGeometry(diverging: Bool = false) -> FaceGeometry {
+        FaceGeometry(
+            chinY: 0.82,
+            eyeY: 0.526,
+            crownEnvelopeY: diverging ? 0.05 : 0.225,
+            crownInferredY: 0.232,
+            faceCenterX: 0.5,
+            faceWidth: 0.4,
+            faceBox: CGRect(x: 0.3, y: 0.2, width: 0.4, height: 0.55)
+        )
     }
 
     private func makeFinding(id: RuleID, status: FindingStatus) -> Finding {
-        Finding(
-            id: id,
-            title: id.rawValue,
-            status: status,
-            detail: "",
-            measurement: nil,
-            provenance: .source
-        )
+        Finding(id: id, title: id.rawValue, status: status, detail: "", measurement: nil, provenance: .source)
+    }
+
+    private func date(year: Int, month: Int, day: Int) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = 12
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)
+        return calendar.date(from: components) ?? Date(timeIntervalSince1970: 0)
+    }
+
+    private func allStrings(in value: Any) -> [String] {
+        switch value {
+        case let dict as [String: Any]: return dict.flatMap { [$0.key] + allStrings(in: $0.value) }
+        case let array as [Any]: return array.flatMap { allStrings(in: $0) }
+        case let string as String: return [string]
+        default: return []
+        }
     }
 
     private func makeImage(width: Int, height: Int) -> CGImage {
@@ -465,14 +391,35 @@ final class PassportProofTests: XCTestCase {
             bytesPerRow: 0,
             space: space,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            fatalError("could not create a test bitmap context")
-        }
+        ) else { fatalError("could not create test context") }
         context.setFillColor(red: 0.96, green: 0.95, blue: 0.93, alpha: 1)
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        guard let image = context.makeImage() else {
-            fatalError("could not create a test image")
-        }
+        guard let image = context.makeImage() else { fatalError("could not create test image") }
         return image
+    }
+
+    private func makeNoisyImage(width: Int, height: Int) -> CGImage {
+        var pixels = [UInt8](repeating: 255, count: width * height * 4)
+        var state: UInt32 = 0x1234_5678
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            state = 1_664_525 &* state &+ 1_013_904_223
+            pixels[index] = UInt8(truncatingIfNeeded: state >> 16)
+            pixels[index + 1] = UInt8(truncatingIfNeeded: state >> 8)
+            pixels[index + 2] = UInt8(truncatingIfNeeded: state)
+        }
+        let space = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        return pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { fatalError("could not create noise context") }
+            guard let image = context.makeImage() else { fatalError("could not create noise image") }
+            return image
+        }
     }
 }

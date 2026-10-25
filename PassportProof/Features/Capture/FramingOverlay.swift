@@ -23,6 +23,8 @@ struct FramingOverlay: View {
     /// where the ground is the live feed.
     var drawsGround: Bool = true
 
+    private var guideInk: Color { drawsGround ? Theme.onInk : Theme.captureInk }
+
     var body: some View {
         GeometryReader { proxy in
             let guide = guideRect(in: proxy.size)
@@ -85,13 +87,13 @@ struct FramingOverlay: View {
         let bottom = crownLowY(guide)
 
         return Rectangle()
-            .fill(drawsGround ? Theme.onInk.opacity(0.10) : Theme.captureBand)
+            .fill(drawsGround ? guideInk.opacity(0.10) : Theme.captureBand)
             .frame(width: guide.width, height: max(0, bottom - top))
             .overlay(alignment: .top) {
-                Theme.Rule(color: Theme.onInk, weight: Theme.Stroke.rule)
+                Theme.Rule(color: guideInk, weight: Theme.Stroke.rule)
             }
             .overlay(alignment: .bottom) {
-                Theme.Rule(color: Theme.onInk, weight: Theme.Stroke.rule)
+                Theme.Rule(color: guideInk, weight: Theme.Stroke.rule)
             }
             .offset(x: guide.minX, y: top)
     }
@@ -138,7 +140,7 @@ struct FramingOverlay: View {
             path.addLine(to: CGPoint(x: guide.midX, y: guide.maxY))
         }
         .stroke(
-            Theme.onInk.opacity(0.45),
+            guideInk.opacity(0.45),
             style: StrokeStyle(lineWidth: Theme.Stroke.rule, dash: [4, 3])
         )
     }
@@ -167,7 +169,7 @@ struct FramingOverlay: View {
             path.addLine(to: CGPoint(x: guide.minX, y: guide.maxY))
             path.addLine(to: CGPoint(x: guide.minX, y: guide.maxY - length))
         }
-        .stroke(Theme.onInk, style: StrokeStyle(lineWidth: Theme.Stroke.cornerTick, lineCap: .butt))
+        .stroke(guideInk, style: StrokeStyle(lineWidth: Theme.Stroke.cornerTick, lineCap: .butt))
     }
 
     // MARK: Primitives
@@ -178,7 +180,7 @@ struct FramingOverlay: View {
             path.addLine(to: CGPoint(x: x2, y: y))
         }
         .stroke(
-            Theme.onInk,
+            guideInk,
             style: StrokeStyle(
                 lineWidth: Theme.Stroke.rule,
                 lineCap: .butt,
@@ -189,7 +191,7 @@ struct FramingOverlay: View {
 
     private func label(_ text: String, at point: CGPoint) -> some View {
         Typography.unit.text(text)
-            .foregroundStyle(Theme.onInk)
+            .foregroundStyle(guideInk)
             .padding(.horizontal, Theme.Spacing.xs)
             .padding(.vertical, Theme.Spacing.xxs)
             .background(Theme.scrim)

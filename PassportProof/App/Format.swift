@@ -68,16 +68,16 @@ enum Format {
 
 extension Provenance {
 
-    /// The label shown to the user. `prototypeDefault` is never softened: the
-    /// contract's own phrase is the one that goes on screen.
+    /// The label shown to the user. App-selected thresholds remain explicit
+    /// and are never presented as issuer-published tolerances.
     var uiLabel: String {
         switch self {
         case .source:
-            return "from source"
+            return "issuer rule"
         case .derived:
-            return "derived"
+            return "derived from issuer rule"
         case .prototypeDefault:
-            return "prototype default — not from source"
+            return "app threshold — not issuer specified"
         }
     }
 }
@@ -91,7 +91,7 @@ extension FindingStatus {
         case .fail:
             return "Fail"
         case .cannotVerify:
-            return "Cannot verify"
+            return "Review"
         }
     }
 }

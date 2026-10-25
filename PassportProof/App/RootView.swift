@@ -19,7 +19,10 @@ struct RootView: View {
                     destination(for: route)
                 }
         }
-        .tint(Theme.ink)
+        .tint(Theme.accent)
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
+        .background(Theme.paper)
     }
 
     @ViewBuilder
@@ -67,14 +70,14 @@ struct MissingDocumentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Typography.sectionLabel.text("Not encoded")
+            Typography.sectionLabel.text("Unsupported workflow")
                 .foregroundStyle(Theme.inkSecondary)
 
-            Typography.title.text("This document is not in the corpus")
+            Typography.title.text("This document is not supported")
                 .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("No rules are encoded for “\(documentID)”. Nothing is inferred for a document that is not listed. The counter at the intake desk remains the reference.")
+            Text("PassportProof does not infer rules for “\(documentID)”. Choose one of the supported workflows from the library, or use the issuing authority's guidance directly.")
                 .typeStyle(Typography.bodySmall)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)

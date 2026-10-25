@@ -128,7 +128,11 @@ struct PrintSheetRenderer {
 
     static func pdfData(photo: CGImage, layout: PrintSheetLayout, spec: DocumentSpec) -> Data? {
         let page = layout.pageSizePoints
-        guard page.width > 0, page.height > 0 else { return nil }
+        let sourceAspect = Double(photo.width) / Double(max(photo.height, 1))
+        guard spec.supportsPrintSheet,
+              abs(sourceAspect - spec.aspectRatio) < 0.02,
+              page.width > 0,
+              page.height > 0 else { return nil }
 
         let metrics = SheetMetrics(layout: layout, spec: spec)
         guard metrics.cellSize.width > 1, metrics.cellSize.height > 1 else { return nil }

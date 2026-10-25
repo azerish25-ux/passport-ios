@@ -2,11 +2,9 @@
 //  DigitalExport.swift
 //  PassportProof
 //
-//  One file, at the document's portal geometry, with DPI written as metadata.
-//  DPI is metadata, not a pixel property: the pixels are the pixels, and 300 is
-//  what the portal reads.
-//
-//  The crop is geometric only — scale, translate, crop. No pixel is invented.
+//  Encodes the prepared crop at the document's exact geometry. No independent
+//  crop happens here. Compression is bounded and the issuer's byte ceiling is
+//  checked on the actual encoded data rather than assumed from a quality value.
 //
 
 import Foundation
@@ -14,44 +12,52 @@ import CoreGraphics
 import ImageIO
 
 enum DigitalExport {
-
     static let dpi = 300
     static let compressionQuality = 0.95
-
-    /// The JPEG uniform type identifier. Written literally to avoid pulling in
-    /// a framework for one string.
     private static let jpegUTI = "public.jpeg" as CFString
 
-    static func jpegData(from image: CGImage, spec: DocumentSpec) -> Data? {
-        guard let rendered = fittedImage(from: image, spec: spec) else { return nil }
+    static func jpegData(from preparedImage: CGImage, spec: DocumentSpec) -> Data? {
+        guard let rendered = resizedImage(from: preparedImage, spec: spec) else { return nil }
 
+        if let maximum = spec.maximumFileSizeBytes {
+            for step in 0...12 {
+                let quality = compressionQuality - Double(step) * 0.05
+                guard let data = encode(rendered, quality: quality) else { return nil }
+                if data.count <= maximum { return data }
+            }
+            return nil
+        }
+
+        return encode(rendered, quality: compressionQuality)
+    }
+
+    private static func encode(_ image: CGImage, quality: Double) -> Data? {
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            jpegUTI,
-            1,
-            nil
-        ) else { return nil }
-
+        guard let destination = CGImageDestinationCreateWithData(data, jpegUTI, 1, nil) else {
+            return nil
+        }
         let properties: [CFString: Any] = [
-            kCGImageDestinationLossyCompressionQuality: compressionQuality,
+            kCGImageDestinationLossyCompressionQuality: max(0.35, quality),
             kCGImagePropertyDPIWidth: dpi,
-            kCGImagePropertyDPIHeight: dpi
+            kCGImagePropertyDPIHeight: dpi,
+            kCGImagePropertyColorModel: "RGB"
         ]
-
-        CGImageDestinationAddImage(destination, rendered, properties as CFDictionary)
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return data as Data
     }
 
-    // MARK: - Geometry
-
-    /// Scales and centre-crops to the document's exact pixel size, in sRGB.
-    private static func fittedImage(from image: CGImage, spec: DocumentSpec) -> CGImage? {
+    /// Resizes the prepared crop only. Aspect is validated instead of silently
+    /// introducing a second, potentially different centre crop.
+    private static func resizedImage(from image: CGImage, spec: DocumentSpec) -> CGImage? {
         let targetWidth = spec.widthPixels
         let targetHeight = spec.heightPixels
-        guard targetWidth > 0, targetHeight > 0, image.width > 0, image.height > 0 else { return nil }
-        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        guard targetWidth > 0, targetHeight > 0, image.width > 0, image.height > 0,
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+
+        let sourceAspect = Double(image.width) / Double(image.height)
+        let targetAspect = Double(targetWidth) / Double(targetHeight)
+        guard abs(sourceAspect - targetAspect) < 0.02 else { return nil }
 
         guard let context = CGContext(
             data: nil,
@@ -64,23 +70,10 @@ enum DigitalExport {
         ) else { return nil }
 
         context.interpolationQuality = .high
-        context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
-        context.fill(CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
-
-        // Aspect-fill: cover the target, then centre the overflow off-frame.
-        let scale = max(
-            CGFloat(targetWidth) / CGFloat(image.width),
-            CGFloat(targetHeight) / CGFloat(image.height)
-        )
-        let drawWidth = CGFloat(image.width) * scale
-        let drawHeight = CGFloat(image.height) * scale
-        let originX = (CGFloat(targetWidth) - drawWidth) / 2
-        let originY = (CGFloat(targetHeight) - drawHeight) / 2
         context.draw(
             image,
-            in: CGRect(x: originX, y: originY, width: drawWidth, height: drawHeight)
+            in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
         )
-
         return context.makeImage()
     }
 }

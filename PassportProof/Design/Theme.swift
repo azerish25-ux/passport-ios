@@ -73,8 +73,18 @@ enum Theme {
 
     // MARK: Accent — interaction only
 
-    /// Marks position: selected tab, focus ring, caret. Never a finding, never a measurement.
-    static let accent = adaptiveColor(light: 0x10565C, dark: 0x4FA3A8)
+    /// Marks position and primary interaction.
+    static let accent = adaptiveColor(light: 0x0D6B60, dark: 0x63D3BD)
+    static let onAccent = adaptiveColor(light: 0xFFFFFF, dark: 0x092821)
+
+    /// Always-dark hero surfaces and their fixed foreground roles. These do not
+    /// invert with the rest of the interface because the ground stays dark.
+    static let heroTop = adaptiveColor(light: 0x183E3B, dark: 0x102C2A)
+    static let heroBottom = adaptiveColor(light: 0x0C2529, dark: 0x081C1E)
+    static let heroInk = Color(uiColor: hexUIColor(0xF7F4EC))
+    static let heroMuted = Color(uiColor: hexUIColor(0xC4D1C9))
+    static let captureInk = Color.white
+    static let captureMuted = Color.white.opacity(0.76)
 
     // MARK: Signals — findings only
 
@@ -226,11 +236,29 @@ enum Typography {
     // MARK: Faces
 
     private static func text(_ size: CGFloat, _ weight: Font.Weight) -> Font {
-        .system(size: size, weight: weight, design: .default)
+        .system(textStyle(for: size), design: .default, weight: weight)
     }
 
     private static func mono(_ size: CGFloat, _ weight: Font.Weight) -> Font {
-        .system(size: size, weight: weight, design: .monospaced).monospacedDigit()
+        .system(textStyle(for: size), design: .monospaced, weight: weight).monospacedDigit()
+    }
+
+    /// Numeric design tokens map to semantic text styles so every style scales
+    /// with Dynamic Type instead of remaining fixed at a point size.
+    private static func textStyle(for size: CGFloat) -> Font.TextStyle {
+        switch size {
+        case 32...: return .largeTitle
+        case 27..<32: return .title
+        case 22..<27: return .title2
+        case 19..<22: return .title3
+        case 16.5..<19: return .headline
+        case 15.5..<16.5: return .body
+        case 14.5..<15.5: return .callout
+        case 13.5..<14.5: return .subheadline
+        case 12.5..<13.5: return .footnote
+        case 11.5..<12.5: return .caption
+        default: return .caption2
+        }
     }
 
     // MARK: Scale

@@ -12,11 +12,14 @@
 		48AEF8CB640830315F830B07 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BEF4FF367D046025952EA47 /* Format.swift */; };
 		5D660FEB046E0CE42F272334 /* PassportProofApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F3947844B25370E90A5F31 /* PassportProofApp.swift */; };
 		BE32D8A408B7619089AB37BD /* PhotoSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */; };
+		676EE6AB7DD6A4A90B5E8785 /* PrivacyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533378039F0EDD012A20E622 /* PrivacyView.swift */; };
 		31FFA1C8738E19C9C593A64E /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601A75661321235EC7FE87E5 /* RootView.swift */; };
 		9AEB923EB845E399E6255B04 /* DocumentCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73EA9B91B5AD944DE9669773 /* DocumentCorpus.swift */; };
 		A793E2AC6E87BE321F4F7C9B /* DigitalExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DFA605BD32A0390A1CDAAF9 /* DigitalExport.swift */; };
+		A11F8291B5F5E873C0B24CA9 /* PhotoCrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A20D479B25AAC82D6259B6A /* PhotoCrop.swift */; };
 		898C48E56B1CCB3285C67CFC /* DocumentSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */; };
 		61EAC08883745609FBA75664 /* Finding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9858B801B42B297EE1FE77E /* Finding.swift */; };
+		3DDC576B7CC068F627FBE671 /* PhotoReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B062EDF079A0B6E2C0272B1 /* PhotoReview.swift */; };
 		73020240678CAAC104BBFB96 /* PrintSheetLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011AC093578B2F487407BA85 /* PrintSheetLayout.swift */; };
 		81819337B46BB2B9A6486917 /* EntitlementStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 616447732891C1A8B5912FC1 /* EntitlementStore.swift */; };
 		6420A467B55CFD16DF46A545 /* BackgroundAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34F703F13AFCE26F8BCACC4 /* BackgroundAnalyzer.swift */; };
@@ -31,6 +34,7 @@
 		CF51DD82AC8AAC520B04E5AD /* MeasurementBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */; };
 		AE27F486AB7DF1AE3D99A846 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6426D138BFBACF3E99A81689 /* CameraPicker.swift */; };
 		073E654FF57DBAD621B4ED8A /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */; };
+		8122DD97FA4601A46916D363 /* CropEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D4932BAA737AB98595C73D /* CropEditorView.swift */; };
 		86FB070BB4E89BFBC730DB6A /* FramingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9EBD0E445B87FB59FA133D5 /* FramingOverlay.swift */; };
 		C6106AB6D4CC8D6F3E9FC0B1 /* PhotoImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 961E3D92AC0788AB1776FC89 /* PhotoImporter.swift */; };
 		1CAC48CEEE086E388611CDDB /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F41DBDD8CF15F5BFA0746EB /* ExportView.swift */; };
@@ -61,11 +65,14 @@
 		3BEF4FF367D046025952EA47 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
 		41F3947844B25370E90A5F31 /* PassportProofApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportProofApp.swift; sourceTree = "<group>"; };
 		905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSession.swift; sourceTree = "<group>"; };
+		533378039F0EDD012A20E622 /* PrivacyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyView.swift; sourceTree = "<group>"; };
 		601A75661321235EC7FE87E5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		73EA9B91B5AD944DE9669773 /* DocumentCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentCorpus.swift; sourceTree = "<group>"; };
 		1DFA605BD32A0390A1CDAAF9 /* DigitalExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalExport.swift; sourceTree = "<group>"; };
+		2A20D479B25AAC82D6259B6A /* PhotoCrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCrop.swift; sourceTree = "<group>"; };
 		8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSpec.swift; sourceTree = "<group>"; };
 		C9858B801B42B297EE1FE77E /* Finding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finding.swift; sourceTree = "<group>"; };
+		4B062EDF079A0B6E2C0272B1 /* PhotoReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoReview.swift; sourceTree = "<group>"; };
 		011AC093578B2F487407BA85 /* PrintSheetLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintSheetLayout.swift; sourceTree = "<group>"; };
 		616447732891C1A8B5912FC1 /* EntitlementStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementStore.swift; sourceTree = "<group>"; };
 		C34F703F13AFCE26F8BCACC4 /* BackgroundAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAnalyzer.swift; sourceTree = "<group>"; };
@@ -80,6 +87,7 @@
 		3ED0FF4C2E66ECEDDE65347E /* MeasurementBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementBar.swift; sourceTree = "<group>"; };
 		6426D138BFBACF3E99A81689 /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
 		EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
+		A4D4932BAA737AB98595C73D /* CropEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropEditorView.swift; sourceTree = "<group>"; };
 		C9EBD0E445B87FB59FA133D5 /* FramingOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramingOverlay.swift; sourceTree = "<group>"; };
 		961E3D92AC0788AB1776FC89 /* PhotoImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoImporter.swift; sourceTree = "<group>"; };
 		0F41DBDD8CF15F5BFA0746EB /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
@@ -149,6 +157,7 @@
 				3BEF4FF367D046025952EA47 /* Format.swift */,
 				41F3947844B25370E90A5F31 /* PassportProofApp.swift */,
 				905CF56B7C8C73C12923F8C9 /* PhotoSession.swift */,
+				533378039F0EDD012A20E622 /* PrivacyView.swift */,
 				601A75661321235EC7FE87E5 /* RootView.swift */,
 			);
 			path = App;
@@ -159,6 +168,7 @@
 			children = (
 				CED54E19DDB9AC30712EABD4 /* Corpus */,
 				9700E53C05E321847E212198 /* Export */,
+				4784B5A658880FA3F363AEDC /* Imaging */,
 				AF2D8274EE591C6878CE874E /* Models */,
 				B7AAA1F1F54ABB4C5C838229 /* Print */,
 				73964D0C1AE3C18D6585D1E3 /* Store */,
@@ -183,11 +193,20 @@
 			path = Export;
 			sourceTree = "<group>";
 		};
+		4784B5A658880FA3F363AEDC /* Imaging */ = {
+			isa = PBXGroup;
+			children = (
+				2A20D479B25AAC82D6259B6A /* PhotoCrop.swift */,
+			);
+			path = Imaging;
+			sourceTree = "<group>";
+		};
 		AF2D8274EE591C6878CE874E /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				8A74A42F8C08E1BDEA5E6859 /* DocumentSpec.swift */,
 				C9858B801B42B297EE1FE77E /* Finding.swift */,
+				4B062EDF079A0B6E2C0272B1 /* PhotoReview.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -256,6 +275,7 @@
 			children = (
 				6426D138BFBACF3E99A81689 /* CameraPicker.swift */,
 				EB4B26BB9D73F3C8F45B6F0C /* CaptureView.swift */,
+				A4D4932BAA737AB98595C73D /* CropEditorView.swift */,
 				C9EBD0E445B87FB59FA133D5 /* FramingOverlay.swift */,
 				961E3D92AC0788AB1776FC89 /* PhotoImporter.swift */,
 			);
@@ -419,11 +439,14 @@
 				48AEF8CB640830315F830B07 /* Format.swift in Sources */,
 				5D660FEB046E0CE42F272334 /* PassportProofApp.swift in Sources */,
 				BE32D8A408B7619089AB37BD /* PhotoSession.swift in Sources */,
+				676EE6AB7DD6A4A90B5E8785 /* PrivacyView.swift in Sources */,
 				31FFA1C8738E19C9C593A64E /* RootView.swift in Sources */,
 				9AEB923EB845E399E6255B04 /* DocumentCorpus.swift in Sources */,
 				A793E2AC6E87BE321F4F7C9B /* DigitalExport.swift in Sources */,
+				A11F8291B5F5E873C0B24CA9 /* PhotoCrop.swift in Sources */,
 				898C48E56B1CCB3285C67CFC /* DocumentSpec.swift in Sources */,
 				61EAC08883745609FBA75664 /* Finding.swift in Sources */,
+				3DDC576B7CC068F627FBE671 /* PhotoReview.swift in Sources */,
 				73020240678CAAC104BBFB96 /* PrintSheetLayout.swift in Sources */,
 				81819337B46BB2B9A6486917 /* EntitlementStore.swift in Sources */,
 				6420A467B55CFD16DF46A545 /* BackgroundAnalyzer.swift in Sources */,
@@ -438,6 +461,7 @@
 				CF51DD82AC8AAC520B04E5AD /* MeasurementBar.swift in Sources */,
 				AE27F486AB7DF1AE3D99A846 /* CameraPicker.swift in Sources */,
 				073E654FF57DBAD621B4ED8A /* CaptureView.swift in Sources */,
+				8122DD97FA4601A46916D363 /* CropEditorView.swift in Sources */,
 				86FB070BB4E89BFBC730DB6A /* FramingOverlay.swift in Sources */,
 				C6106AB6D4CC8D6F3E9FC0B1 /* PhotoImporter.swift in Sources */,
 				1CAC48CEEE086E388611CDDB /* ExportView.swift in Sources */,

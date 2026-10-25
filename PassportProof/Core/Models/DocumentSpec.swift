@@ -2,14 +2,12 @@
 //  DocumentSpec.swift
 //  PassportProof
 //
-//  One encoded document. Everything a rule needs, plus the provenance the
-//  library screen is required to show.
+//  One verified document workflow. Physical print rules and digital upload
+//  rules are deliberately different products, even for the same document.
 //
 
 import Foundation
 import CoreGraphics
-
-// MARK: - Changelog
 
 struct ChangelogEntry: Identifiable, Sendable {
     let id: String
@@ -17,33 +15,57 @@ struct ChangelogEntry: Identifiable, Sendable {
     let note: String
 }
 
-// MARK: - Document
+enum DocumentWorkflow: String, Sendable {
+    case printedPhoto
+    case digitalPhoto
+
+    var title: String {
+        switch self {
+        case .printedPhoto: return "Printed photo"
+        case .digitalPhoto: return "Digital upload"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .printedPhoto: return "PRINT"
+        case .digitalPhoto: return "DIGITAL"
+        }
+    }
+}
 
 struct DocumentSpec: Identifiable, Sendable {
     let id: String
     let country: String
     let countryCode: String
     let documentName: String
+    let workflow: DocumentWorkflow
 
     let widthMM: Double
     let heightMM: Double
     let widthPixels: Int
     let heightPixels: Int
 
-    /// Chin to top of skull, in millimetres. Never the 22 mm metric clause.
+    /// Chin to top of skull, in millimetres.
     let headHeightMM: ClosedRange<Double>
-    /// Head height ÷ image height, as a 0…1 fraction, where the document states one.
+    /// Head height ÷ image height, as a 0…1 fraction, where published.
     let headHeightShare: ClosedRange<Double>?
-    /// Eye line measured up from the bottom edge, in millimetres, where stated.
+    /// Eye line measured up from the bottom edge, where published.
     let eyeLineFromBottomMM: ClosedRange<Double>?
 
+    let maximumPhotoAgeMonths: Double
+    let maximumFileSizeBytes: Int?
     let backgroundDescription: String
+    let expressionRequirement: String
+    let glassesRequirement: String
+
     let sourceURL: URL
     let verifiedOn: Date
     let changelog: [ChangelogEntry]
-    let isPrototypeData: Bool
 
-    var displayName: String { "\(country) — \(documentName)" }
-
+    var displayName: String { "\(country) \(documentName)" }
     var pixelSize: CGSize { CGSize(width: widthPixels, height: heightPixels) }
+    var aspectRatio: Double { widthMM / heightMM }
+    var supportsPrintSheet: Bool { workflow == .printedPhoto }
+    var supportsDigitalExport: Bool { workflow == .digitalPhoto }
 }

@@ -15,48 +15,55 @@ import CoreGraphics
 // MARK: - Result
 
 struct PhotoAnalysis: Sendable {
-    let findings: [Finding]
+    private(set) var findings: [Finding]
     let geometry: FaceGeometry?
     let background: BackgroundReport?
-    let overall: FindingStatus
+    private(set) var overall: FindingStatus
+    let imagePixelSize: CGSize
+    let captureDate: Date?
+    let shadowDelta: Double?
+    let glareSuspected: Bool
+    private(set) var review: PhotoReview
 
     var failures: [Finding] { findings.filter { $0.status == .fail } }
+    var unresolved: [Finding] { findings.filter { $0.status == .cannotVerify } }
+
+    /// Reapplies only the rule layer after a visual confirmation. Expensive
+    /// Vision and pixel signals are reused, while the displayed review state
+    /// and the exported readiness decision stay in lockstep.
+    mutating func update(review: PhotoReview, spec: DocumentSpec) {
+        let updated = ValidationEngine.findings(
+            geometry: geometry,
+            background: background,
+            spec: spec,
+            imagePixelSize: imagePixelSize,
+            captureDate: captureDate,
+            shadowDelta: shadowDelta,
+            glareSuspected: glareSuspected,
+            review: review,
+            referenceDate: Date()
+        )
+        findings = updated
+        overall = ValidationEngine.overall(for: updated)
+        self.review = review
+    }
 }
 
 // MARK: - Engine
 
 enum ValidationEngine {
-
-    // MARK: Thresholds (prototype defaults — labelled as such in the UI)
-
-    /// Divergence between the silhouette envelope and the inferred crown, as a
-    /// fraction of measured head height. Beyond this the head height is not
-    /// trustworthy in either direction.
     static let crownDivergenceLimit = 0.06
-
-    /// Maximum horizontal offset of the face centre from the image centre.
     static let centringToleranceMM = 3.0
-
-    /// Maximum luminance delta across the face box.
     static let shadowDeltaLimit = 0.22
-
-    /// Minimum short-side source resolution.
-    static let minimumSourcePixels = 1200
-
-    /// Maximum age of the photograph.
-    static let maximumPhotoAgeMonths = 6.0
 
     // MARK: - Analysis
 
-    static func analyze(image: CGImage, spec: DocumentSpec) -> PhotoAnalysis {
-        analyze(image: image, spec: spec, captureDate: nil)
-    }
-
-    /// Variant that accepts an EXIF capture date. `CGImage` does not carry
-    /// metadata, so callers that have the `CGImageSource` or a `PHAsset` should
-    /// pass the date through here; without it the photo-age rule reports
-    /// `cannotVerify` rather than guessing.
-    static func analyze(image: CGImage, spec: DocumentSpec, captureDate: Date?) -> PhotoAnalysis {
+    static func analyze(
+        image: CGImage,
+        spec: DocumentSpec,
+        captureDate: Date? = nil,
+        review: PhotoReview = .pending
+    ) -> PhotoAnalysis {
         let pixelSize = CGSize(width: image.width, height: image.height)
         let geometry = FaceAnalyzer.geometry(of: image)
 
@@ -80,35 +87,60 @@ enum ValidationEngine {
             imagePixelSize: pixelSize,
             captureDate: captureDate,
             shadowDelta: measuredShadowDelta,
-            glareSuspected: suspectedGlare
+            glareSuspected: suspectedGlare,
+            review: review,
+            referenceDate: Date()
         )
 
         return PhotoAnalysis(
             findings: allFindings,
             geometry: geometry,
             background: background,
-            overall: overall(for: allFindings)
+            overall: overall(for: allFindings),
+            imagePixelSize: pixelSize,
+            captureDate: captureDate,
+            shadowDelta: measuredShadowDelta,
+            glareSuspected: suspectedGlare,
+            review: review
         )
     }
 
-    /// Contract signature. Shadow and glare signals are unavailable here, so
-    /// those two rules report honestly rather than inventing a value.
+    /// Deterministic rule-only entry point used by unit tests and cached review
+    /// updates. Optional signals remain `cannotVerify` when unavailable.
     static func findings(
         geometry: FaceGeometry?,
         background: BackgroundReport?,
         spec: DocumentSpec,
         imagePixelSize: CGSize,
-        captureDate: Date?
+        captureDate: Date?,
+        shadowDelta: Double? = nil,
+        glareSuspected: Bool = false,
+        review: PhotoReview = .pending,
+        referenceDate: Date = Date()
     ) -> [Finding] {
-        findings(
-            geometry: geometry,
-            background: background,
-            spec: spec,
-            imagePixelSize: imagePixelSize,
-            captureDate: captureDate,
-            shadowDelta: nil,
-            glareSuspected: false
-        )
+        var output: [Finding] = [headHeight(geometry: geometry, spec: spec)]
+        if spec.headHeightShare != nil {
+            output.append(headHeightShare(geometry: geometry, spec: spec))
+        }
+        if spec.eyeLineFromBottomMM != nil {
+            output.append(eyeLine(geometry: geometry, spec: spec))
+        }
+        output.append(contentsOf: [
+            centring(geometry: geometry, spec: spec),
+            backgroundUniformity(background: background),
+            shadow(delta: shadowDelta),
+            expression(geometry: geometry, review: review),
+            glasses(review: review, glareSuspected: glareSuspected),
+            resolution(imagePixelSize: imagePixelSize, spec: spec),
+            photoAge(
+                captureDate: captureDate,
+                spec: spec,
+                review: review,
+                referenceDate: referenceDate
+            ),
+            noManipulation(review: review)
+        ])
+        return output
     }
 
     // MARK: - Aggregation
@@ -117,32 +149,6 @@ enum ValidationEngine {
         if findings.contains(where: { $0.status == .fail }) { return .fail }
         if findings.contains(where: { $0.status == .cannotVerify }) { return .cannotVerify }
         return .pass
-    }
-
-    // MARK: - The rules
-
-    private static func findings(
-        geometry: FaceGeometry?,
-        background: BackgroundReport?,
-        spec: DocumentSpec,
-        imagePixelSize: CGSize,
-        captureDate: Date?,
-        shadowDelta: Double?,
-        glareSuspected: Bool
-    ) -> [Finding] {
-        [
-            headHeight(geometry: geometry, spec: spec),
-            headHeightShare(geometry: geometry, spec: spec),
-            eyeLine(geometry: geometry, spec: spec),
-            centring(geometry: geometry, spec: spec),
-            backgroundUniformity(background: background),
-            shadow(delta: shadowDelta),
-            expression(),
-            glasses(glareSuspected: glareSuspected),
-            resolution(imagePixelSize: imagePixelSize),
-            photoAge(captureDate: captureDate),
-            noManipulation()
-        ]
     }
 
     // MARK: R1 / R2 — head height
@@ -240,6 +246,19 @@ enum ValidationEngine {
             )
         }
 
+        // The same crown measurement feeds every head-based rule. Divergence
+        // must not turn into a contradictory PASS on a different row.
+        if geometry.crownDivergence > crownDivergenceLimit {
+            return Finding(
+                id: .headHeightShare,
+                title: "Head height share",
+                status: .cannotVerify,
+                detail: "The crown estimators disagree, so the head's share of the frame cannot be measured reliably.",
+                measurement: nil,
+                provenance: .source
+            )
+        }
+
         // `headHeight` is already normalised against image height, which is
         // exactly the proportion the document states.
         let measured = geometry.headHeight
@@ -304,6 +323,17 @@ enum ValidationEngine {
                 title: "Eye line",
                 status: .cannotVerify,
                 detail: "No eyes were detected, so the eye line cannot be located.",
+                measurement: nil,
+                provenance: .source
+            )
+        }
+
+        if geometry.crownDivergence > crownDivergenceLimit {
+            return Finding(
+                id: .eyeLine,
+                title: "Eye line",
+                status: .cannotVerify,
+                detail: "The crown estimators disagree, so the eye-line position cannot be trusted against this crop.",
                 measurement: nil,
                 provenance: .source
             )
@@ -501,12 +531,32 @@ enum ValidationEngine {
 
     // MARK: R11 — expression
 
-    private static func expression() -> Finding {
-        Finding(
+    private static func expression(geometry: FaceGeometry?, review: PhotoReview) -> Finding {
+        guard geometry != nil else {
+            return Finding(
+                id: .expression,
+                title: "Expression",
+                status: .cannotVerify,
+                detail: "No face was detected, so expression and open eyes need a clearer photograph.",
+                measurement: nil,
+                provenance: .source
+            )
+        }
+        guard review.expressionConfirmed else {
+            return Finding(
+                id: .expression,
+                title: "Expression",
+                status: .cannotVerify,
+                detail: "Use the visual checklist to confirm the expression requirement for this document.",
+                measurement: nil,
+                provenance: .source
+            )
+        }
+        return Finding(
             id: .expression,
             title: "Expression",
-            status: .cannotVerify,
-            detail: "Neutral expression cannot be determined on-device; a reviewer makes this call.",
+            status: .pass,
+            detail: "You visually confirmed the expression requirement. The issuer still reviews the submitted photograph.",
             measurement: nil,
             provenance: .source
         )
@@ -514,93 +564,137 @@ enum ValidationEngine {
 
     // MARK: R12 — glasses
 
-    private static func glasses(glareSuspected: Bool) -> Finding {
+    private static func glasses(review: PhotoReview, glareSuspected: Bool) -> Finding {
         if glareSuspected {
             return Finding(
                 id: .glasses,
-                title: "Glasses",
+                title: "Glasses and eye visibility",
                 status: .cannotVerify,
-                detail: "Bright, near-white pixels around the eyes suggest glare on lenses. Remove the glasses if you can; if you cannot, a reviewer decides whether the eyes are visible.",
+                detail: "Bright pixels around the eyes may be glare. Inspect the original closely and retake if frames, reflection or shadow obscure either eye.",
+                measurement: nil,
+                provenance: .source
+            )
+        }
+        guard review.glassesConfirmed else {
+            return Finding(
+                id: .glasses,
+                title: "Glasses and eye visibility",
+                status: .cannotVerify,
+                detail: "Use the visual checklist to confirm the glasses rule and that both eyes are fully visible.",
                 measurement: nil,
                 provenance: .source
             )
         }
         return Finding(
             id: .glasses,
-            title: "Glasses",
+            title: "Glasses and eye visibility",
             status: .pass,
-            detail: "No glasses were positively detected. This check does not confirm that no glasses are worn, and it cannot rule out a thin rim or a reflection.",
+            detail: "You visually confirmed the glasses requirement and unobstructed eyes; no glasses detector is claimed.",
             measurement: nil,
             provenance: .source
         )
     }
 
-    // MARK: R6 / G9 — resolution
+    // MARK: R6 / G9 — prepared-crop resolution
 
-    private static func resolution(imagePixelSize: CGSize) -> Finding {
-        let shortSide = Int(min(imagePixelSize.width, imagePixelSize.height).rounded())
-        let rangeText = MeasurementFormat.range(Double(minimumSourcePixels), nil, unit: "px")
+    private static func resolution(imagePixelSize: CGSize, spec: DocumentSpec) -> Finding {
+        let requiredWidth = spec.widthPixels
+        let requiredHeight = spec.heightPixels
+        let width = Int(imagePixelSize.width.rounded())
+        let height = Int(imagePixelSize.height.rounded())
+        let shortSide = min(width, height)
+        let requiredShortSide = min(requiredWidth, requiredHeight)
+        let rangeText = "\(requiredWidth) × \(requiredHeight) px minimum"
         let measurement = Measurement(
             value: Double(shortSide),
             unit: "px",
-            lowerBound: Double(minimumSourcePixels),
+            lowerBound: Double(requiredShortSide),
             upperBound: nil,
-            displayValue: "\(shortSide) px",
+            displayValue: "\(width) × \(height) px",
             displayRange: rangeText
         )
 
-        if shortSide < minimumSourcePixels {
+        if width < requiredWidth || height < requiredHeight {
             return Finding(
                 id: .resolution,
-                title: "Resolution",
+                title: "Crop resolution",
                 status: .fail,
-                detail: "The short side of the source is \(shortSide) px; \(minimumSourcePixels) px is the minimum for a 2 inch cell at 300 DPI. Capture at a larger size or use a higher-resolution original.",
+                detail: "This crop is \(width) × \(height) px; the output needs at least \(requiredWidth) × \(requiredHeight) px. Zoom out or choose a higher-resolution original rather than inventing pixels.",
                 measurement: measurement,
-                provenance: .prototypeDefault
+                provenance: .source
             )
         }
         return Finding(
             id: .resolution,
-            title: "Resolution",
+            title: "Crop resolution",
             status: .pass,
-            detail: "The short side of the source is \(shortSide) px, above the \(minimumSourcePixels) px minimum.",
+            detail: "The prepared crop is \(width) × \(height) px and covers the \(requiredWidth) × \(requiredHeight) px output without forced upscaling.",
             measurement: measurement,
-            provenance: .prototypeDefault
+            provenance: .source
         )
     }
 
     // MARK: R7 — photo age
 
-    private static func photoAge(captureDate: Date?) -> Finding {
-        let rangeText = MeasurementFormat.range(0, maximumPhotoAgeMonths, unit: "months")
+    private static func photoAge(
+        captureDate: Date?,
+        spec: DocumentSpec,
+        review: PhotoReview,
+        referenceDate: Date
+    ) -> Finding {
+        let limit = spec.maximumPhotoAgeMonths
+        let rangeText = MeasurementFormat.range(0, limit, unit: "months")
 
         guard let captureDate else {
+            if review.recentPhotoConfirmed {
+                return Finding(
+                    id: .photoAge,
+                    title: "Photo age",
+                    status: .pass,
+                    detail: "No EXIF capture date was available. You confirmed that the photograph meets the \(MeasurementFormat.number(limit))-month recency requirement.",
+                    measurement: nil,
+                    provenance: .source
+                )
+            }
             return Finding(
                 id: .photoAge,
                 title: "Photo age",
                 status: .cannotVerify,
-                detail: "This image carries no capture date, so its age cannot be checked. The limit is \(MeasurementFormat.number(maximumPhotoAgeMonths)) months for visa documents.",
+                detail: "This image has no readable capture date. Confirm its recency in the visual checklist; the limit is \(MeasurementFormat.number(limit)) months.",
                 measurement: nil,
                 provenance: .source
             )
         }
 
-        let months = Date().timeIntervalSince(captureDate) / (60 * 60 * 24 * 30.44)
+        let interval = referenceDate.timeIntervalSince(captureDate)
+        guard interval >= -300 else {
+            return Finding(
+                id: .photoAge,
+                title: "Photo age",
+                status: .cannotVerify,
+                detail: "The capture date is in the future. Check the source file and device clock rather than treating a negative age as recent.",
+                measurement: nil,
+                provenance: .source
+            )
+        }
+
+        let months = max(0, interval / (60 * 60 * 24 * 30.44))
         let measurement = Measurement(
             value: months,
             unit: "months",
             lowerBound: 0,
-            upperBound: maximumPhotoAgeMonths,
+            upperBound: limit,
             displayValue: MeasurementFormat.number(months) + " months",
             displayRange: rangeText
         )
 
-        if months > maximumPhotoAgeMonths {
+        if let cutoff = Calendar(identifier: .gregorian).date(byAdding: .month, value: -Int(limit), to: referenceDate),
+           captureDate < cutoff {
             return Finding(
                 id: .photoAge,
                 title: "Photo age",
                 status: .fail,
-                detail: "The photograph was captured \(MeasurementFormat.number(months)) months ago. The limit is \(MeasurementFormat.number(maximumPhotoAgeMonths)) months, so a newer photograph is required.",
+                detail: "The photograph is older than the \(MeasurementFormat.number(limit))-month limit. Take a new photograph that reflects your current appearance.",
                 measurement: measurement,
                 provenance: .source
             )
@@ -609,7 +703,7 @@ enum ValidationEngine {
             id: .photoAge,
             title: "Photo age",
             status: .pass,
-            detail: "The photograph was captured \(MeasurementFormat.number(months)) months ago, inside the \(MeasurementFormat.number(maximumPhotoAgeMonths)) month limit.",
+            detail: "The capture date is inside the \(MeasurementFormat.number(limit))-month limit for this document.",
             measurement: measurement,
             provenance: .source
         )
@@ -617,12 +711,22 @@ enum ValidationEngine {
 
     // MARK: R14 / R16 — no manipulation
 
-    private static func noManipulation() -> Finding {
-        Finding(
+    private static func noManipulation(review: PhotoReview) -> Finding {
+        guard review.originalUneditedConfirmed else {
+            return Finding(
+                id: .noManipulation,
+                title: "Original, unedited photo",
+                status: .cannotVerify,
+                detail: "Confirm that the source was not filtered, retouched or digitally altered before the geometric crop in this app.",
+                measurement: nil,
+                provenance: .source
+            )
+        }
+        return Finding(
             id: .noManipulation,
-            title: "No manipulation",
+            title: "Original, unedited photo",
             status: .pass,
-            detail: "This app applies a geometric crop only. It does not retouch, filter, or synthesise pixels.",
+            detail: "You confirmed an unaltered source. PassportProof applies only the reviewed geometric crop and output resizing—no retouching, filters or synthesis.",
             measurement: nil,
             provenance: .source
         )

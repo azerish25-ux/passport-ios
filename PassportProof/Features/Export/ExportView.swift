@@ -2,14 +2,8 @@
 //  ExportView.swift
 //  PassportProof
 //
-//  AC14 first: the calibration sheet is offered before anything is paid for and
-//  is shared without consulting the entitlement store at all. The two exports
-//  that follow are gated, and route to Unlock rather than showing a disabled
-//  button with no explanation.
-//
-//  Files are staged in the temporary directory, shared, and deleted on sheet
-//  dismissal. That is a share staging file, not photo storage: P1 forbids
-//  persisting the user's photograph, and nothing here outlives the share.
+//  Output-specific export of the exact measured crop. Failed/incomplete checks
+//  cannot be bypassed. Calibration remains free; paid outputs use StoreKit.
 //
 
 import SwiftUI
@@ -17,231 +11,304 @@ import UIKit
 
 @MainActor
 struct ExportView: View {
-
     let spec: DocumentSpec
 
     @EnvironmentObject private var session: PhotoSession
     @EnvironmentObject private var entitlements: EntitlementStore
 
     @State private var share: ShareItem?
+    @State private var stagedURL: URL?
     @State private var failure: String?
+    @State private var preparedSummary: String?
+    @State private var isExporting = false
     @State private var goToUnlock = false
 
     private var layout: PrintSheetLayout { session.layout }
+    private var isReady: Bool { session.canExport(for: spec) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                ScreenTitle(title: "Export", subtitle: spec.workflow.title)
 
-                ScreenTitle(title: "Export", subtitle: spec.displayName)
+                preview
 
-                Theme.SectionHeader(
-                    title: "Layout",
-                    trailing: "\(layout.columns) × \(layout.rows)"
-                )
-
-                ForEach(PrintSheetLayout.allCases) { item in
-                    LayoutRow(
-                        item: item,
-                        isSelected: layout == item
-                    ) {
-                        session.layout = item
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }
-
-                    Theme.Rule()
+                if !isReady {
+                    readinessCard
                 }
 
-                Theme.SectionHeader(title: "Sheet")
-                calibrationSection
-                Theme.Rule()
-                printSection
-                Theme.Rule()
-                digitalSection
+                if spec.supportsPrintSheet {
+                    printContent
+                } else {
+                    digitalContent
+                }
 
                 if let failure {
-                    Text(failure)
-                        .typeStyle(Typography.meta)
+                    Label(failure, systemImage: "exclamationmark.triangle.fill")
+                        .typeStyle(Typography.bodySmall)
                         .foregroundStyle(Theme.signalFail)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(Theme.Spacing.l)
+                        .background(Theme.failWash, in: RoundedRectangle(cornerRadius: 16))
                         .padding(.horizontal, Theme.Spacing.margin)
                         .padding(.top, Theme.Spacing.m)
                 }
 
                 if !entitlements.isUnlocked {
-                    lockedNote
+                    lockedCard
                 }
 
-                Text("Every sheet carries the instruction “print at 100% — do not scale”. A PDF carries a page box; the print driver decides whether to honour it, which is why the calibration sheet exists.")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Theme.Spacing.margin)
-                    .padding(.top, Theme.Spacing.xl)
-                    .padding(.bottom, Theme.Spacing.xxxl)
+                privacyFooter
             }
+            .padding(.bottom, Theme.Spacing.xxxl)
         }
         .background(Theme.paper)
         .navigationTitle(spec.documentName)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $share) { item in
-            ShareSheet(items: [item.url])
+            ShareSheet(items: [item.url]) {
+                cleanStaging()
+            }
         }
         .navigationDestination(isPresented: $goToUnlock) {
             UnlockView()
         }
-        .onDisappear {
-            cleanStaging()
-        }
+        .onDisappear { cleanStaging() }
     }
 
-    // MARK: Calibration — never gated
-
-    private var calibrationSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-
-            Text("One page at this layout's exact page size. Print it at 100%, measure the marks against a ruler, and only then decide. Printing it does not use the unlock.")
-                .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            SecondaryAction(title: "Print calibration sheet") {
-                exportCalibration()
+    private var preview: some View {
+        HStack(alignment: .center, spacing: Theme.Spacing.l) {
+            if let image = session.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 88, height: 108)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityLabel("Prepared photo used for export")
             }
+
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                Label("MEASURED CROP", systemImage: "checkmark.seal.fill")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.7)
+                    .foregroundStyle(Theme.signalPass)
+                Text(spec.displayName)
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(spec.supportsPrintSheet
+                     ? "\(Format.sizeMM(width: spec.widthMM, height: spec.heightMM)) · 300 DPI"
+                     : "\(Format.sizePixels(width: spec.widthPixels, height: spec.heightPixels)) · JPEG · sRGB")
+                    .typeStyle(Typography.meta)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
+        .padding(Theme.Spacing.l)
+        .background(Theme.paperRaised)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
-        .padding(.bottom, Theme.Spacing.l)
+        .padding(.top, Theme.Spacing.xl)
     }
 
-    // MARK: Print sheet — gated
+    private var readinessCard: some View {
+        Label("Return to Photo check and complete every visual confirmation without a failed rule before exporting.", systemImage: "lock.fill")
+            .typeStyle(Typography.bodySmall)
+            .foregroundStyle(Theme.signalFail)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(Theme.Spacing.l)
+            .background(Theme.failWash, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.m)
+    }
 
-    private var printSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+    // MARK: Printed photo
 
-            Typography.unit.text("print sheet")
-                .foregroundStyle(Theme.inkTertiary)
+    private var printContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Theme.SectionHeader(title: "Print layout")
+            VStack(spacing: Theme.Spacing.s) {
+                ForEach(PrintSheetLayout.allCases) { item in
+                    LayoutRow(item: item, isSelected: layout == item) {
+                        session.layout = item
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.m)
 
-            Text("\(Format.pageInches(layout.pageSizePoints)) · \(layout.columns) × \(layout.rows) cells · \(layout.supportsCutMarks ? "cut marks in a real gutter" : "no gutters — borderless only")")
-                .typeStyle(Typography.tabular)
-                .foregroundStyle(Theme.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                Label("Before your first print", systemImage: "ruler")
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                Text("Print the free calibration page at 100% and measure its reference square. Printer scaling is the one thing a PDF cannot control.")
+                    .typeStyle(Typography.bodySmall)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                SecondaryAction(title: "Share free calibration sheet", isEnabled: !isExporting) {
+                    exportCalibration()
+                }
+            }
+            .padding(Theme.Spacing.l)
+            .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.xl)
 
-            PrimaryButton(
-                title: "Export print sheet",
-                isEnabled: session.hasPhoto
-            ) {
+            PrimaryButton(title: isExporting ? "Rendering print sheet…" : "Export print sheet", isEnabled: isReady && !isExporting) {
                 exportPrintSheet()
             }
-            .padding(.top, Theme.Spacing.s)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.xl)
 
-            if !session.hasPhoto {
-                Text("No photograph in this session. Capture one first.")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkTertiary)
-            }
+            outputSummary
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
-        .padding(.bottom, Theme.Spacing.l)
     }
 
-    // MARK: Digital file — gated
+    // MARK: Digital photo
 
-    private var digitalSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+    private var digitalContent: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            Theme.SectionHeader(title: "Digital file")
 
-            Typography.unit.text("digital file")
-                .foregroundStyle(Theme.inkTertiary)
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                ExportFact(icon: "photo", title: "Geometry", value: "\(spec.widthPixels) × \(spec.heightPixels) pixels")
+                ExportFact(icon: "doc", title: "Format", value: "JPEG · sRGB · 300 DPI metadata")
+                if let maximum = spec.maximumFileSizeBytes {
+                    ExportFact(icon: "arrow.down.doc", title: "File size", value: "No more than \(maximum / 1_000) kB, checked after encoding")
+                }
+                ExportFact(icon: "crop", title: "Editing", value: "Your reviewed crop only; no filters or synthesis")
+            }
+            .padding(Theme.Spacing.l)
+            .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.m)
 
-            Text("JPEG · sRGB · quality 0.95 · \(Format.sizePixels(width: spec.widthPixels, height: spec.heightPixels)) · 300 dpi in metadata")
-                .typeStyle(Typography.tabular)
-                .foregroundStyle(Theme.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            SecondaryAction(title: "Export digital file", isEnabled: session.hasPhoto) {
+            PrimaryButton(title: isExporting ? "Preparing digital file…" : "Export digital file", isEnabled: isReady && !isExporting) {
                 exportDigital()
             }
-            .padding(.top, Theme.Spacing.xs)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.m)
+
+            outputSummary
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
-        .padding(.bottom, Theme.Spacing.l)
     }
 
-    // MARK: Lock
-
-    private var lockedNote: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Text("Locked")
-                .typeStyle(Typography.sectionLabel)
-                .foregroundStyle(Theme.inkSecondary)
-
-            Text("The print sheet and the digital file need the one-time unlock. The calibration sheet above does not.")
-                .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            SecondaryAction(title: "Unlock") {
-                goToUnlock = true
+    private var outputSummary: some View {
+        Group {
+            if let preparedSummary {
+                Label(preparedSummary, systemImage: "checkmark.circle.fill")
+                    .typeStyle(Typography.bodySmall)
+                    .foregroundStyle(Theme.signalPass)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.Spacing.margin)
+                    .padding(.top, Theme.Spacing.m)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, Theme.Stroke.emphasis + Theme.Spacing.m)
-        .padding(.trailing, Theme.Spacing.m)
-        .padding(.vertical, Theme.Spacing.m)
-        .background(Theme.paperSunk)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(Theme.accent)
-                .frame(width: Theme.Stroke.emphasis)
+    }
+
+    private var lockedCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            Label("One-time export unlock", systemImage: "lock.open")
+                .font(.headline)
+                .foregroundStyle(Theme.ink)
+            Text("Your print or digital export requires the one-time purchase. Analysis and calibration are free; there is no subscription.")
+                .typeStyle(Typography.bodySmall)
+                .foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            SecondaryAction(title: "View unlock") { goToUnlock = true }
         }
+        .padding(Theme.Spacing.l)
+        .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.l)
+        .padding(.top, Theme.Spacing.xl)
+    }
+
+    private var privacyFooter: some View {
+        Label("Exports are created locally and staged only while the system share sheet is in use. The temporary file is deleted when sharing finishes.", systemImage: "lock.shield")
+            .typeStyle(Typography.meta)
+            .foregroundStyle(Theme.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.xl)
     }
 
     // MARK: Actions
 
     private func exportCalibration() {
-        // Deliberately no entitlement check. AC14.
-        guard let data = PrintSheetRenderer.calibrationPDFData(layout: layout) else {
-            failure = "The calibration sheet could not be rendered."
-            return
+        guard !isExporting else { return }
+        isExporting = true
+        failure = nil
+        let layout = self.layout
+        Task {
+            let data = await Task.detached(priority: .userInitiated) {
+                PrintSheetRenderer.calibrationPDFData(layout: layout)
+            }.value
+            isExporting = false
+            guard let data else {
+                failure = "The calibration sheet could not be rendered. Try another layout."
+                return
+            }
+            stage(data, name: "calibration-\(layout.rawValue)", fileExtension: "pdf")
         }
-
-        stage(data, name: "passportproof-calibration-\(layout.rawValue).pdf")
     }
 
     private func exportPrintSheet() {
-        guard requireUnlock() else { return }
+        guard requireReady(), requireUnlock(), !isExporting else { return }
+        guard let photo = session.cgImage else { return }
+        isExporting = true
+        failure = nil
+        preparedSummary = nil
+        let revision = session.revision
+        let layout = self.layout
+        let spec = self.spec
 
-        guard let photo = session.cgImage else {
-            failure = "No photograph in this session."
-            return
+        Task {
+            let data = await Task.detached(priority: .userInitiated) {
+                PrintSheetRenderer.pdfData(photo: photo, layout: layout, spec: spec)
+            }.value
+            guard !Task.isCancelled, session.revision == revision else { return }
+            isExporting = false
+            guard let data else {
+                failure = "The print sheet could not be rendered from this crop."
+                return
+            }
+            preparedSummary = "\(layout.title) PDF ready · \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))"
+            stage(data, name: "\(spec.id)-\(layout.rawValue)", fileExtension: "pdf")
         }
-
-        guard let data = PrintSheetRenderer.pdfData(photo: photo, layout: layout, spec: spec) else {
-            failure = "The print sheet could not be rendered."
-            return
-        }
-
-        stage(data, name: "passportproof-\(spec.id)-\(layout.rawValue).pdf")
     }
 
     private func exportDigital() {
-        guard requireUnlock() else { return }
+        guard requireReady(), requireUnlock(), !isExporting else { return }
+        guard let photo = session.cgImage else { return }
+        isExporting = true
+        failure = nil
+        preparedSummary = nil
+        let revision = session.revision
+        let spec = self.spec
 
-        guard let photo = session.cgImage else {
-            failure = "No photograph in this session."
-            return
+        Task {
+            let data = await Task.detached(priority: .userInitiated) {
+                DigitalExport.jpegData(from: photo, spec: spec)
+            }.value
+            guard !Task.isCancelled, session.revision == revision else { return }
+            isExporting = false
+            guard let data else {
+                failure = "The digital file could not meet the output requirements. Try a less detailed crop or another original."
+                return
+            }
+            let size = ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
+            preparedSummary = "\(spec.widthPixels) × \(spec.heightPixels) JPEG ready · \(size)"
+            stage(data, name: spec.id, fileExtension: "jpg")
         }
+    }
 
-        guard let data = DigitalExport.jpegData(from: photo, spec: spec) else {
-            failure = "The digital file could not be rendered."
-            return
-        }
-
-        stage(data, name: "passportproof-\(spec.id).jpg")
+    private func requireReady() -> Bool {
+        if isReady { return true }
+        failure = "Complete the photo check without failures before exporting."
+        return false
     }
 
     private func requireUnlock() -> Bool {
@@ -250,97 +317,86 @@ struct ExportView: View {
         return false
     }
 
-    // MARK: Staging
-
-    private func stage(_ data: Data, name: String) {
-        failure = nil
-
-        // Clear the previous share before writing the next one, so staging
-        // files never accumulate. The photo itself is never written to disk.
+    private func stage(_ data: Data, name: String, fileExtension: String) {
         cleanStaging()
-
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-
+        let safeName = name.replacingOccurrences(of: "/", with: "-")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("passportproof-\(safeName)-\(UUID().uuidString)")
+            .appendingPathExtension(fileExtension)
         do {
-            try data.write(to: url, options: .atomic)
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
+            stagedURL = url
             share = ShareItem(url: url)
         } catch {
-            failure = "The file could not be written to the share folder."
+            failure = "The file could not be prepared for sharing. Check available storage and try again."
         }
     }
 
-    /// Removes every staging file this screen wrote. Runs on sheet dismissal and
-    /// on leaving the screen, so a shared file does not outlive its use.
     private func cleanStaging() {
-        let directory = FileManager.default.temporaryDirectory
-
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil
-        ) else { return }
-
-        for url in contents where url.lastPathComponent.hasPrefix("passportproof-") {
-            try? FileManager.default.removeItem(at: url)
-        }
+        guard let stagedURL else { return }
+        try? FileManager.default.removeItem(at: stagedURL)
+        self.stagedURL = nil
     }
 }
-
-// MARK: - Layout row
 
 private struct LayoutRow: View {
     let item: PrintSheetLayout
     let isSelected: Bool
     let onSelect: () -> Void
 
-    private var detail: String {
-        let cells = "\(item.columns) × \(item.rows) cells"
-        let page = Format.pageInches(item.pageSizePoints)
-        let gutter = item.supportsCutMarks ? "cut marks" : "no gutters"
-        return "\(cells) · \(page) · \(gutter)"
-    }
-
     var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .top, spacing: Theme.Spacing.m) {
-
+            HStack(spacing: Theme.Spacing.m) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Theme.accent : Theme.inkTertiary)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     Text(item.title)
-                        .typeStyle(Typography.body)
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(Theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     Text(item.subtitle)
                         .typeStyle(Typography.meta)
                         .foregroundStyle(Theme.inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(detail)
-                        .typeStyle(Typography.tabular)
-                        .foregroundStyle(Theme.inkTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Spacer(minLength: Theme.Spacing.s)
-
-                if isSelected {
-                    Typography.findingLabel.text("Selected")
-                        .foregroundStyle(Theme.accent)
-                        .padding(.top, Theme.Spacing.xxs)
-                }
+                Spacer()
+                Text("\(item.columns * item.rows)")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Theme.inkSecondary)
+                    .accessibilityLabel("\(item.columns * item.rows) photos")
             }
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.m)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Theme.paperSunk : Theme.paper)
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Rectangle()
-                        .fill(Theme.accent)
-                        .frame(width: Theme.Stroke.emphasis)
-                }
+            .padding(Theme.Spacing.l)
+            .background(isSelected ? Theme.accent.opacity(0.09) : Theme.paperRaised)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isSelected ? Theme.accent : Theme.rule, lineWidth: isSelected ? 1.5 : 0.5)
             }
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("layout.\(item.rawValue)")
+    }
+}
+
+private struct ExportFact: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+            Image(systemName: icon)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.inkSecondary)
+                Text(value)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }

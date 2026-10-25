@@ -77,13 +77,13 @@ struct FaceOverlayView: View {
             let height = max(0, bottom - top)
 
             Rectangle()
-                .fill(Theme.onInk.opacity(0.10))
+                .fill(Theme.captureInk.opacity(0.10))
                 .frame(width: size.width, height: height)
                 .overlay(alignment: .top) {
-                    Theme.Rule(color: Theme.onInk, weight: Theme.Stroke.rule)
+                    Theme.Rule(color: Theme.captureInk, weight: Theme.Stroke.rule)
                 }
                 .overlay(alignment: .bottom) {
-                    Theme.Rule(color: Theme.onInk, weight: Theme.Stroke.rule)
+                    Theme.Rule(color: Theme.captureInk, weight: Theme.Stroke.rule)
                 }
                 .offset(y: top)
         }
@@ -96,10 +96,10 @@ struct FaceOverlayView: View {
             let inferred = CGFloat(geometry.crownInferredY) * size.height
 
             ZStack(alignment: .topLeading) {
-                horizontalLine(y: envelope, width: size.width, color: Theme.onInk, dash: [])
+                horizontalLine(y: envelope, width: size.width, color: Theme.captureInk, dash: [])
                 horizontalLine(y: inferred, width: size.width, color: Theme.signalVerify, dash: [3, 2])
 
-                label("CROWN", x: 0, y: envelope - 18, color: Theme.onInk)
+                label("CROWN", x: 0, y: envelope - 18, color: Theme.captureInk)
                 label("CROWN · INFERRED", x: 0, y: inferred - 18, color: Theme.signalVerify)
             }
         }
@@ -111,8 +111,8 @@ struct FaceOverlayView: View {
             let y = CGFloat(geometry.eyeY) * size.height
 
             ZStack(alignment: .topLeading) {
-                horizontalLine(y: y, width: size.width, color: Theme.onInk, dash: [4, 3])
-                label("EYE", x: 0, y: y - 18, color: Theme.onInk)
+                horizontalLine(y: y, width: size.width, color: Theme.captureInk, dash: [4, 3])
+                label("EYE", x: 0, y: y - 18, color: Theme.captureInk)
             }
         }
     }
@@ -127,7 +127,7 @@ struct FaceOverlayView: View {
                 path.addLine(to: CGPoint(x: x, y: size.height))
             }
             .stroke(
-                Theme.onInk.opacity(0.45),
+                Theme.captureInk.opacity(0.45),
                 style: StrokeStyle(lineWidth: Theme.Stroke.rule, dash: [4, 3])
             )
         }
@@ -140,7 +140,7 @@ struct FaceOverlayView: View {
 
             Rectangle()
                 .stroke(
-                    Theme.onInk,
+                    Theme.captureInk,
                     style: StrokeStyle(lineWidth: Theme.Stroke.rule, dash: [2, 3])
                 )
                 .frame(width: rect.width, height: rect.height)

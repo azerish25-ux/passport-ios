@@ -2,11 +2,9 @@
 //  PhotoSession.swift
 //  PassportProof
 //
-//  The single in-memory home for the photo under measurement.
-//
-//  Prohibition P1: this object lives for the session only. It writes nothing to
-//  disk, caches nothing, and is deliberately not Codable. Killing the app is the
-//  deletion path.
+//  The single in-memory home for the prepared photograph. Nothing is Codable
+//  and no image is persisted. Preview, diagnosis and export consume these same
+//  cropped pixels so a finding can never describe a different output.
 //
 
 import SwiftUI
@@ -14,42 +12,52 @@ import UIKit
 
 @MainActor
 final class PhotoSession: ObservableObject {
-
-    /// The photo as the user sees it.
     @Published private(set) var image: UIImage?
-
-    /// The same photo as pixels, orientation applied. The engine consumes this.
     @Published private(set) var cgImage: CGImage?
-
-    /// The gate result for the current photo, evaluated on the still.
-    @Published var gate: CaptureGateResult?
-
-    /// Result for the photo above, and the document it was measured against.
-    @Published var analysis: PhotoAnalysis?
-    @Published var analyzedDocumentID: String?
-
-    /// The photo's capture date, when one is known: the EXIF `DateTimeOriginal`
-    /// for a library import, "now" for a camera capture. Feeds the photo-age
-    /// rule (R7). A date is metadata, not an image — P1 is unaffected.
     @Published private(set) var captureDate: Date?
+    @Published private(set) var review = PhotoReview.pending
+    @Published private(set) var revision = UUID()
 
-    /// Last print layout chosen. Kept here so the picker survives a back-tap.
+    @Published var gate: CaptureGateResult?
+    @Published private(set) var analysis: PhotoAnalysis?
+    @Published private(set) var analyzedDocumentID: String?
     @Published var layout: PrintSheetLayout = .fourBySix
 
     var hasPhoto: Bool { cgImage != nil }
 
+    /// Adopts the final, user-reviewed crop. Later stages never apply another
+    /// independent centre crop.
     func adopt(_ image: UIImage, captureDate: Date? = nil) {
         self.image = image
         self.cgImage = ImageBridge.cgImage(from: image)
         self.captureDate = captureDate
+        self.review = .pending
         self.analysis = nil
         self.analyzedDocumentID = nil
         self.gate = nil
+        self.revision = UUID()
     }
 
     func store(_ analysis: PhotoAnalysis, for documentID: String) {
         self.analysis = analysis
         self.analyzedDocumentID = documentID
+    }
+
+    func updateReview(_ review: PhotoReview) {
+        self.review = review
+        guard var analysis,
+              let analyzedDocumentID,
+              let spec = DocumentCorpus.document(id: analyzedDocumentID) else { return }
+        analysis.update(review: review, spec: spec)
+        self.analysis = analysis
+    }
+
+    func canExport(for spec: DocumentSpec) -> Bool {
+        guard hasPhoto,
+              analyzedDocumentID == spec.id,
+              review.allConfirmed,
+              let analysis else { return false }
+        return analysis.failures.isEmpty
     }
 
     func clear() {
@@ -59,19 +67,16 @@ final class PhotoSession: ObservableObject {
         analysis = nil
         analyzedDocumentID = nil
         captureDate = nil
+        review = .pending
+        revision = UUID()
     }
 }
 
 // MARK: - UIImage to CGImage
 
 enum ImageBridge {
-
-    /// Returns the photo as a `CGImage` with its orientation baked in.
-    ///
-    /// `UIImage.cgImage` ignores `imageOrientation`, so a portrait photo from the
-    /// library would otherwise reach the face detector rotated. The redraw is a
-    /// rotation/flip at the original pixel size — geometric only, which is the
-    /// only transformation G7 permits. No scaling, no resampling of content.
+    /// Returns pixels with EXIF orientation baked in. `UIImage.cgImage` alone
+    /// ignores `imageOrientation` and would rotate the validator's input.
     static func cgImage(from image: UIImage) -> CGImage? {
         if image.imageOrientation == .up, let cg = image.cgImage {
             return cg
@@ -80,7 +85,6 @@ enum ImageBridge {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = image.scale
         format.opaque = true
-
         let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
         let redrawn = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: image.size))
