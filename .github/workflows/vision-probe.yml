@@ -8,23 +8,35 @@ on:
       - Tools/run_vision_probe.py
       - .github/workflows/vision-probe.yml
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Hosted runner architecture
+        type: choice
+        default: macos-15-intel
+        options: [macos-15-intel, macos-15]
+      runtime:
+        description: Exact runtime, or native macOS
+        type: choice
+        default: '18.5'
+        options: ['18.5', '26.2', macos]
 
 permissions:
   contents: read
 
 concurrency:
-  group: vision-probe-${{ github.ref }}
+  group: vision-probe-${{ github.ref }}-${{ inputs.runner || 'macos-15-intel' }}-${{ inputs.runtime || '18.5' }}
   cancel-in-progress: true
 
 jobs:
   isolated-vision:
-    name: Native Vision on ${{ matrix.runtime }}
-    runs-on: macos-15
+    # The earlier arm64/macOS and arm64/iOS comparisons are preserved in run
+    # 40172454108. The next control holds iOS18.5 fixed and changes the host
+    # architecture. A dispatch can reproduce any earlier supported target.
+    name: Native Vision ${{ inputs.runtime || '18.5' }} on ${{ inputs.runner || 'macos-15-intel' }}
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [macos, '18.5', '26.2']
+    env:
+      VISION_PROBE_RUNTIME: ${{ inputs.runtime || '18.5' }}
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 26.3
@@ -34,12 +46,12 @@ jobs:
           xcodebuild -version
           xcrun simctl list runtimes
       - name: Run independent native Vision processes
-        run: python3 Tools/run_vision_probe.py '${{ matrix.runtime }}'
+        run: python3 Tools/run_vision_probe.py "$VISION_PROBE_RUNTIME"
       - name: Preserve every result, including failures
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: isolated-vision-${{ matrix.runtime }}
+          name: isolated-vision-${{ inputs.runtime || '18.5' }}-${{ runner.arch }}
           path: build/vision-probe/*.log
           if-no-files-found: warn
           retention-days: 14
