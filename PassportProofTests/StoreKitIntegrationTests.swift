@@ -68,6 +68,8 @@ final class StoreKitIntegrationTests: XCTestCase {
         await store.refresh()
         XCTAssertEqual(store.state, .available)
         try await environment.setSimulatedError(.generic(.notAvailableInStorefront), forAPI: .purchase)
+        let configuredFailure = await environment.simulatedError(forAPI: .purchase)
+        XCTAssertEqual(configuredFailure, .generic(.notAvailableInStorefront))
         await store.purchase()
         recordPurchaseDiagnostic(store, configured: "StoreKitError.notAvailableInStorefront", name: "non-cancellation-purchase")
         XCTAssertFalse(store.isUnlocked)
@@ -77,7 +79,25 @@ final class StoreKitIntegrationTests: XCTestCase {
         }
 
         try await environment.setSimulatedError(nil, forAPI: .purchase)
+        let clearedBySetter = await environment.simulatedError(forAPI: .purchase)
+        print("STOREKIT RETRY simulated error after nil setter: \(String(describing: clearedBySetter))")
+        // CI still received an Xcode-forced server failure on the next purchase
+        // after the nil setter. Restore all test-server settings as a recovery
+        // precondition; keep this same app store and its transaction history.
+        // This is not an entitlement reset or an app-side purchase bypass.
+        // https://developer.apple.com/documentation/storekittest/sktestsession/resettodefaultstate()
+        environment.resetToDefaultState()
+        environment.disableDialogs = true
+        let retryError = await environment.simulatedError(forAPI: .purchase)
+        XCTAssertNil(retryError, "The retry must run without a simulated purchase failure")
+
+        // UnlockView's actual Try again action refreshes product availability
+        // before presenting the purchase button again. Exercise that same path.
+        await store.refresh()
+        XCTAssertEqual(store.state, .available)
+        XCTAssertFalse(store.isUnlocked, "Refreshing after failure must not grant an entitlement")
         await store.purchase()
+        recordPurchaseDiagnostic(store, configured: String(describing: retryError), name: "purchase-retry-after-failure")
         XCTAssertTrue(store.isUnlocked, "A supported retry must complete through verified StoreKit purchase")
         XCTAssertEqual(store.state, .purchased)
         XCTAssertFalse(store.isPrototypeUnlock)

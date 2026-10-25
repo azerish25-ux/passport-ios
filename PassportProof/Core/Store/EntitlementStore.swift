@@ -230,7 +230,22 @@ final class EntitlementStore: ObservableObject {
         for _ in 0..<8 {
             guard let failure = current else { break }
             let nsError = failure as NSError
-            chain.append("\(String(reflecting: type(of: failure))) domain=\(nsError.domain) code=\(nsError.code)")
+            let kind: String
+            if let storeError = failure as? StoreKitError {
+                switch storeError {
+                case .userCancelled: kind = "StoreKitError.userCancelled"
+                case .notAvailableInStorefront: kind = "StoreKitError.notAvailableInStorefront"
+                case .notEntitled: kind = "StoreKitError.notEntitled"
+                case .unknown: kind = "StoreKitError.unknown"
+                case .unsupported: kind = "StoreKitError.unsupported"
+                case .systemError: kind = "StoreKitError.systemError"
+                case .networkError: kind = "StoreKitError.networkError"
+                default: kind = "StoreKitError.other"
+                }
+            } else {
+                kind = String(reflecting: type(of: failure))
+            }
+            chain.append("\(kind) domain=\(nsError.domain) code=\(nsError.code)")
             if let storeError = failure as? StoreKitError, case .systemError(let underlying) = storeError {
                 current = underlying
             } else {

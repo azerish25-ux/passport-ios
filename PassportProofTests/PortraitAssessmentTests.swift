@@ -15,6 +15,7 @@ final class PortraitAssessmentTests: XCTestCase {
         let analysis = ValidationEngine.analyze(image: source, spec: DocumentCorpus.documents[1])
         record(name: "full-resolution-landmark-regression", image: source, analysis: analysis)
         let geometry = try XCTUnwrap(analysis.geometry, "The full-resolution frontal portrait must provide face geometry; uncertain hair/skull should be reported separately.")
+        assertCoarseFullResolutionLandmarks(geometry)
         XCTAssertGreaterThan(geometry.chinY, geometry.eyeY)
         XCTAssertGreaterThan(geometry.eyeY, 0)
         XCTAssertLessThanOrEqual(geometry.chinY, 1)
@@ -23,13 +24,14 @@ final class PortraitAssessmentTests: XCTestCase {
 
     func testRepeatedFullResolutionGeometryIsBoundedAndStable() throws {
         let source = try fixture(named: "FullResolutionPortrait")
-        var lines = ["Repeated production geometry; backend=\(FaceAnalyzer.defaultBackend.rawValue); real Vision, no injected measurements."]
+        var lines = ["Repeated production geometry; model=\(FaceAnalyzer.defaultModel.rawValue); system-selected compute; real Vision, no injected measurements."]
         defer { attachDiagnostic(lines, name: "repeated-production-geometry") }
         var baseline: FaceGeometry?
         for index in 0..<12 {
             let geometry = FaceAnalyzer.geometry(of: source)
             lines.append("request=\(index) geometry=\(String(describing: geometry))")
             let measured = try XCTUnwrap(geometry, "Repeated request \(index) must retain valid real face measurements.")
+            assertCoarseFullResolutionLandmarks(measured)
             XCTAssertTrue((0...1).contains(measured.eyeY))
             XCTAssertTrue((0...1).contains(measured.chinY))
             XCTAssertLessThan(measured.eyeY, measured.chinY)
@@ -123,28 +125,29 @@ final class PortraitAssessmentTests: XCTestCase {
         XCTFail("No portrait established measurable, unconstrained source geometry, including the full-resolution fixture. The photographic crop regression was not exercised.")
     }
 
-    /// Keep the default-backend experiment after production-path tests. The
-    /// system backend is diagnostic on Simulator; the selected CPU path must
-    /// pass every assertion. On a physical device both paths are checked.
-    func testZZRawVisionBackendComparison() throws {
+    /// Keep alternative models after production-path tests. The selected model
+    /// must pass the raw-coordinate and repeatability checks. Other supported
+    /// revision/constellation pairs are recorded without concealing a failure
+    /// of the production path or replacing it with diagnostic measurements.
+    func testZZRawVisionModelComparison() throws {
         let source = try fixture(named: "FullResolutionPortrait")
-        var lines = ["Raw Vision backend comparison. Face contour is read three times from the SAME observation before any coordinate mapping."]
-        defer { attachDiagnostic(lines, name: "raw-vision-backend-comparison") }
+        var lines = ["Raw Vision model comparison using system-selected compute. Face contour is read three times from the SAME observation before any coordinate mapping."]
+        defer { attachDiagnostic(lines, name: "raw-vision-model-comparison") }
 
-        for backend in [FaceAnalyzer.InferenceBackend.cpu, .system] {
+        for model in [FaceAnalyzer.LandmarkModel.revision2With65Points, .revision3With65Points, .revision3With76Points] {
             var baseline: [CGPoint]?
-            let requiresValidOutput = backend == .cpu || FaceAnalyzer.defaultBackend == .system
+            let requiresValidOutput = model == FaceAnalyzer.defaultModel
             for index in 0..<8 {
                 do {
-                    let request = try FaceAnalyzer.landmarkRequest(backend: backend)
+                    let request = try FaceAnalyzer.landmarkRequest(model: model)
                     let handler = VNImageRequestHandler(cgImage: source, orientation: .up, options: [:])
                     try handler.perform([request])
                     let faces = request.results ?? []
-                    lines.append("backend=\(backend.rawValue) revision=\(request.revision) devices=\(computeDescription(for: request)) request=\(index) faces=\(faces.count)")
+                    lines.append("model=\(model.rawValue) revision=\(request.revision) constellation=\(request.constellation.rawValue) devices=\(computeDescription(for: request)) request=\(index) faces=\(faces.count)")
                     guard faces.count == 1, let face = faces.first,
                           let contour = face.landmarks?.faceContour else {
                         lines.append("no single face contour")
-                        if requiresValidOutput { XCTFail("\(backend.rawValue) request \(index) did not produce one face contour.") }
+                        if requiresValidOutput { XCTFail("\(model.rawValue) request \(index) did not produce one face contour.") }
                         continue
                     }
                     // Copy values into new Swift storage, so later framework
@@ -158,7 +161,7 @@ final class PortraitAssessmentTests: XCTestCase {
                         let readDelta = maximumPointDelta(first, points)
                         lines.append("same-observation-read=\(readIndex) \(normalizedRange(points)) deltaFromFirst=\(readDelta)")
                         if requiresValidOutput {
-                            XCTAssertTrue(FaceAnalyzer.normalizedFacePointsAreValid(points), "\(backend.rawValue) request \(index) raw normalized landmarks are invalid.")
+                            XCTAssertTrue(FaceAnalyzer.normalizedFacePointsAreValid(points), "\(model.rawValue) request \(index) raw normalized landmarks are invalid.")
                             XCTAssertLessThanOrEqual(readDelta, 0.000_001, "A repeated getter read must not mutate one observation.")
                         }
                     }
@@ -166,17 +169,33 @@ final class PortraitAssessmentTests: XCTestCase {
                         let requestDelta = maximumPointDelta(previous, first)
                         lines.append("deltaFromFirstRequest=\(requestDelta)")
                         if requiresValidOutput {
-                            XCTAssertLessThanOrEqual(requestDelta, 0.001, "\(backend.rawValue) request \(index) drifted on identical pixels.")
+                            XCTAssertLessThanOrEqual(requestDelta, 0.001, "\(model.rawValue) request \(index) drifted on identical pixels.")
                         }
                     } else {
                         baseline = first
                     }
                 } catch {
-                    lines.append("backend=\(backend.rawValue) request=\(index) error=\(error)")
-                    if requiresValidOutput { XCTFail("Real \(backend.rawValue) Vision request failed: \(error)") }
+                    lines.append("model=\(model.rawValue) request=\(index) error=\(error)")
+                    if requiresValidOutput { XCTFail("Real \(model.rawValue) Vision request failed: \(error)") }
                 }
             }
         }
+    }
+
+    /// Coarse hand-inspected bounds for this unmodified 1062 × 1210 fixture:
+    /// eye centres are near row 390, and the visible chin/beard contour is near
+    /// rows 700–790. These deliberately broad image fractions reject a stable
+    /// but plainly misplaced model output. They are not issuer tolerances, an
+    /// annotated accuracy benchmark, or coordinates supplied to production.
+    private func assertCoarseFullResolutionLandmarks(
+        _ geometry: FaceGeometry, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertTrue((0.28...0.36).contains(geometry.eyeY),
+                      "The measured eyes must lie in the visually inspected eye region, got \(geometry.eyeY).",
+                      file: file, line: line)
+        XCTAssertTrue((0.53...0.68).contains(geometry.chinY),
+                      "The measured chin must lie in the visually inspected lower-face region, got \(geometry.chinY).",
+                      file: file, line: line)
     }
 
     private func fixture(named name: String) throws -> CGImage {
@@ -255,7 +274,7 @@ final class PortraitAssessmentTests: XCTestCase {
             let request = try FaceAnalyzer.landmarkRequest()
             try handler.perform([request])
             let faces = request.results ?? []
-            var summary = "rawVisionLandmarkFaceCount=\(faces.count) facesWithLandmarks=\(faces.filter { $0.landmarks != nil }.count) backend=\(FaceAnalyzer.defaultBackend.rawValue) revision=\(request.revision) devices=\(computeDescription(for: request)) (separate diagnostic request; app geometry may reject a detected face)"
+            var summary = "rawVisionLandmarkFaceCount=\(faces.count) facesWithLandmarks=\(faces.filter { $0.landmarks != nil }.count) model=\(FaceAnalyzer.defaultModel.rawValue) revision=\(request.revision) constellation=\(request.constellation.rawValue) devices=\(computeDescription(for: request)) (separate diagnostic request; app geometry may reject a detected face)"
             if let face = faces.first, let landmarks = face.landmarks {
                 summary += " raw-before-mapping \(normalizedRange(landmarks.allPoints?.normalizedPoints ?? []))"
                 let eyePoints = (landmarks.leftEye?.normalizedPoints ?? []) + (landmarks.rightEye?.normalizedPoints ?? [])

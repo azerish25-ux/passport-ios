@@ -17,7 +17,6 @@
 
 import Foundation
 import CoreGraphics
-import CoreML
 import Vision
 
 /// Normalised face geometry. **All y values are 0 at the top of the image and
@@ -69,44 +68,52 @@ struct FaceGeometry: Sendable {
 
 enum FaceAnalyzer {
 
-    enum InferenceBackend: String {
-        case system
-        case cpu
+    enum LandmarkModel: String {
+        case revision2With65Points
+        case revision3With65Points
+        case revision3With76Points
+
+        var revision: Int {
+            switch self {
+            case .revision2With65Points: return VNDetectFaceLandmarksRequestRevision2
+            case .revision3With65Points, .revision3With76Points: return VNDetectFaceLandmarksRequestRevision3
+            }
+        }
+
+        var constellation: VNRequestFaceLandmarksConstellation {
+            switch self {
+            case .revision2With65Points, .revision3With65Points: return .constellation65Points
+            case .revision3With76Points: return .constellation76Points
+            }
+        }
     }
 
     private enum RequestConfigurationError: Error {
-        case noComputeStages
-        case cpuUnavailable(String)
+        case unsupportedModel(LandmarkModel)
     }
 
-    /// Simulator inference uses supported CPU stages explicitly. It still runs
-    /// Apple's real Vision model. A physical device retains the native backend;
-    /// Simulator results do not establish accuracy or performance on hardware.
-    static var defaultBackend: InferenceBackend {
-        #if targetEnvironment(simulator)
-        return .cpu
-        #else
-        return .system
-        #endif
-    }
+    /// Pin a documented model instead of allowing an OS default to change the
+    /// measurements. Revision 3 produced unstable raw points in repeated real
+    /// Simulator requests, including when every compute stage used the CPU.
+    /// Strict photographic regressions require revision 2 / 65 points to stay
+    /// repeatable and align with the fixture's inspected eye/chin regions.
+    /// Selecting a revision alone does not establish model accuracy.
+    /// Both Simulator and hardware retain system-selected compute devices.
+    static let defaultModel = LandmarkModel.revision2With65Points
 
     /// One request factory for production inference and runtime diagnostics.
-    /// A missing CPU stage is an error, never a silent fallback to invented data.
-    /// https://developer.apple.com/documentation/vision/vnrequest/supportedcomputestagedevices
-    /// https://developer.apple.com/documentation/vision/vnrequest/setcomputedevice(_:for:)
-    static func landmarkRequest(backend: InferenceBackend = defaultBackend) throws -> VNDetectFaceLandmarksRequest {
-        let request = VNDetectFaceLandmarksRequest()
-        if backend == .cpu {
-            let stages = try request.supportedComputeStageDevices
-            guard !stages.isEmpty else { throw RequestConfigurationError.noComputeStages }
-            for (stage, devices) in stages {
-                guard let cpu = devices.first(where: { device in
-                    if case .cpu = device { return true }
-                    return false
-                }) else { throw RequestConfigurationError.cpuUnavailable(String(describing: stage)) }
-                request.setComputeDevice(cpu, for: stage)
-            }
+    /// Unsupported revisions or constellations fail explicitly; there is no
+    /// fallback to another model or to fabricated measurements.
+    /// https://developer.apple.com/documentation/vision/vnrequest/supportedrevisions
+    /// https://developer.apple.com/documentation/vision/vndetectfacelandmarksrequest/revision(_:supportsconstellation:)
+    static func landmarkRequest(model: LandmarkModel = defaultModel) throws -> VNDetectFaceLandmarksRequest {
+        guard VNDetectFaceLandmarksRequest.supportedRevisions.contains(model.revision),
+              VNDetectFaceLandmarksRequest.revision(model.revision, supportsConstellation: model.constellation) else {
+            throw RequestConfigurationError.unsupportedModel(model)
         }
+        let request = VNDetectFaceLandmarksRequest()
+        request.revision = model.revision
+        request.constellation = model.constellation
         return request
     }
 

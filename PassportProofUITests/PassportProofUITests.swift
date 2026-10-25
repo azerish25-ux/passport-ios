@@ -352,21 +352,40 @@ final class PassportProofUITests: XCTestCase {
         // These identifiers come from the actual system-picker hierarchy. Its
         // loading screen leaves the app's hidden photo.on.rectangle icon in the
         // accessibility tree, so an app-wide 'Photo' image query is unsafe.
-        let picker = app.scrollViews["photosView_content_scroll_view"]
-        let grid = picker.otherElements.matching(identifier: "PXGGridLayout-Group").firstMatch
+        let photosNavigation = app.navigationBars["Photos"]
+        require(photosNavigation, in: app, timeout: 20)
+        let pickers = app.scrollViews.matching(identifier: "photosView_content_scroll_view")
+        let picker = pickers.firstMatch
+        require(picker, in: app, timeout: 20)
+        let grids = picker.otherElements.matching(identifier: "PXGGridLayout-Group")
+        let grid = grids.firstMatch
+        require(grid, in: app, timeout: 20)
         let assets = grid.images.matching(NSPredicate(
             format: "identifier == %@ AND label BEGINSWITH %@", "PXGGridLayout-Info", "Photo, "
         ))
         let portrait = assets.firstMatch
-        waitUntil(in: app, description: "The system PhotosPicker must finish loading and expose its newest photo", timeout: 40) {
-            app.navigationBars["Photos"].exists && picker.exists && portrait.exists && portrait.isHittable
+        require(portrait, in: app, timeout: 20)
+        print("PHOTOS PICKER resolved navigation=\(photosNavigation.exists), pickers=\(pickers.count), grids=\(grids.count), assets=\(assets.count)")
+        // PhotoKit's virtual grid image exists and has a correct visible frame
+        // on iOS 26.2, but reports isHittable=false. Validate this exact asset's
+        // bounds before tapping its center; never substitute a background icon.
+        waitUntil(in: app, description: "The newest PhotosPicker asset must be fully visible below its navigation bar", timeout: 10) {
+            let frame = portrait.frame
+            let visiblePicker = picker.frame.intersection(app.frame)
+            return frame.width >= 30 && frame.height >= 30 &&
+                visiblePicker.contains(frame) && frame.minY >= photosNavigation.frame.maxY
         }
         // CI adds this portrait immediately after erasing the simulator. The
         // picker sorts newest first; the runtime's sample assets are historical.
-        print("PHOTOS PICKER selecting newest asset: \(portrait.label); grid asset count: \(assets.count)")
+        let assetFrame = portrait.frame
+        print("PHOTOS PICKER selecting newest asset: \(portrait.label); frame=\(assetFrame); isHittable=\(portrait.isHittable); pickerFrame=\(picker.frame)")
         attachHierarchy(app, named: "\(evidencePrefix)-system-photos-picker")
         capture(app, named: "\(evidencePrefix)-photos-picker")
-        portrait.tap()
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+            dx: assetFrame.midX - app.frame.minX,
+            dy: assetFrame.midY - app.frame.minY
+        )).tap()
+        require(app.buttons["crop.confirm"], in: app, timeout: 30)
     }
 
     @MainActor
