@@ -111,11 +111,11 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           echo "Resolved simulator: $NAME ($UDID)"
 
-      - name: Run unit and UI tests
+      - name: Run unit tests
+        timeout-minutes: 15
         run: |
-          # Not -quiet: the suite summaries and test counts are the evidence that
-          # this run proved something. Capture xcodebuild's status explicitly;
-          # piping into grep would otherwise report grep's status.
+          # Unit and UI tests are separate steps so a simulator automation issue
+          # cannot hide a unit-test result (or vice versa).
           set +e
           xcodebuild test \
             -project "$PROJECT" \
@@ -123,31 +123,69 @@ jobs:
             -configuration Debug \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build \
-            -resultBundlePath build/TestResults.xcresult \
+            -resultBundlePath build/UnitResults.xcresult \
+            -only-testing:PassportProofTests \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            2>&1 | tee build/test.log
+            2>&1 | tee build/unit-test.log
           STATUS=${PIPESTATUS[0]}
           set -e
 
-          echo "xcodebuild test exit status: $STATUS"
-          echo "### Tests" >> "$GITHUB_STEP_SUMMARY"
+          echo "xcodebuild unit-test exit status: $STATUS"
+          echo "### Unit tests" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          grep -E "Executed [0-9]+ test|Test Suite '(All tests|PassportProofTests|PassportProofUITests)" build/test.log >> "$GITHUB_STEP_SUMMARY" || echo "no summary line found" >> "$GITHUB_STEP_SUMMARY"
+          grep -E "Executed [0-9]+ test|Test Suite 'PassportProofTests" build/unit-test.log >> "$GITHUB_STEP_SUMMARY" || echo "no summary line found" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$STATUS" -ne 0 ]; then
-            echo "::error::Tests failed (exit $STATUS)"
-            grep -E "error:|failed|Assertion Failure" build/test.log | head -60 || true
+            echo "::error::Unit tests failed (exit $STATUS)"
+            grep -E "error:|failed|Assertion Failure" build/unit-test.log | head -60 || true
             exit "$STATUS"
           fi
-
-          if ! grep -q "Test Suite 'PassportProofTests.xctest' passed" build/test.log; then
+          if ! grep -q "Test Suite 'PassportProofTests.xctest' passed" build/unit-test.log; then
             echo "::error::The unit-test suite did not report a passing result"
             exit 1
           fi
-          if ! grep -q "Test Suite 'PassportProofUITests.xctest' passed" build/test.log; then
+          if ! grep -Eq "Executed [1-9][0-9]* tests" build/unit-test.log; then
+            echo "::error::No unit tests were executed"
+            exit 1
+          fi
+
+      - name: Run UI tests
+        timeout-minutes: 20
+        run: |
+          set +e
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build \
+            -resultBundlePath build/UIResults.xcresult \
+            -only-testing:PassportProofUITests \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee build/ui-test.log
+          STATUS=${PIPESTATUS[0]}
+          set -e
+
+          echo "xcodebuild UI-test exit status: $STATUS"
+          echo "### UI tests" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "Executed [0-9]+ test|Test Suite 'PassportProofUITests|Test Case .*failed" build/ui-test.log >> "$GITHUB_STEP_SUMMARY" || echo "no summary line found" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::UI tests failed (exit $STATUS)"
+            grep -E "error:|failed|Assertion Failure" build/ui-test.log | head -80 || true
+            exit "$STATUS"
+          fi
+          if ! grep -q "Test Suite 'PassportProofUITests.xctest' passed" build/ui-test.log; then
             echo "::error::The UI-test suite did not report a passing result"
+            exit 1
+          fi
+          if ! grep -Eq "Executed [1-9][0-9]* tests" build/ui-test.log; then
+            echo "::error::No UI tests were executed"
             exit 1
           fi
 
@@ -155,9 +193,9 @@ jobs:
         if: always()
         run: |
           mkdir -p build/screenshots
-          if [ -d build/TestResults.xcresult ]; then
+          if [ -d build/UIResults.xcresult ]; then
             xcrun xcresulttool export attachments \
-              --path build/TestResults.xcresult \
+              --path build/UIResults.xcresult \
               --output-path build/screenshots || true
           fi
 
@@ -167,9 +205,11 @@ jobs:
         with:
           name: test-results
           path: |
-            build/TestResults.xcresult
-            build/test.log
-          if-no-files-found: error
+            build/UnitResults.xcresult
+            build/UIResults.xcresult
+            build/unit-test.log
+            build/ui-test.log
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload simulator screenshots

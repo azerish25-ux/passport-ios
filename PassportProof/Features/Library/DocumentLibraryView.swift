@@ -198,7 +198,7 @@ struct DocumentLibraryView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("library.unlock")
 
-            Text("Informational diagnosis only. The issuing authority always makes the final decision.")
+            Text("Informational diagnosis only. PassportProof is independent and not affiliated with any government. The issuing authority always makes the final decision.")
                 .typeStyle(Typography.meta)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)

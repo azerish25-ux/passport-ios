@@ -13,6 +13,7 @@ struct PassportProofApp: App {
     @StateObject private var entitlements = EntitlementStore()
     @StateObject private var session = PhotoSession()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some Scene {
         WindowGroup {
@@ -27,7 +28,7 @@ struct PassportProofApp: App {
                         .transition(.opacity)
                 }
             }
-            .animation(.easeOut(duration: 0.12), value: scenePhase)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: scenePhase)
         }
     }
 }

@@ -8,6 +8,8 @@
 import XCTest
 import CoreGraphics
 import ImageIO
+import SwiftUI
+import UIKit
 @testable import PassportProof
 
 final class PassportProofTests: XCTestCase {
@@ -70,6 +72,17 @@ final class PassportProofTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(rect.minY, 0)
         XCTAssertLessThanOrEqual(rect.maxX, 1200)
         XCTAssertLessThanOrEqual(rect.maxY, 900)
+    }
+
+    func testPreparedCropIsBoundedForAnalysis() {
+        let source = makeImage(width: 4000, height: 3000)
+        let spec = DocumentCorpus.documents[0]
+        guard let crop = PhotoCrop.croppedCGImage(from: source, transform: .identity, spec: spec) else {
+            return XCTFail("large crop failed")
+        }
+        XCTAssertEqual(max(crop.width, crop.height), Int(PhotoCrop.maximumPreparedDimension))
+        XCTAssertEqual(Double(crop.width) / Double(crop.height), spec.aspectRatio, accuracy: 0.01)
+        XCTAssertGreaterThanOrEqual(crop.width, spec.widthPixels)
     }
 
     func testPreparedCropIsWhatDigitalExportConsumes() {
@@ -206,6 +219,38 @@ final class PassportProofTests: XCTestCase {
         XCTAssertEqual(results.first { $0.id == .glasses }?.status, .cannotVerify)
     }
 
+    // MARK: - Session export gate
+
+    @MainActor
+    func testSessionBlocksExportWithoutAFaceAndInvalidatesOldAnalysis() {
+        let spec = DocumentCorpus.documents[0]
+        let session = PhotoSession()
+        let image = UIImage(cgImage: makeImage(width: 900, height: 900))
+        session.adopt(image)
+
+        let analysis = ValidationEngine.analyze(
+            image: makeImage(width: 900, height: 900),
+            spec: spec,
+            captureDate: nil,
+            review: .pending
+        )
+        session.store(analysis, for: spec.id)
+        var review = PhotoReview()
+        review.expressionConfirmed = true
+        review.glassesConfirmed = true
+        review.originalUneditedConfirmed = true
+        review.recentPhotoConfirmed = true
+        session.updateReview(review)
+
+        XCTAssertNil(analysis.geometry)
+        XCTAssertFalse(session.canExport(for: spec), "A crop with no measurable face must never be exportable")
+
+        session.adopt(UIImage(cgImage: makeImage(width: 600, height: 600)))
+        XCTAssertNil(session.analysis)
+        XCTAssertNil(session.analyzedDocumentID)
+        XCTAssertEqual(session.review, .pending)
+    }
+
     // MARK: - Resolution and photo age
 
     func testResolutionChecksPreparedCropAgainstOutput() {
@@ -292,6 +337,32 @@ final class PassportProofTests: XCTestCase {
         XCTAssertNil(PhotoImporter.decodeImage(from: Data("not an image".utf8)))
     }
 
+    // MARK: - Accessibility contrast
+
+    func testCoreTextColoursMeetWCAGAAInBothAppearances() {
+        let pairs: [(String, UIColor, UIColor)] = [
+            ("ink/paper", UIColor(Theme.ink), UIColor(Theme.paper)),
+            ("secondary/paper", UIColor(Theme.inkSecondary), UIColor(Theme.paper)),
+            ("tertiary/paper", UIColor(Theme.inkTertiary), UIColor(Theme.paper)),
+            ("tertiary/raised", UIColor(Theme.inkTertiary), UIColor(Theme.paperRaised)),
+            ("pass/paper", UIColor(Theme.signalPass), UIColor(Theme.paper)),
+            ("fail/wash", UIColor(Theme.signalFail), UIColor(Theme.failWash)),
+            ("review/wash", UIColor(Theme.signalVerify), UIColor(Theme.verifyWash)),
+            ("accent/paper", UIColor(Theme.accent), UIColor(Theme.paper)),
+        ]
+
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            for (name, foreground, background) in pairs {
+                let ratio = contrastRatio(
+                    foreground.resolvedColor(with: traits),
+                    background.resolvedColor(with: traits)
+                )
+                XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(name) fails AA in \(style == .dark ? "dark" : "light"): \(ratio)")
+            }
+        }
+    }
+
     // MARK: - Compiled App Store surface
 
     func testAppIconIsCompiledIntoTheBundle() {
@@ -370,6 +441,25 @@ final class PassportProofTests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         return calendar.date(from: components) ?? Date(timeIntervalSince1970: 0)
+    }
+
+    private func contrastRatio(_ foreground: UIColor, _ background: UIColor) -> Double {
+        let light = relativeLuminance(foreground)
+        let dark = relativeLuminance(background)
+        return (max(light, dark) + 0.05) / (min(light, dark) + 0.05)
+    }
+
+    private func relativeLuminance(_ color: UIColor) -> Double {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        XCTAssertTrue(color.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+        func linear(_ value: CGFloat) -> Double {
+            let component = Double(value)
+            return component <= 0.04045 ? component / 12.92 : pow((component + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
     }
 
     private func allStrings(in value: Any) -> [String] {

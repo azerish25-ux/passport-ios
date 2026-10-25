@@ -48,8 +48,9 @@ accepted App Store submission.
 
 ### App Store Connect metadata
 
-- **Privacy policy URL:** required. The in-app disclosure is implemented, but
-  App Store Connect also requires a publicly reachable web URL.
+- **Privacy policy URL:** required. Ready-to-host policy text is in
+  [`PRIVACY.md`](PRIVACY.md); App Store Connect also requires a publicly
+  reachable web URL, so publish it on a maintained site or GitHub Pages.
 - **Support URL:** required; use a maintained page with a contact method.
 - **Category:** Utilities. **Age rating:** 4+ unless future content changes it.
 - **App Privacy:** Data Not Collected, no tracking. This must match the bundled

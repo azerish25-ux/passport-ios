@@ -24,6 +24,7 @@ struct CropEditorView: View {
     @State private var hasInteracted = false
     @State private var isPreparing: Bool
     @State private var isCompleting = false
+    @State private var completionTask: Task<Void, Never>?
     @State private var failure: String?
 
     init(
@@ -89,8 +90,12 @@ struct CropEditorView: View {
             controls
         }
         .background(Theme.paper)
+        .interactiveDismissDisabled(isCompleting)
         .task {
             await prepareAutomaticCrop()
+        }
+        .onDisappear {
+            completionTask?.cancel()
         }
     }
 
@@ -101,6 +106,7 @@ struct CropEditorView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.ink)
+            .disabled(isCompleting)
 
             Spacer()
 
@@ -294,7 +300,7 @@ struct CropEditorView: View {
         let sourceImage = self.sourceImage
         let spec = self.spec
 
-        Task {
+        completionTask = Task {
             let cropped = await Task.detached(priority: .userInitiated) {
                 PhotoCrop.croppedImage(from: sourceImage, transform: transform, spec: spec)
             }.value

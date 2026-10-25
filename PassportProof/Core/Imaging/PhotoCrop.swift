@@ -21,6 +21,11 @@ struct CropTransform: Equatable, Sendable {
 enum PhotoCrop {
     static let zoomRange: ClosedRange<CGFloat> = 1...4
 
+    /// Vision and pixel analysis do not benefit from a 12 MP crop whose largest
+    /// output is 1200 px. Three times the largest output leaves ample resampling
+    /// headroom while keeping analysis bounded and responsive.
+    static let maximumPreparedDimension: CGFloat = 2048
+
     /// Uses facial geometry only to propose a crop. The user can adjust it and
     /// the validator still measures the resulting pixels independently.
     static func automaticTransform(for image: CGImage, spec: DocumentSpec) -> CropTransform {
@@ -113,7 +118,26 @@ enum PhotoCrop {
         let rect = cropRect(imageSize: size, spec: spec, transform: safe)
         // Small crops are returned for diagnosis too: the resolution rule can
         // then explain why export is blocked instead of hiding the photograph.
-        return image.cropping(to: rect)
+        guard let cropped = image.cropping(to: rect) else { return nil }
+        let longestSide = CGFloat(max(cropped.width, cropped.height))
+        guard longestSide > maximumPreparedDimension else { return cropped }
+
+        let scale = maximumPreparedDimension / longestSide
+        let width = max(1, Int((CGFloat(cropped.width) * scale).rounded()))
+        let height = max(1, Int((CGFloat(cropped.height) * scale).rounded()))
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: space,
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+              ) else { return nil }
+        context.interpolationQuality = .high
+        context.draw(cropped, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
     }
 
     static func croppedImage(

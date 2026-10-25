@@ -31,7 +31,8 @@ The catalogue deliberately contains only complete workflows. The earlier UK entr
 - `PrivacyInfo.xcprivacy` declares no collected data and no tracking.
 - StoreKit is the only purchase surface and uses Apple's network services.
 - An opaque privacy cover hides session photos in the app switcher.
-- In-app disclosure lives at **Library → Privacy**.
+- In-app disclosure lives at **Library → Privacy**; ready-to-host policy text is
+  in [`docs/PRIVACY.md`](docs/PRIVACY.md).
 
 ## Architecture
 

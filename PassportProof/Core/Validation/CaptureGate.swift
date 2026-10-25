@@ -6,7 +6,7 @@
 //
 //  Capture enforcement buys the background, not the skull: a compliant updo
 //  still puts hair above the crown, so the `cannotVerify` state survives this.
-//  All four thresholds below are prototype defaults.
+//  All four thresholds below are app-selected defaults, labelled in the UI.
 //
 
 import Foundation
@@ -28,7 +28,12 @@ enum CaptureGate {
     static let headBandTolerance = 0.15
 
     static func evaluate(frame: CGImage, spec: DocumentSpec) -> CaptureGateResult {
-        guard let geometry = FaceAnalyzer.geometry(of: frame) else {
+        // The preview guide is the document's aspect box, while the sensor feeds
+        // a wider frame. Gate the same central crop the guide represents rather
+        // than measuring head share against pixels that will be discarded.
+        let measuredFrame = centerCropped(frame, to: spec.aspectRatio) ?? frame
+
+        guard let geometry = FaceAnalyzer.geometry(of: measuredFrame) else {
             return CaptureGateResult(
                 canCapture: false,
                 message: "No face detected. Fill the frame with your head and shoulders and hold still.",
@@ -37,7 +42,7 @@ enum CaptureGate {
             )
         }
 
-        let background = BackgroundAnalyzer.analyze(frame, faceBox: geometry.faceBox)
+        let background = BackgroundAnalyzer.analyze(measuredFrame, faceBox: geometry.faceBox)
         let top = geometry.crownEnvelopeY
         let bottom = geometry.chinY
 
@@ -99,5 +104,28 @@ enum CaptureGate {
             headTopFraction: top,
             headBottomFraction: bottom
         )
+    }
+
+    private static func centerCropped(_ image: CGImage, to aspect: Double) -> CGImage? {
+        guard aspect > 0, image.width > 0, image.height > 0 else { return nil }
+        let imageAspect = Double(image.width) / Double(image.height)
+        if abs(imageAspect - aspect) < 0.01 { return image }
+
+        let width: CGFloat
+        let height: CGFloat
+        if imageAspect > aspect {
+            height = CGFloat(image.height)
+            width = height * CGFloat(aspect)
+        } else {
+            width = CGFloat(image.width)
+            height = width / CGFloat(aspect)
+        }
+        let rect = CGRect(
+            x: floor((CGFloat(image.width) - width) / 2),
+            y: floor((CGFloat(image.height) - height) / 2),
+            width: floor(width),
+            height: floor(height)
+        )
+        return image.cropping(to: rect)
     }
 }

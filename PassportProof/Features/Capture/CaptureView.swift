@@ -16,17 +16,14 @@ struct CaptureView: View {
     let spec: DocumentSpec
 
     @EnvironmentObject private var session: PhotoSession
-    @State private var flow: CaptureFlow?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var showCamera = false
+    @State private var showCrop = false
+    @State private var shouldOpenAnalysis = false
     @State private var goToAnalysis = false
     @State private var pendingImage: UIImage?
     @State private var pendingCaptureDate: Date?
     @State private var cameraDenied = false
-
-    private enum CaptureFlow: String, Identifiable {
-        case camera
-        case crop
-        var id: String { rawValue }
-    }
 
     private var cameraAvailable: Bool {
         AVCaptureDevice.default(for: .video) != nil
@@ -61,27 +58,29 @@ struct CaptureView: View {
         .background(Theme.paper)
         .navigationTitle(spec.documentName)
         .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(item: $flow) { flow in
-            switch flow {
-            case .camera:
-                CameraPicker(
-                    spec: spec,
-                    onCapture: { image in
-                        pendingImage = image
-                        pendingCaptureDate = Date()
-                        self.flow = .crop
-                    },
-                    onCancel: { self.flow = nil }
-                )
-            case .crop:
-                if let pendingImage {
-                    CropEditorView(
-                        sourceImage: pendingImage,
-                        spec: spec,
-                        onComplete: acceptCrop,
-                        onCancel: discardPending
-                    )
+        .fullScreenCover(isPresented: $showCamera, onDismiss: presentCropIfReady) {
+            CameraPicker(
+                spec: spec,
+                onCapture: { image in
+                    pendingImage = image
+                    pendingCaptureDate = Date()
+                    showCamera = false
+                },
+                onCancel: {
+                    pendingImage = nil
+                    pendingCaptureDate = nil
+                    showCamera = false
                 }
+            )
+        }
+        .fullScreenCover(isPresented: $showCrop, onDismiss: openAnalysisIfRequested) {
+            if let pendingImage {
+                CropEditorView(
+                    sourceImage: pendingImage,
+                    spec: spec,
+                    onComplete: acceptCrop,
+                    onCancel: discardPending
+                )
             }
         }
         .navigationDestination(isPresented: $goToAnalysis) {
@@ -98,14 +97,22 @@ struct CaptureView: View {
                 .accessibilityLabel("Example framing guide")
                 .accessibilityHidden(true)
 
-            HStack(spacing: Theme.Spacing.m) {
-                SetupItem(icon: "square.on.square", title: "Plain background", detail: spec.backgroundDescription)
-                SetupItem(icon: "sun.max", title: "Even light", detail: "Face one light source; avoid shadows")
-            }
-
-            HStack(spacing: Theme.Spacing.m) {
-                SetupItem(icon: "person.crop.rectangle", title: "Head & shoulders", detail: "Look directly at the camera")
-                SetupItem(icon: "hand.raised", title: "Hold still", detail: "Live guidance helps with framing")
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                    SetupItem(icon: "square.on.square", title: "Plain background", detail: spec.backgroundDescription)
+                    SetupItem(icon: "sun.max", title: "Even light", detail: "Face one light source; avoid shadows")
+                    SetupItem(icon: "person.crop.rectangle", title: "Head & shoulders", detail: "Look directly at the camera")
+                    SetupItem(icon: "hand.raised", title: "Hold still", detail: "Live guidance helps with framing")
+                }
+            } else {
+                HStack(spacing: Theme.Spacing.m) {
+                    SetupItem(icon: "square.on.square", title: "Plain background", detail: spec.backgroundDescription)
+                    SetupItem(icon: "sun.max", title: "Even light", detail: "Face one light source; avoid shadows")
+                }
+                HStack(spacing: Theme.Spacing.m) {
+                    SetupItem(icon: "person.crop.rectangle", title: "Head & shoulders", detail: "Look directly at the camera")
+                    SetupItem(icon: "hand.raised", title: "Hold still", detail: "Live guidance helps with framing")
+                }
             }
         }
         .padding(.horizontal, Theme.Spacing.margin)
@@ -134,7 +141,7 @@ struct CaptureView: View {
             PhotoImporter(title: "Choose from library") { image, captureDate in
                 pendingImage = image
                 pendingCaptureDate = captureDate
-                flow = .crop
+                showCrop = true
             }
             .padding(.horizontal, Theme.Spacing.m)
         }
@@ -201,12 +208,12 @@ struct CaptureView: View {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             cameraDenied = false
-            flow = .camera
+            showCamera = true
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 Task { @MainActor in
                     cameraDenied = !granted
-                    if granted { flow = .camera }
+                    if granted { showCamera = true }
                 }
             }
         default:
@@ -218,14 +225,27 @@ struct CaptureView: View {
         session.adopt(image, captureDate: pendingCaptureDate)
         pendingImage = nil
         pendingCaptureDate = nil
-        flow = nil
-        goToAnalysis = true
+        shouldOpenAnalysis = true
+        showCrop = false
     }
 
     private func discardPending() {
         pendingImage = nil
         pendingCaptureDate = nil
-        flow = nil
+        showCrop = false
+    }
+
+    private func presentCropIfReady() {
+        if pendingImage != nil {
+            showCrop = true
+        }
+    }
+
+    private func openAnalysisIfRequested() {
+        if shouldOpenAnalysis {
+            shouldOpenAnalysis = false
+            goToAnalysis = true
+        }
     }
 }
 

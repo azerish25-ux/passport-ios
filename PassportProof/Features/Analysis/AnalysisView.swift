@@ -314,7 +314,12 @@ struct AnalysisView: View {
 
     private var bottomBar: some View {
         VStack(spacing: Theme.Spacing.xs) {
-            if let result, !result.failures.isEmpty {
+            if let result, result.geometry == nil {
+                PrimaryButton(title: "Retake with a visible face") { dismiss() }
+                Text("Export requires one measurable face in the prepared crop.")
+                    .typeStyle(Typography.meta)
+                    .foregroundStyle(Theme.inkSecondary)
+            } else if let result, !result.failures.isEmpty {
                 PrimaryButton(title: "Retake photo") { dismiss() }
             } else {
                 PrimaryButton(

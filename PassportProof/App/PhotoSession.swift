@@ -56,7 +56,8 @@ final class PhotoSession: ObservableObject {
         guard hasPhoto,
               analyzedDocumentID == spec.id,
               review.allConfirmed,
-              let analysis else { return false }
+              let analysis,
+              analysis.geometry != nil else { return false }
         return analysis.failures.isEmpty
     }
 

@@ -59,12 +59,17 @@ final class EntitlementStore: ObservableObject {
         defer { isWorking = false }
         state = .loading
 
+        // Local verified entitlements work offline. Check them before asking the
+        // network for product metadata so a purchased user is never downgraded
+        // by a connection failure.
+        let alreadyEntitled = await refreshEntitlements()
+        if alreadyEntitled { state = .purchased }
+
         do {
             let products = try await Product.products(for: [Self.productIdentifier])
             guard let product = products.first else {
                 self.product = nil
                 displayPrice = Self.fallbackPrice
-                _ = await refreshEntitlements()
                 if !isUnlocked {
                     #if DEBUG
                     state = .unavailable("StoreKit has no product configured. A debug-only demonstration unlock is available.")
@@ -77,10 +82,13 @@ final class EntitlementStore: ObservableObject {
 
             self.product = product
             displayPrice = product.displayPrice
-            let entitled = await refreshEntitlements()
-            state = entitled ? .purchased : .available
+            if !isUnlocked { state = .available }
         } catch {
-            state = .failed(Self.message(for: error))
+            if isUnlocked {
+                state = .purchased
+            } else {
+                state = .failed(Self.message(for: error))
+            }
         }
     }
 
@@ -128,6 +136,11 @@ final class EntitlementStore: ObservableObject {
         isWorking = true
         defer { isWorking = false }
 
+        if await refreshEntitlements() {
+            state = .purchased
+            return
+        }
+
         do {
             try await AppStore.sync()
         } catch {
@@ -135,8 +148,7 @@ final class EntitlementStore: ObservableObject {
             return
         }
 
-        let entitled = await refreshEntitlements()
-        if entitled {
+        if await refreshEntitlements() {
             state = .purchased
         } else {
             state = .failed("No previous PassportProof purchase was found for this Apple Account.")

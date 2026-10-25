@@ -26,7 +26,7 @@ in both appearances.
 | `paperRaised` | `#FBF9F4` | `#201C14` | Cards, bottom bars |
 | `ink` | `#14120F` | `#EDE8DC` | Primary text, primary fill |
 | `inkSecondary` | `#4C463A` | `#A9A292` | Supporting copy |
-| `inkTertiary` | `#7B7364` | `#7C7565` | Non-essential metadata only |
+| `inkTertiary` | `#6F6758` | `#9C9483` | Non-essential metadata; ≥4.5:1 |
 | `rule` | `#D8D2C4` | `#332F26` | Hairlines and card borders |
 | `accent` | `#0D6B60` | `#63D3BD` | Interactive actions and focus |
 | `onAccent` | `#FFFFFF` | `#092821` | Text on accent |

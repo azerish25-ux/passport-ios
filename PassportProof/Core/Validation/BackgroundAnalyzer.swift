@@ -6,7 +6,7 @@
 //
 //  This is a threshold test, not a perceptual one: the sources say any residual
 //  original-background pixels at the hair edge are a problem, and that there is
-//  no perceptual tolerance to appeal to. The numbers used here are prototype
+//  no perceptual tolerance to appeal to. The numbers used here are app-selected
 //  defaults — the sources give no numeric threshold for the capture gate.
 //
 
@@ -27,7 +27,7 @@ struct BackgroundReport: Sendable {
 
 enum BackgroundAnalyzer {
 
-    // MARK: - Thresholds (prototype defaults, one struct, tunable)
+    // MARK: - Thresholds (app-selected defaults, one struct, tunable)
 
     static let uniformitySigmaLimit = 0.045
     static let crownContrastLimit = 0.18

@@ -21,6 +21,7 @@ struct ExportView: View {
     @State private var failure: String?
     @State private var preparedSummary: String?
     @State private var isExporting = false
+    @State private var exportTask: Task<Void, Never>?
     @State private var goToUnlock = false
 
     private var layout: PrintSheetLayout { session.layout }
@@ -73,7 +74,10 @@ struct ExportView: View {
         .navigationDestination(isPresented: $goToUnlock) {
             UnlockView()
         }
-        .onDisappear { cleanStaging() }
+        .onDisappear {
+            exportTask?.cancel()
+            if share == nil { cleanStaging() }
+        }
     }
 
     private var preview: some View {
@@ -242,10 +246,11 @@ struct ExportView: View {
         isExporting = true
         failure = nil
         let layout = self.layout
-        Task {
+        exportTask = Task {
             let data = await Task.detached(priority: .userInitiated) {
                 PrintSheetRenderer.calibrationPDFData(layout: layout)
             }.value
+            guard !Task.isCancelled else { return }
             isExporting = false
             guard let data else {
                 failure = "The calibration sheet could not be rendered. Try another layout."
@@ -265,11 +270,14 @@ struct ExportView: View {
         let layout = self.layout
         let spec = self.spec
 
-        Task {
+        exportTask = Task {
             let data = await Task.detached(priority: .userInitiated) {
                 PrintSheetRenderer.pdfData(photo: photo, layout: layout, spec: spec)
             }.value
-            guard !Task.isCancelled, session.revision == revision else { return }
+            guard !Task.isCancelled, session.revision == revision else {
+                isExporting = false
+                return
+            }
             isExporting = false
             guard let data else {
                 failure = "The print sheet could not be rendered from this crop."
@@ -289,11 +297,14 @@ struct ExportView: View {
         let revision = session.revision
         let spec = self.spec
 
-        Task {
+        exportTask = Task {
             let data = await Task.detached(priority: .userInitiated) {
                 DigitalExport.jpegData(from: photo, spec: spec)
             }.value
-            guard !Task.isCancelled, session.revision == revision else { return }
+            guard !Task.isCancelled, session.revision == revision else {
+                isExporting = false
+                return
+            }
             isExporting = false
             guard let data else {
                 failure = "The digital file could not meet the output requirements. Try a less detailed crop or another original."
