@@ -517,7 +517,7 @@ enum ValidationEngine {
     // MARK: R10 — shadow
 
     private static func shadow(delta: Double?) -> Finding {
-        let rangeText = MeasurementFormat.range(0, shadowDeltaLimit, unit: "")
+        let rangeText = "0.000 – " + String(format: "%.3f", shadowDeltaLimit)
 
         guard let delta else {
             return Finding(
@@ -535,7 +535,7 @@ enum ValidationEngine {
             unit: "",
             lowerBound: 0,
             upperBound: shadowDeltaLimit,
-            displayValue: MeasurementFormat.number(delta),
+            displayValue: String(format: "%.3f", delta),
             displayRange: rangeText
         )
 
@@ -543,8 +543,8 @@ enum ValidationEngine {
             return Finding(
                 id: .shadow,
                 title: "Shadow",
-                status: .fail,
-                detail: "Luminance varies by \(MeasurementFormat.number(delta)) across the face; the app-selected limit is \(MeasurementFormat.number(shadowDeltaLimit)). Turn to face the light so both sides of the face are lit evenly.",
+                status: .cannotVerify,
+                detail: "Brightness differs across the sampled face regions. A beard, eyebrows, eyes or other natural features can produce this signal, so it does not establish a cast shadow. Inspect the original at full size for shadows around the eyes, nose and chin, and confirm all facial features remain clearly visible. Retake if lighting is uneven or a shadow obscures the face. The \(String(format: "%.3f", shadowDeltaLimit)) review cue is an app-selected screening value.",
                 measurement: measurement,
                 provenance: .appDefault
             )
@@ -553,7 +553,7 @@ enum ValidationEngine {
             id: .shadow,
             title: "Shadow",
             status: .pass,
-            detail: "Luminance varies by \(MeasurementFormat.number(delta)) across the face, inside the app-selected limit of \(MeasurementFormat.number(shadowDeltaLimit)).",
+            detail: "Face-region brightness variation is inside the app's screening range. This pixel check cannot establish that lighting is shadow-free; inspect the original for cast shadows and clearly visible facial features.",
             measurement: measurement,
             provenance: .appDefault
         )
@@ -765,7 +765,9 @@ enum ValidationEngine {
     // MARK: - Pixel signals
 
     /// Largest deviation of any 3 × 3 cell of the face box from the box mean.
-    private static func shadowDelta(in sample: SampledImage, faceBox: CGRect) -> Double? {
+    /// This mixes illumination with natural facial reflectance, including
+    /// eyebrows and beards; high variation is a review cue, not proof of shadow.
+    static func shadowDelta(in sample: SampledImage, faceBox: CGRect) -> Double? {
         let box = PixelSampling.clamp(faceBox)
         guard box.width > 0.01, box.height > 0.01 else { return nil }
 

@@ -22,6 +22,7 @@ env:
   PROJECT: PassportProof.xcodeproj
   SCHEME: PassportProof
   APP_NAME: PassportProof
+  XCODE_DEVELOPER_PATH: /Applications/Xcode_26.3.app/Contents/Developer
 
 jobs:
   # Compiles the app for the simulator, then runs the unit tests on a concrete
@@ -37,10 +38,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Report toolchain
+      - name: Select and report Xcode 26.3
         run: |
+          set -euo pipefail
+          if [ ! -x "$XCODE_DEVELOPER_PATH/usr/bin/xcodebuild" ]; then
+            echo "::error::Required Xcode 26.3 is not installed at $XCODE_DEVELOPER_PATH"
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_DEVELOPER_PATH"
+          DEVICE_SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          SIMULATOR_SDK=$(xcrun --sdk iphonesimulator --show-sdk-version)
           echo "### Toolchain" >> "$GITHUB_STEP_SUMMARY"
+          echo "Developer directory: $(xcode-select -p)" | tee -a "$GITHUB_STEP_SUMMARY"
           xcodebuild -version | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Device SDK: $DEVICE_SDK" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Simulator SDK: $SIMULATOR_SDK" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           xcrun simctl list runtimes | tee -a "$GITHUB_STEP_SUMMARY"
@@ -98,34 +110,70 @@ jobs:
             CODE_SIGNING_ALLOWED=YES \
             -quiet
 
-      - name: Resolve an available iPhone simulator
+      - name: Resolve an iPhone simulator matching the selected SDK
         id: sim
         run: |
           set -euo pipefail
-          UDID=$(xcrun simctl list -j devices available | python3 -c '
-          import json, sys
-          data = json.load(sys.stdin)["devices"]
-          # Prefer the newest iOS runtime that has a bootable iPhone.
-          for runtime in sorted(data, reverse=True):
-              if "iOS" not in runtime:
-                  continue
-              for device in data[runtime]:
+          SIMULATOR_SDK=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          python3 - "$SIMULATOR_SDK" <<'PYSIM'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          def version_parts(value):
+              try:
+                  return tuple(int(part) for part in value.split("."))
+              except ValueError:
+                  return ()
+
+          sdk = sys.argv[1]
+          sdk_version = version_parts(sdk)
+          if len(sdk_version) < 2:
+              raise SystemExit(f"Cannot determine major/minor version of simulator SDK: {sdk!r}")
+          runtimes = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "-j", "runtimes"], text=True
+          ))["runtimes"]
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "-j", "devices", "available"], text=True
+          ))["devices"]
+          available_ios = [runtime for runtime in runtimes
+                           if runtime.get("isAvailable")
+                           and runtime["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-")]
+          matching = [runtime for runtime in available_ios
+                      if version_parts(runtime["version"])[:2] == sdk_version[:2]]
+          selected = None
+          for runtime in sorted(matching, key=lambda item: version_parts(item["version"]), reverse=True):
+              for device in devices.get(runtime["identifier"], []):
                   if device.get("isAvailable") and device["name"].startswith("iPhone"):
-                      print(device["udid"])
-                      sys.exit(0)
-          sys.exit(1)
-          ')
-          NAME=$(xcrun simctl list -j devices | python3 -c "
-          import json, sys
-          udid = '$UDID'
-          for devices in json.load(sys.stdin)['devices'].values():
-              for d in devices:
-                  if d['udid'] == udid:
-                      print(d['name'])
-                      sys.exit(0)
-          ")
-          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
-          echo "Resolved simulator: $NAME ($UDID)"
+                      selected = (runtime, device)
+                      break
+              if selected:
+                  break
+          if selected is None:
+              available = ", ".join(runtime["version"] for runtime in available_ios) or "none"
+              raise SystemExit(
+                  f"No available iPhone simulator matches SDK {sdk_version[0]}.{sdk_version[1]}. "
+                  f"Available iOS runtimes: {available}. Refusing an unrelated runtime."
+              )
+
+          runtime, device = selected
+          details = (
+              f"Simulator SDK: {sdk}\n"
+              f"Runtime: {runtime['name']} {runtime['version']} "
+              f"(build {runtime.get('buildversion', 'unknown')}; {runtime['identifier']})\n"
+              f"Device: {device['name']} ({device['udid']})\n"
+          )
+          print(details, end="")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+              output.write(f"udid={device['udid']}\n")
+              output.write(f"runtime={runtime['identifier']}\n")
+              output.write(f"runtime_version={runtime['version']}\n")
+              output.write(f"sdk_version={sdk}\n")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write("\n### Selected simulator\n\n```text\n" + details + "```\n")
+          PYSIM
 
       - name: Prepare clean simulator and photo-library fixture
         timeout-minutes: 6
@@ -315,6 +363,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select and report Xcode 26.3
+        run: |
+          set -euo pipefail
+          if [ ! -x "$XCODE_DEVELOPER_PATH/usr/bin/xcodebuild" ]; then
+            echo "::error::Required Xcode 26.3 is not installed at $XCODE_DEVELOPER_PATH"
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_DEVELOPER_PATH"
+          DEVICE_SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          SIMULATOR_SDK=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          echo "### Toolchain" >> "$GITHUB_STEP_SUMMARY"
+          echo "Developer directory: $(xcode-select -p)" | tee -a "$GITHUB_STEP_SUMMARY"
+          xcodebuild -version | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Device SDK: $DEVICE_SDK" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Simulator SDK: $SIMULATOR_SDK" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Generate Xcode project
         run: python3 Tools/generate_project.py

@@ -42,6 +42,54 @@ final class AssessmentDiagnosticsTests: XCTestCase {
                        "A face rectangle is not a subject mask. Pixels from a wider subject are not proof of background editing.")
     }
 
+    func testSymmetricDarkFeaturesRequireLightingReviewRatherThanRejection() throws {
+        let result = try lightingFinding(hasDarkFeatures: true)
+        XCTAssertGreaterThan(result.delta, ValidationEngine.shadowDeltaLimit,
+                             "Known feature contrast must actually exercise the high-variation branch.")
+        XCTAssertEqual(result.finding.status, .cannotVerify,
+                       "A symmetric reflectance pattern cannot establish a lighting defect from cell variation alone.")
+    }
+
+    func testFlatFaceRegionPassesLightingScreenPositiveControl() throws {
+        let result = try lightingFinding(hasDarkFeatures: false)
+        XCTAssertEqual(result.delta, 0, accuracy: 0.000_001)
+        XCTAssertEqual(result.finding.status, .pass)
+        let unavailable = ValidationEngine.findings(
+            geometry: nil, background: nil, spec: DocumentCorpus.documents[0],
+            imagePixelSize: CGSize(width: 1000, height: 1000), captureDate: nil, shadowDelta: nil
+        )
+        XCTAssertEqual(unavailable.first { $0.id == .shadow }?.status, .cannotVerify)
+    }
+
+    /// Controlled reflectance pixels isolate the production lighting metric.
+    /// No face detection or whole-photo approval is claimed for this pattern.
+    private func lightingFinding(hasDarkFeatures: Bool) throws -> (delta: Double, finding: Finding) {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 240, height: 240, bitsPerComponent: 8, bytesPerRow: 0,
+            space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(red: 0.72, green: 0.64, blue: 0.58, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 240, height: 240))
+        if hasDarkFeatures {
+            context.setFillColor(red: 0.08, green: 0.08, blue: 0.08, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: 240, height: 80))
+        }
+        let image = try XCTUnwrap(context.makeImage())
+        let sample = try XCTUnwrap(SampledImage(image: image))
+        let left = try XCTUnwrap(sample.meanLuminance(inNormalizedRect: CGRect(x: 0, y: 0, width: 0.5, height: 1)))
+        let right = try XCTUnwrap(sample.meanLuminance(inNormalizedRect: CGRect(x: 0.5, y: 0, width: 0.5, height: 1)))
+        XCTAssertEqual(left, right, accuracy: 0.000_001, "The known pattern must have symmetric side-to-side brightness.")
+        let delta = try XCTUnwrap(ValidationEngine.shadowDelta(in: sample, faceBox: CGRect(x: 0, y: 0, width: 1, height: 1)))
+        let findings = ValidationEngine.findings(
+            geometry: nil, background: nil, spec: DocumentCorpus.documents[0],
+            imagePixelSize: CGSize(width: image.width, height: image.height), captureDate: nil, shadowDelta: delta
+        )
+        let finding = try XCTUnwrap(findings.first { $0.id == .shadow })
+        print("ASSESSMENT lighting darkFeatures=\(hasDarkFeatures) variation=\(delta) threshold=\(ValidationEngine.shadowDeltaLimit) left=\(left) right=\(right) status=\(finding.status.rawValue)")
+        return (delta, finding)
+    }
+
     private func backgroundFinding(
         name: String,
         red: CGFloat,
