@@ -71,8 +71,9 @@ struct FaceOverlayView: View {
 
     @ViewBuilder
     private func headBand(in size: CGSize) -> some View {
-        if let geometry {
-            let top = CGFloat(geometry.crownEnvelopeY) * size.height
+        if let geometry, spec.headMeasurement == .skull || geometry.hasCrownSilhouette {
+            let crown = spec.headMeasurement == .skull ? geometry.crownInferredY : geometry.crownEnvelopeY
+            let top = CGFloat(crown) * size.height
             let bottom = CGFloat(geometry.chinY) * size.height
             let height = max(0, bottom - top)
 
@@ -92,15 +93,18 @@ struct FaceOverlayView: View {
     @ViewBuilder
     private func crownLines(in size: CGSize) -> some View {
         if let geometry {
-            let envelope = CGFloat(geometry.crownEnvelopeY) * size.height
-            let inferred = CGFloat(geometry.crownInferredY) * size.height
-
-            ZStack(alignment: .topLeading) {
-                horizontalLine(y: envelope, width: size.width, color: Theme.captureInk, dash: [])
-                horizontalLine(y: inferred, width: size.width, color: Theme.signalVerify, dash: [3, 2])
-
-                label("CROWN", x: 0, y: envelope - 18, color: Theme.captureInk)
-                label("CROWN · INFERRED", x: 0, y: inferred - 18, color: Theme.signalVerify)
+            if spec.headMeasurement == .skull {
+                let y = CGFloat(geometry.crownInferredY) * size.height
+                ZStack(alignment: .topLeading) {
+                    horizontalLine(y: y, width: size.width, color: Theme.signalVerify, dash: [3, 2])
+                    label("SKULL · ESTIMATE", x: 0, y: max(0, y - 20), color: Theme.signalVerify)
+                }
+            } else if geometry.hasCrownSilhouette {
+                let y = CGFloat(geometry.crownEnvelopeY) * size.height
+                ZStack(alignment: .topLeading) {
+                    horizontalLine(y: y, width: size.width, color: Theme.captureInk, dash: [])
+                    label("HEAD · INCLUDING HAIR", x: 0, y: max(0, y - 20), color: Theme.captureInk)
+                }
             }
         }
     }

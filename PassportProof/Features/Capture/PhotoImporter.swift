@@ -8,11 +8,9 @@
 //
 //  The decode goes through ImageIO rather than `UIImage(data:)` for two
 //  reasons. First, the EXIF `DateTimeOriginal` travels with the file, and the
-//  photo-age rule (R7) needs it: without it the rule can only ever say
-//  "cannot verify" for an imported photo. Second, a 48-megapixel library photo
-//  decoded at full size allocates roughly 200 MB of bitmap for a measurement
-//  that never needs more than 4096 px on the long side; the guard downsamples
-//  only oversized sources and leaves every ordinary photo untouched.
+//  photo-age rule uses it when available. Second, the working original is
+//  bounded to 4096 pixels so retaining it for crop edits does not retain an
+//  unbounded camera bitmap. EXIF orientation is baked into the working pixels.
 //
 
 import SwiftUI
@@ -20,49 +18,60 @@ import PhotosUI
 import ImageIO
 import UIKit
 
+@MainActor
 struct PhotoImporter: View {
 
     let title: String
     var isEnabled: Bool = true
     let onImage: (UIImage, Date?) -> Void
 
-    /// Sources larger than this on the long side are downsampled on decode.
-    /// The resolution rule's floor is 1200 px on the short side, so this cap
-    /// never turns a compliant photo into a failing one.
+    /// Sources larger than this are downsampled before entering the session.
+    /// Crop resolution is still assessed against the selected workflow.
     nonisolated static let maximumDecodedDimension: CGFloat = 4096
 
     @State private var item: PhotosPickerItem?
     @State private var isLoading = false
     @State private var didFail = false
+    @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
 
             PhotosPicker(selection: $item, matching: .images) {
-                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                        Typography.button.text(title)
+                HStack(spacing: Theme.Spacing.m) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.title2)
+                        .foregroundStyle(isEnabled ? Theme.accent : Theme.inkTertiary)
+                        .frame(width: 48, height: 48)
+                        .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: 14))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title).font(.headline)
                             .foregroundStyle(isEnabled ? Theme.ink : Theme.inkTertiary)
-
-                        Text(isLoading ? "Reading the file…" : "Photos on this device. Nothing is uploaded.")
-                            .typeStyle(Typography.meta)
-                            .foregroundStyle(Theme.inkTertiary)
+                        Text(isLoading ? "Opening your original…" : "Choose an original from your photo library")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: Theme.Spacing.m)
 
-                    Typography.unit.text("photo")
-                        .foregroundStyle(Theme.inkTertiary)
+                    if isLoading {
+                        ProgressView().accessibilityLabel("Loading photo")
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.inkTertiary)
+                    }
                 }
                 .frame(minHeight: Theme.Metrics.tapTarget, alignment: .leading)
                 .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .disabled(!isEnabled || isLoading)
             .accessibilityIdentifier("capture.library")
 
             if didFail {
-                Text("That file could not be read as an image. Try another photo.")
-                    .typeStyle(Typography.meta)
+                Text("This photo could not be opened. If it is in iCloud, download it in Photos and try again, or choose another original.")
+                    .font(.footnote)
                     .foregroundStyle(Theme.signalFail)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -70,16 +79,22 @@ struct PhotoImporter: View {
         .onChange(of: item) { _, newItem in
             load(newItem)
         }
+        .onDisappear {
+            loadTask?.cancel()
+            isLoading = false
+            item = nil
+        }
     }
 
     private func load(_ newItem: PhotosPickerItem?) {
         guard let newItem else { return }
-
+        loadTask?.cancel()
         isLoading = true
         didFail = false
 
-        Task {
+        loadTask = Task {
             let data = try? await newItem.loadTransferable(type: Data.self)
+            guard !Task.isCancelled else { return }
 
             // The decode is CPU-bound — for an oversized source it is the
             // expensive step — so it runs off the main actor and only the
@@ -88,15 +103,13 @@ struct PhotoImporter: View {
                 data.flatMap { Self.decodeImage(from: $0) }
             }.value
 
-            await MainActor.run {
-                isLoading = false
-                item = nil
-
-                if let decoded {
-                    onImage(decoded.image, decoded.captureDate)
-                } else {
-                    didFail = true
-                }
+            guard !Task.isCancelled else { return }
+            isLoading = false
+            item = nil
+            if let decoded {
+                onImage(decoded.image, decoded.captureDate)
+            } else {
+                didFail = true
             }
         }
     }
@@ -120,40 +133,11 @@ struct PhotoImporter: View {
         let height = rawProperties?.getInteger(kCGImagePropertyPixelHeight) ?? 0
         let longSide = CGFloat(max(width, height))
 
-        if longSide > maximumDecodedDimension {
-            // The thumbnail API bakes the EXIF rotation into the pixels, so the
-            // result is carried at `.up`.
-            guard let cgImage = downsampledImage(from: source, maxDimension: maximumDecodedDimension) else {
-                return nil
-            }
-            return (UIImage(cgImage: cgImage), captureDate)
-        }
-
-        guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        let decodeLimit = longSide > 0 ? min(longSide, maximumDecodedDimension) : maximumDecodedDimension
+        guard let cgImage = downsampledImage(from: source, maxDimension: decodeLimit) else {
             return nil
         }
-
-        // `CGImageSourceCreateImageAtIndex` returns raw pixels: the EXIF
-        // rotation stays metadata. Carry it on the UIImage the way
-        // `UIImage(data:)` would, so `ImageBridge` sees the same orientation
-        // contract it was written against.
-        let exifOrientation = rawProperties?.getInteger(kCGImagePropertyOrientation) ?? 1
-        return (UIImage(cgImage: cgImage, scale: 1, orientation: Self.uiOrientation(fromExif: exifOrientation)), captureDate)
-    }
-
-    /// EXIF orientation 1–8 → `UIImage.Orientation`. The cases share names and
-    /// indices one to one; anything outside 1–8 reads as upright.
-    nonisolated private static func uiOrientation(fromExif value: Int) -> UIImage.Orientation {
-        switch value {
-        case 2: return .upMirrored
-        case 3: return .down
-        case 4: return .downMirrored
-        case 5: return .leftMirrored
-        case 6: return .right
-        case 7: return .rightMirrored
-        case 8: return .left
-        default: return .up
-        }
+        return (UIImage(cgImage: cgImage), captureDate)
     }
 
     /// Reads the image at a bounded pixel size. `CreateThumbnailWithTransform`
@@ -181,8 +165,7 @@ struct PhotoImporter: View {
 // MARK: - Property helpers
 
 private extension Dictionary where Key == CFString, Value == Any {
-    /// `CFNumber` pixel dimensions arrive as NSNumber; fail closed to 0, which
-    /// routes the decode through the unbounded path only when metadata is absent.
+    /// Missing dimensions use the bounded thumbnail path as well.
     func getInteger(_ key: CFString) -> Int {
         (self[key] as? NSNumber)?.intValue ?? 0
     }

@@ -13,26 +13,39 @@ struct PrivacyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                    HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                        StudioMark()
+                        StudioEyebrow(title: "Your photo, your device")
+                    }
                     Text("Private by design")
-                        .font(.largeTitle.weight(.bold))
+                        .font(.system(.largeTitle, design: .serif))
+                        .tracking(-0.7)
                         .foregroundStyle(Theme.ink)
-                    Text("PassportProof is built so your photograph and personal activity do not become a data product.")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("A document photo is personal. We built PassportProof to keep it that way.")
                         .font(.body)
                         .foregroundStyle(Theme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                        Label("Photo analysis stays on your device", systemImage: "iphone")
+                        Label("No account or tracking", systemImage: "person.crop.circle.badge.checkmark")
+                        Label("You decide when to share", systemImage: "square.and.arrow.up")
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.ink)
+                    .padding(Theme.Spacing.l)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
                 }
 
                 PrivacySection(
                     title: "Photos",
                     icon: "photo",
                     rows: [
-                        "Analysis runs on your device. No photograph is uploaded to PassportProof or a third-party analytics service.",
-                        "Your selected crop is held in memory for the current session. It is not saved to Photos, a database or an app cache.",
-                        "An exported file is written to temporary protected storage only for the system share sheet and is deleted when sharing finishes or the export screen closes."
+                        "Photo checks run on your device. We never upload your photograph for analysis.",
+                        "Your selected photo and crop are kept only for the current session. The app does not add them to your photo library or keep a photo archive.",
+                        "A temporary export file is removed after sharing finishes or you leave the export screen. Copies you choose to save or send remain wherever you put them."
                     ]
                 )
 
@@ -52,7 +65,7 @@ struct PrivacyView: View {
                     rows: [
                         "No account, advertising identifier, analytics SDK, crash-reporting service, remote configuration or tracking.",
                         "No photo metadata is transmitted. Capture date and visual confirmations remain session-only inputs to the checks.",
-                        "The bundled privacy manifest declares no collected data and no tracking."
+                        "We do not build a profile of you or monitor how you use the app."
                     ]
                 )
 
@@ -80,6 +93,9 @@ struct PrivacyView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") { dismiss() }
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(minHeight: Theme.Metrics.tapTarget)
             }
         }
     }
@@ -93,14 +109,15 @@ private struct PrivacySection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Label(title, systemImage: icon)
-                .font(.title3.weight(.bold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(Theme.ink)
             ForEach(rows, id: \.self) { row in
                 HStack(alignment: .top, spacing: Theme.Spacing.s) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(Theme.accent)
-                        .padding(.top, 3)
+                    Circle()
+                        .fill(Theme.sageStrong)
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 7)
+                        .accessibilityHidden(true)
                     Text(row)
                         .typeStyle(Typography.bodySmall)
                         .foregroundStyle(Theme.inkSecondary)
@@ -109,6 +126,8 @@ private struct PrivacySection: View {
             }
         }
         .padding(Theme.Spacing.l)
-        .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: 18))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).stroke(Theme.rule, lineWidth: 0.7))
     }
 }

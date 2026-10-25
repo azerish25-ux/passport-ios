@@ -40,8 +40,9 @@ enum PhotoCrop {
     /// Pure placement calculation shared by the camera/import suggestion and
     /// regression tests. The final crop is still independently measured.
     static func automaticTransform(imageSize: CGSize, geometry: FaceGeometry, spec: DocumentSpec) -> CropTransform {
+        let suggestedHeadHeight = geometry.suggestedHeadHeight(for: spec.headMeasurement)
         guard imageSize.width > 0, imageSize.height > 0,
-              geometry.headHeight.isFinite, geometry.headHeight > 0,
+              suggestedHeadHeight.isFinite, suggestedHeadHeight > 0,
               geometry.eyeY.isFinite, geometry.faceCenterX.isFinite else { return .identity }
         let targetFraction = (spec.headHeightMM.lowerBound + spec.headHeightMM.upperBound) / 2 / spec.heightMM
         let baseHeight = cropRect(
@@ -50,7 +51,7 @@ enum PhotoCrop {
             transform: .identity,
             integral: false
         ).height
-        let desiredHeight = imageSize.height * CGFloat(geometry.headHeight) / CGFloat(targetFraction)
+        let desiredHeight = imageSize.height * CGFloat(suggestedHeadHeight) / CGFloat(targetFraction)
         let proposedZoom = baseHeight / max(desiredHeight, 1)
         let zoom = proposedZoom.clamped(to: zoomRange)
         let actualHeight = baseHeight / zoom

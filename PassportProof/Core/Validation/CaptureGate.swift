@@ -75,7 +75,7 @@ enum CaptureGate {
             )
         }
 
-        let headFraction = geometry.headHeight
+        let headFraction = geometry.suggestedHeadHeight(for: spec.headMeasurement)
         guard headFraction > 0.0001 else {
             return CaptureGateResult(
                 canCapture: false,

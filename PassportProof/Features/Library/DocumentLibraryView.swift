@@ -2,7 +2,7 @@
 //  DocumentLibraryView.swift
 //  PassportProof
 //
-//  A focused production catalogue: only complete workflows, no placeholders.
+//  A focused catalogue with clear output choices and a useful first action.
 //
 
 import SwiftUI
@@ -13,226 +13,216 @@ struct DocumentLibraryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                hero
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                introduction
                 catalogue
                 process
                 privacyCard
                 footer
             }
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.xl)
+            .padding(.bottom, Theme.Spacing.xxl)
         }
         .background(Theme.paper)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            brandHeader
-                .padding(.bottom, Theme.Spacing.s)
-                .background(Theme.paper)
-                .overlay(alignment: .bottom) { Theme.Rule() }
-        }
+        .safeAreaInset(edge: .top, spacing: 0) { brandHeader }
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showPrivacy) {
-            NavigationStack { PrivacyView() }
-        }
+        .sheet(isPresented: $showPrivacy) { NavigationStack { PrivacyView() } }
     }
 
     private var brandHeader: some View {
         HStack(spacing: Theme.Spacing.m) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.title2)
-                .foregroundStyle(Theme.onInk)
-                .frame(width: 42, height: 42)
-                .background(Theme.ink, in: RoundedRectangle(cornerRadius: 12))
-            VStack(alignment: .leading, spacing: 1) {
+            StudioMark()
+            VStack(alignment: .leading, spacing: 2) {
                 Text("PassportProof")
-                    .font(.headline.weight(.bold))
+                    .font(.headline.weight(.semibold))
+                    .tracking(-0.4)
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Text("PRIVATE PHOTO STUDIO")
-                        .font(.caption2.weight(.semibold))
-                        .tracking(1.1)
+                    Text("THE PRIVATE PHOTO STUDIO")
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(1.3)
                         .foregroundStyle(Theme.inkSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
                 }
             }
-            Spacer()
-            Button {
-                showPrivacy = true
-            } label: {
-                Image(systemName: "lock.shield")
-                    .font(.title3)
+            Spacer(minLength: 4)
+            Button { showPrivacy = true } label: {
+                Image(systemName: "lock")
+                    .font(.body.weight(.medium))
                     .foregroundStyle(Theme.ink)
                     .frame(width: 44, height: 44)
+                    .background(Theme.paperRaised, in: Circle())
+                    .overlay(Circle().stroke(Theme.rule, lineWidth: 0.7))
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Privacy and data use")
             .accessibilityIdentifier("library.privacy")
         }
         .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.m)
+        .background(Theme.paper)
+        .overlay(alignment: .bottom) { Theme.Rule() }
     }
 
-    private var hero: some View {
+    private var introduction: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            HStack {
-                Label("ON-DEVICE", systemImage: "checkmark.shield.fill")
-                    .font(.caption2.weight(.bold))
-                    .tracking(1)
-                    .foregroundStyle(Theme.onAccent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(Theme.accent, in: Capsule())
-                Spacer()
-                Image(systemName: "viewfinder")
-                    .font(.largeTitle)
-                    .foregroundStyle(Theme.heroInk.opacity(0.16))
-                    .accessibilityHidden(true)
+            HStack(alignment: .center, spacing: Theme.Spacing.xs) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                    StudioEyebrow(title: "Made for your next step")
+                    Text("Prepare your\npassport photo.")
+                        .font(.system(.largeTitle, design: .serif))
+                        .tracking(-1)
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    StudioPortraitArt()
+                        .frame(width: 126, height: 174)
+                }
             }
 
-            Text("A better photo,\nbefore you submit.")
-                .font(.largeTitle.weight(.bold))
-                .tracking(-0.8)
-                .foregroundStyle(Theme.heroInk)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Guided capture, transparent checks and precisely formatted exports for supported US document workflows.")
-                .font(.body)
-                .foregroundStyle(Theme.heroMuted)
+            Text("A little guidance. Clear photo checks.\nThe right file for your application.")
+                .font(.subheadline)
+                .lineSpacing(3)
+                .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             NavigationLink(value: AppRoute.capture(documentID: "us-passport")) {
-                HStack {
-                    Text("Start a photo")
-                    Image(systemName: "arrow.right")
+                HStack(spacing: Theme.Spacing.s) {
+                    Text("Start US passport photo")
+                    Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold))
                 }
-                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(AccentButtonStyle())
+            .buttonStyle(PrimaryButtonStyle())
             .accessibilityIdentifier("library.start")
 
-            Text("US Passport starts first. Choose another workflow below.")
-                .font(.caption)
-                .foregroundStyle(Theme.heroMuted)
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "checkmark.circle")
+                    .foregroundStyle(Theme.accent)
+                Text("Check your photo free. Pay only to export.")
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.caption)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(Theme.Spacing.xl)
-        .background(
-            LinearGradient(
-                colors: [Theme.heroTop, Theme.heroBottom],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
-        )
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.l)
     }
 
     private var catalogue: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    Text("Choose your document")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(Theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("\(DocumentCorpus.documents.count) workflows")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.inkSecondary)
-                }
-            } else {
-                HStack {
-                    Text("Choose your document")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(Theme.ink)
-                    Spacer()
-                    Text("\(DocumentCorpus.documents.count) workflows")
-                        .font(.caption.weight(.semibold))
+            HStack(alignment: .firstTextBaseline) {
+                Text("Choose your document")
+                    .font(.title3.weight(.semibold))
+                    .tracking(-0.4)
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Text("US · 3 options")
+                        .font(.caption)
                         .foregroundStyle(Theme.inkSecondary)
                 }
             }
-
-            VStack(spacing: Theme.Spacing.m) {
+            VStack(spacing: Theme.Spacing.s) {
                 ForEach(DocumentCorpus.documents) { spec in
                     NavigationLink(value: AppRoute.documentDetail(documentID: spec.id)) {
                         DocumentCard(spec: spec)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StudioDocumentButtonStyle())
                     .accessibilityIdentifier("library.document.\(spec.id)")
                 }
             }
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xxl)
     }
 
     private var process: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text("From camera to confident file")
-                .font(.title3.weight(.bold))
-                .foregroundStyle(Theme.ink)
-
-            ProcessStep(number: "01", title: "Frame it", detail: "Use live camera guidance or choose an original photo, then review one precise crop.")
-            ProcessStep(number: "02", title: "Check it", detail: "See measured results and confirm the visual requirements software cannot prove.")
-            ProcessStep(number: "03", title: "Export it", detail: "Create a print sheet or digital file from the exact photo you reviewed.")
+        StudioCard {
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                StudioEyebrow(title: "A simple process")
+                StudioStepProgress(current: 1)
+                Text("See what needs attention before you save.")
+                    .font(.system(.title3, design: .serif))
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("We check framing and image quality, explain the results, and ask you to confirm what software cannot see.")
+                    .typeStyle(Typography.bodySmall)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Theme.Rule()
+                NavigationLink(value: AppRoute.unlock) {
+                    HStack {
+                        Text("What’s included in export")
+                            .font(.subheadline.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Image(systemName: "arrow.right").font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.accent)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("library.unlock")
+            }
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xxl)
     }
 
     private var privacyCard: some View {
-        Button {
-            showPrivacy = true
-        } label: {
+        Button { showPrivacy = true } label: {
             HStack(alignment: .top, spacing: Theme.Spacing.m) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.title2)
+                Image(systemName: "lock.shield")
+                    .font(.title3)
                     .foregroundStyle(Theme.accent)
+                    .padding(.top, 2)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text("Your photo stays yours")
-                        .font(.headline)
+                    Text("A private moment. Kept private.")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.ink)
-                    Text("No account, analytics or upload. Photos are held in memory; share staging is deleted after use.")
-                        .typeStyle(Typography.bodySmall)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Your photo stays on your device.\nNo account. No tracking. No upload.")
+                        .font(.caption)
+                        .lineSpacing(2)
                         .foregroundStyle(Theme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Read our privacy approach")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                        .padding(.top, Theme.Spacing.xs)
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(Theme.inkTertiary)
+                Spacer(minLength: 2)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.top, 4)
             }
             .padding(Theme.Spacing.l)
-            .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xxl)
     }
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            NavigationLink(value: AppRoute.unlock) {
-                Label("View one-time export unlock", systemImage: "sparkles")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("library.unlock")
-
-            Text("Informational diagnosis only. PassportProof is independent and not affiliated with any government. The issuing authority always makes the final decision.")
-                .typeStyle(Typography.meta)
+            Text("Independent photo guidance. The issuing authority makes the final decision.")
+                .font(.caption)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Rules verified \(Format.day(DocumentCorpus.documents[0].verifiedOn)) · Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
-                .font(.caption)
-                .foregroundStyle(Theme.inkTertiary)
+            if let verified = DocumentCorpus.documents.first?.verifiedOn {
+                Text("Requirements checked \(Format.day(verified))")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.inkTertiary)
+            }
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
-        .padding(.bottom, Theme.Spacing.xxxl)
+    }
+}
+
+private struct StudioDocumentButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .animation(reduceMotion ? nil : Theme.Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -240,105 +230,52 @@ private struct DocumentCard: View {
     let spec: DocumentSpec
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    private var detail: String {
+        if spec.supportsPrintSheet { return "Print at home or a photo shop" }
+        return spec.id == "us-visa" ? "For a US visa photo upload" : "For a Diversity Visa entry"
+    }
+
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                    HStack(spacing: Theme.Spacing.s) {
-                        countryTile
-                        workflowBadge
-                        Spacer()
-                        chevron
-                    }
+        HStack(alignment: .center, spacing: Theme.Spacing.m) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                StudioPortraitArt(style: spec.supportsPrintSheet ? .printSheet : .digital, compact: true)
+                    .frame(width: 62, height: 68)
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
                     Text(spec.documentName)
-                        .font(.title3.weight(.bold))
+                        .font(.headline)
                         .foregroundStyle(Theme.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    summary
-                }
-            } else {
-                HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                    countryTile
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        HStack(spacing: Theme.Spacing.s) {
-                            Text(spec.documentName)
-                                .font(.headline)
-                                .foregroundStyle(Theme.ink)
-                            workflowBadge
-                        }
-                        summary
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Spacer(minLength: 0)
+                        Text(spec.supportsPrintSheet ? "PRINT" : "DIGITAL")
+                            .font(.system(size: 8, weight: .bold))
+                            .tracking(0.7)
+                            .foregroundStyle(Theme.inkSecondary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 5)
+                            .background(Theme.paperSunk, in: Capsule())
                     }
-                    Spacer(minLength: Theme.Spacing.s)
-                    chevron
                 }
-            }
-        }
-        .padding(Theme.Spacing.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.paperRaised)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Theme.rule, lineWidth: 0.5)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    private var countryTile: some View {
-        Text(spec.countryCode)
-            .font(.system(.headline, design: .monospaced, weight: .bold))
-            .foregroundStyle(Theme.ink)
-            .frame(width: 52, height: 52)
-            .background(Theme.paperSunk, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    private var workflowBadge: some View {
-        Text(spec.workflow.shortTitle)
-            .font(.caption2.weight(.bold))
-            .tracking(0.5)
-            .foregroundStyle(Theme.accent)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
-            .background(Theme.accent.opacity(0.1), in: Capsule())
-    }
-
-    private var summary: some View {
-        Text(spec.supportsPrintSheet
-             ? "2 × 2 in print sheet · 300 DPI"
-             : "\(spec.widthPixels) × \(spec.heightPixels) JPEG · up to \(spec.maximumFileSizeBytes.map { $0 / 1_000 } ?? 0) kB")
-            .typeStyle(Typography.meta)
-            .foregroundStyle(Theme.inkSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var chevron: some View {
-        Image(systemName: "chevron.right")
-            .font(.caption.weight(.bold))
-            .foregroundStyle(Theme.inkTertiary)
-    }
-}
-
-private struct ProcessStep: View {
-    let number: String
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.m) {
-            Text(number)
-                .font(.system(.caption, design: .monospaced, weight: .bold))
-                .foregroundStyle(Theme.accent)
-                .frame(width: 32, height: 32)
-                .background(Theme.accent.opacity(0.1), in: Circle())
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.ink)
                 Text(detail)
-                    .typeStyle(Typography.bodySmall)
+                    .font(.caption)
                     .foregroundStyle(Theme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Text(spec.supportsPrintSheet ? "2 × 2 in · 300 DPI" : "600 × 600 px · JPEG")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(Theme.accent)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Theme.inkTertiary)
+                .padding(.leading, 2)
         }
+        .padding(Theme.Spacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.rule, lineWidth: 0.7))
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }

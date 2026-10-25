@@ -9,6 +9,7 @@
 import SwiftUI
 
 @main
+@MainActor
 struct PassportProofApp: App {
     @StateObject private var entitlements = EntitlementStore()
     @StateObject private var session = PhotoSession()
@@ -17,6 +18,11 @@ struct PassportProofApp: App {
 
     private var isLargeTextUITest: Bool {
         ProcessInfo.processInfo.arguments.contains("-UITestLargeText")
+    }
+
+    init() {
+        // Remove leftovers from a prior process; current active shares are kept.
+        _ = ExportStaging.cleanupAbandonedFiles()
     }
 
     var body: some Scene {
@@ -42,7 +48,16 @@ struct PassportProofApp: App {
             RootView().dynamicTypeSize(.accessibility3)
         } else {
             RootView()
+                .preferredColorScheme(isDarkUITest ? .dark : nil)
         }
+    }
+
+    private var isDarkUITest: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-UITestDarkMode")
+        #else
+        return false
+        #endif
     }
 }
 

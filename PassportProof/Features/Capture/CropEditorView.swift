@@ -1,249 +1,257 @@
-//
-//  CropEditorView.swift
-//  PassportProof
-//
-//  A user-reviewed, aspect-locked crop. No pixels are retouched or synthesized.
-//
-
 import SwiftUI
 import UIKit
 
+/// A reversible framing workspace. The session changes only after acceptance.
 @MainActor
 struct CropEditorView: View {
     let sourceImage: UIImage
     let spec: DocumentSpec
-    let onComplete: (UIImage) -> Void
+    let onAccept: (PreparedPhotoCrop) -> Void
     let onCancel: () -> Void
 
-    private let sourceCGImage: CGImage?
-    private let startsAutomatically: Bool
+    private let originalCGImage: CGImage?
+    private let initialTransform: CropTransform?
+    private let initialRotationQuarterTurns: Int
 
+    @State private var workingImage: UIImage?
+    @State private var workingCGImage: CGImage?
     @State private var transform: CropTransform
+    @State private var rotationQuarterTurns: Int
     @State private var dragStart: CGPoint?
     @State private var magnificationStart: CGFloat?
-    @State private var hasInteracted = false
-    @State private var isPreparing: Bool
+    @State private var showGuides = true
+    @State private var hasPrepared = false
+    @State private var isPreparing = true
     @State private var isCompleting = false
+    @State private var preparationID = UUID()
+    @State private var preparationTask: Task<Void, Never>?
     @State private var completionTask: Task<Void, Never>?
     @State private var failure: String?
 
-    init(
-        sourceImage: UIImage,
-        spec: DocumentSpec,
-        initialTransform: CropTransform? = nil,
-        onComplete: @escaping (UIImage) -> Void,
-        onCancel: @escaping () -> Void
-    ) {
+    init(sourceImage: UIImage, spec: DocumentSpec, initialTransform: CropTransform? = nil,
+         initialRotationQuarterTurns: Int = 0, onAccept: @escaping (PreparedPhotoCrop) -> Void,
+         onCancel: @escaping () -> Void) {
         self.sourceImage = sourceImage
         self.spec = spec
-        self.onComplete = onComplete
+        self.initialTransform = initialTransform
+        self.initialRotationQuarterTurns = initialRotationQuarterTurns
+        self.onAccept = onAccept
         self.onCancel = onCancel
-        self.sourceCGImage = ImageBridge.cgImage(from: sourceImage)
-        self.startsAutomatically = initialTransform == nil
+        self.originalCGImage = ImageBridge.cgImage(from: sourceImage)
         _transform = State(initialValue: initialTransform ?? .identity)
-        _isPreparing = State(initialValue: initialTransform == nil)
+        _rotationQuarterTurns = State(initialValue: initialRotationQuarterTurns)
+    }
+
+    init(context: PhotoEditContext, spec: DocumentSpec, onAccept: @escaping (PreparedPhotoCrop) -> Void,
+         onCancel: @escaping () -> Void) {
+        self.init(sourceImage: context.originalImage, spec: spec, initialTransform: context.transform,
+                  initialRotationQuarterTurns: context.rotationQuarterTurns, onAccept: onAccept, onCancel: onCancel)
+    }
+
+    /// Kept for existing callers that need only the prepared pixels.
+    init(sourceImage: UIImage, spec: DocumentSpec, initialTransform: CropTransform? = nil,
+         onComplete: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
+        self.init(sourceImage: sourceImage, spec: spec, initialTransform: initialTransform,
+                  onAccept: { onComplete($0.image) }, onCancel: onCancel)
     }
 
     private var sourceSize: CGSize {
-        CGSize(width: sourceCGImage?.width ?? 1, height: sourceCGImage?.height ?? 1)
+        CGSize(width: workingCGImage?.width ?? 1, height: workingCGImage?.height ?? 1)
     }
 
+    private var cropPixels: CGSize {
+        guard workingCGImage != nil else { return .zero }
+        let rect = PhotoCrop.cropRect(imageSize: sourceSize, spec: spec, transform: transform)
+        let scale = min(1, PhotoCrop.maximumPreparedDimension / max(rect.width, rect.height))
+        return CGSize(width: (rect.width * scale).rounded(), height: (rect.height * scale).rounded())
+    }
+
+    private var sufficientPixels: Bool {
+        cropPixels.width >= CGFloat(spec.widthPixels) && cropPixels.height >= CGFloat(spec.heightPixels)
+    }
+    private var isBusy: Bool { isPreparing || isCompleting }
+
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            GeometryReader { proxy in
-                let cropSize = cropSize(in: proxy.size)
-                let displaySize = displayedImageSize(in: cropSize)
-                let offset = CGSize(
-                    width: (0.5 - transform.center.x) * displaySize.width,
-                    height: (0.5 - transform.center.y) * displaySize.height
-                )
-
-                ZStack {
-                    Theme.ink
-                    Image(uiImage: sourceImage)
-                        .resizable()
-                        .frame(width: displaySize.width, height: displaySize.height)
-                        .offset(offset)
-                        .frame(width: cropSize.width, height: cropSize.height)
-                        .clipped()
-                        .overlay { cropGrid }
-                        .overlay {
-                            Rectangle()
-                                .stroke(Theme.paperRaised.opacity(0.85), lineWidth: 1)
-                        }
-                        .gesture(dragGesture(in: displaySize))
-                        .gesture(magnificationGesture(in: cropSize))
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Crop preview for \(spec.displayName)")
-                        .accessibilityHint("Drag to reposition or pinch to zoom. Accessible crop actions are also available.")
-                        .accessibilityAction(named: "Move crop left") { self.nudge(x: -0.02, y: 0) }
-                        .accessibilityAction(named: "Move crop right") { self.nudge(x: 0.02, y: 0) }
-                        .accessibilityAction(named: "Move crop up") { self.nudge(x: 0, y: -0.02) }
-                        .accessibilityAction(named: "Move crop down") { self.nudge(x: 0, y: 0.02) }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                    StudioStepProgress(current: 1)
+                    VStack(alignment: .leading, spacing: 6) {
+                        StudioEyebrow(title: "\(spec.documentName) · \(spec.workflow.title)")
+                        Text("Make room for your face.")
+                            .font(.title2.weight(.bold)).foregroundStyle(Theme.ink)
+                        Text("Move or zoom the photo. Keep the whole head in view.")
+                            .font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    preview
+                    adjustmentControls
+                    if let failure {
+                        NoticeCard(icon: "exclamationmark.triangle", title: "Could not prepare this crop",
+                                   message: failure, tint: Theme.signalFail)
+                    }
+                    Label("Your original stays available in this session. Cancel keeps your previous crop.",
+                          systemImage: "arrow.uturn.backward")
+                        .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(Theme.Spacing.margin)
+                .frame(maxWidth: 640).frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, Theme.Spacing.m)
-            .padding(.vertical, Theme.Spacing.m)
-
-            controls
+            .background(Theme.paper)
+            .navigationTitle("Frame your photo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel", action: onCancel)
+                        .disabled(isCompleting).accessibilityIdentifier("crop.cancel")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showGuides.toggle() } label: {
+                        Image(systemName: showGuides ? "square.grid.3x3.fill" : "square.grid.3x3")
+                    }
+                    .accessibilityLabel(showGuides ? "Hide framing guides" : "Show framing guides")
+                    .accessibilityIdentifier("crop.guides")
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                PrimaryButton(title: isCompleting ? "Preparing photo…" : "Check this photo",
+                              isEnabled: !isBusy && workingCGImage != nil) { complete() }
+                    .accessibilityIdentifier("crop.confirm")
+                    .padding(.horizontal, Theme.Spacing.margin).padding(.vertical, Theme.Spacing.m)
+                    .background(Theme.paperRaised)
+                    .overlay(alignment: .top) { Theme.Rule() }
+            }
         }
-        .background(Theme.paper)
         .interactiveDismissDisabled(isCompleting)
         .task {
-            await prepareAutomaticCrop()
+            guard !hasPrepared else { return }
+            hasPrepared = true
+            prepareSource(rotation: initialRotationQuarterTurns, fixedTransform: initialTransform,
+                          automatic: initialTransform == nil)
         }
         .onDisappear {
+            preparationTask?.cancel()
             completionTask?.cancel()
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: Theme.Spacing.m) {
-            Button(action: onCancel) {
-                Label("Cancel", systemImage: "xmark")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.ink)
-            .disabled(isCompleting)
-
-            Spacer()
-
-            VStack(spacing: Theme.Spacing.xxs) {
-                Text("Frame your photo")
-                    .font(.headline)
-                    .foregroundStyle(Theme.ink)
-                Text(spec.workflow.title)
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkSecondary)
-            }
-
-            Spacer()
-
-            Button("Reset") { reset() }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                .disabled(isCompleting)
-        }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .frame(minHeight: 64)
-        .background(Theme.paperRaised)
-    }
-
-    private var cropGrid: some View {
-        Image(systemName: "crop")
-            .font(.title3)
-            .foregroundStyle(Theme.paperRaised.opacity(0.85))
-            .padding(Theme.Spacing.s)
-            .background(Theme.scrim)
-            .clipShape(Circle())
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .padding(Theme.Spacing.s)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            HStack {
-                Label("Pinch or drag to adjust", systemImage: "hand.draw")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkSecondary)
-                Spacer()
+    private var preview: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let scale = max(size.width / max(sourceSize.width, 1), size.height / max(sourceSize.height, 1)) * transform.zoom
+            let displaySize = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+            ZStack {
+                Theme.ink
+                if let workingImage {
+                    Image(uiImage: workingImage)
+                        .resizable()
+                        .frame(width: displaySize.width, height: displaySize.height)
+                        .offset(x: (0.5 - transform.center.x) * displaySize.width,
+                                y: (0.5 - transform.center.y) * displaySize.height)
+                        .frame(width: size.width, height: size.height).clipped()
+                    if showGuides { CropGuides(spec: spec) }
+                } else {
+                    Image(systemName: "photo").font(.largeTitle).foregroundStyle(.white.opacity(0.65))
+                }
                 if isPreparing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .accessibilityLabel("Preparing suggested crop")
+                    ProgressView("Preparing framing…")
+                        .font(.footnote.weight(.medium)).padding(16)
+                        .background(.regularMaterial, in: Capsule())
                 }
             }
-
-            HStack(spacing: Theme.Spacing.m) {
-                Image(systemName: "photo")
-                    .foregroundStyle(Theme.inkSecondary)
-                Slider(
-                    value: Binding(
-                        get: { transform.zoom },
-                        set: { updateZoom($0) }
-                    ),
-                    in: PhotoCrop.zoomRange
-                )
-                .tint(Theme.accent)
-                .accessibilityLabel("Crop zoom")
-                .accessibilityValue("\(Int(transform.zoom * 100)) percent")
-                Image(systemName: "photo.fill")
-                    .foregroundStyle(Theme.inkSecondary)
-            }
-
-            Text("Only crop and resize are applied. Filters, retouching and background changes are never used.")
-                .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let failure {
-                Label(failure, systemImage: "exclamationmark.triangle.fill")
-                    .typeStyle(Typography.bodySmall)
-                    .foregroundStyle(Theme.signalFail)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            PrimaryButton(title: isCompleting ? "Preparing photo…" : "Check this photo", isEnabled: !isCompleting && sourceCGImage != nil) {
-                complete()
-            }
+            .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())
+            .gesture(dragGesture(in: displaySize))
+            .simultaneousGesture(magnificationGesture)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Crop preview for \(spec.displayName)")
+            .accessibilityHint("Drag or pinch to frame your photo. Move actions and a zoom slider are available.")
+            .accessibilityAction(named: "Move crop left") { nudge(x: -0.02, y: 0) }
+            .accessibilityAction(named: "Move crop right") { nudge(x: 0.02, y: 0) }
+            .accessibilityAction(named: "Move crop up") { nudge(x: 0, y: -0.02) }
+            .accessibilityAction(named: "Move crop down") { nudge(x: 0, y: 0.02) }
+            .accessibilityIdentifier("crop.preview")
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
-        .padding(.bottom, Theme.Spacing.xl)
-        .background(Theme.paperRaised)
-    }
-
-    private func cropSize(in available: CGSize) -> CGSize {
-        let width = max(1, available.width)
-        let height = max(1, available.height)
-        let aspect = CGFloat(spec.aspectRatio)
-        var cropWidth = width
-        var cropHeight = cropWidth / aspect
-        if cropHeight > height {
-            cropHeight = height
-            cropWidth = cropHeight * aspect
+        .aspectRatio(CGFloat(spec.aspectRatio), contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.rule, lineWidth: 1)
         }
-        return CGSize(width: cropWidth, height: cropHeight)
     }
 
-    private func displayedImageSize(in cropSize: CGSize) -> CGSize {
-        let baseScale = max(
-            cropSize.width / max(sourceSize.width, 1),
-            cropSize.height / max(sourceSize.height, 1)
-        )
-        let scale = baseScale * transform.zoom
-        return CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+    private var adjustmentControls: some View {
+        StudioCard {
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Framing").font(.headline)
+                    Spacer()
+                    Text("\(Int(transform.zoom * 100))%")
+                        .font(.subheadline.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+                }
+                Slider(value: Binding(get: { transform.zoom }, set: updateZoom), in: PhotoCrop.zoomRange)
+                    .tint(Theme.accent).disabled(isBusy)
+                    .accessibilityLabel("Crop zoom")
+                    .accessibilityValue("\(Int(transform.zoom * 100)) percent")
+                    .accessibilityIdentifier("crop.zoom")
+                HStack(spacing: Theme.Spacing.s) {
+                    toolButton("Rotate", icon: "rotate.right", identifier: "crop.rotate") {
+                        prepareSource(rotation: rotationQuarterTurns + 1, fixedTransform: nil, automatic: true)
+                    }
+                    toolButton("Auto frame", icon: "viewfinder", identifier: "crop.autoFrame") {
+                        prepareSource(rotation: rotationQuarterTurns, fixedTransform: nil, automatic: true)
+                    }
+                    toolButton("Reset", icon: "arrow.counterclockwise", identifier: "crop.reset") {
+                        prepareSource(rotation: 0, fixedTransform: .identity, automatic: false)
+                    }
+                }
+                Theme.Rule()
+                Label("\(Int(cropPixels.width)) × \(Int(cropPixels.height)) crop pixels",
+                      systemImage: sufficientPixels ? "checkmark.circle" : "exclamationmark.circle")
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(sufficientPixels ? Theme.accent : Theme.signalVerify)
+                    .accessibilityIdentifier("crop.dimensions")
+                if !sufficientPixels && workingCGImage != nil {
+                    Text("Zoom out or use a larger original to reach \(spec.widthPixels) × \(spec.heightPixels) pixels.")
+                        .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .foregroundStyle(Theme.ink)
+        }
     }
 
-    private func dragGesture(in displaySize: CGSize) -> some Gesture {
+    private func toolButton(_ title: String, icon: String, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Image(systemName: icon).font(.title3)
+                Text(title).font(.caption.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .foregroundStyle(Theme.accent)
+            .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain).disabled(isBusy).accessibilityIdentifier(identifier)
+    }
+
+    private func dragGesture(in size: CGSize) -> some Gesture {
         DragGesture()
             .onChanged { value in
-                hasInteracted = true
-                isPreparing = false
+                guard !isBusy else { return }
                 let start = dragStart ?? transform.center
                 if dragStart == nil { dragStart = start }
-                transform = clamped(
-                    CropTransform(
-                        zoom: transform.zoom,
-                        center: CGPoint(
-                            x: start.x - value.translation.width / max(displaySize.width, 1),
-                            y: start.y - value.translation.height / max(displaySize.height, 1)
-                        )
-                    )
-                )
+                transform = clamped(CropTransform(zoom: transform.zoom, center: CGPoint(
+                    x: start.x - value.translation.width / max(size.width, 1),
+                    y: start.y - value.translation.height / max(size.height, 1)
+                )))
             }
             .onEnded { _ in dragStart = nil }
     }
 
-    private func magnificationGesture(in cropSize: CGSize) -> some Gesture {
+    private var magnificationGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                hasInteracted = true
-                isPreparing = false
+                guard !isBusy else { return }
                 let start = magnificationStart ?? transform.zoom
                 if magnificationStart == nil { magnificationStart = start }
                 transform = clamped(CropTransform(zoom: start * value, center: transform.center))
@@ -256,61 +264,113 @@ struct CropEditorView: View {
     }
 
     private func updateZoom(_ zoom: CGFloat) {
-        hasInteracted = true
-        isPreparing = false
+        guard !isBusy else { return }
         transform = clamped(CropTransform(zoom: zoom, center: transform.center))
     }
 
     private func nudge(x: CGFloat, y: CGFloat) {
-        hasInteracted = true
-        transform = clamped(
-            CropTransform(
-                zoom: transform.zoom,
-                center: CGPoint(x: transform.center.x + x, y: transform.center.y + y)
-            )
-        )
+        guard !isBusy else { return }
+        transform = clamped(CropTransform(zoom: transform.zoom, center: CGPoint(x: transform.center.x + x, y: transform.center.y + y)))
     }
 
-    private func reset() {
-        hasInteracted = false
-        failure = nil
-        Task { await prepareAutomaticCrop() }
-    }
-
-    private func prepareAutomaticCrop() async {
-        guard let sourceCGImage else {
+    private func prepareSource(rotation: Int, fixedTransform: CropTransform?, automatic: Bool) {
+        guard !isCompleting, let originalCGImage else {
             isPreparing = false
-            failure = "This photo could not be read. Choose another image."
+            failure = "Choose another original photo and try again."
             return
         }
+        preparationTask?.cancel()
+        let requestID = UUID()
+        preparationID = requestID
         isPreparing = true
-        let suggested = await Task.detached(priority: .userInitiated) {
-            PhotoCrop.automaticTransform(for: sourceCGImage, spec: spec)
-        }.value
-        guard !Task.isCancelled else { return }
-        if !hasInteracted { transform = suggested }
-        isPreparing = false
+        failure = nil
+        dragStart = nil
+        magnificationStart = nil
+        let turns = ((rotation % 4) + 4) % 4
+        let spec = self.spec
+        preparationTask = Task {
+            let rotated = await Task.detached(priority: .userInitiated) {
+                ImageBridge.rotatedImage(from: originalCGImage, quarterTurns: turns)
+            }.value
+            guard !Task.isCancelled, preparationID == requestID else { return }
+            guard let pixels = rotated.cgImage else {
+                isPreparing = false
+                failure = "The original could not be rotated. Try another photo."
+                return
+            }
+            let proposed: CropTransform
+            if automatic {
+                proposed = await Task.detached(priority: .userInitiated) {
+                    PhotoCrop.automaticTransform(for: pixels, spec: spec)
+                }.value
+            } else {
+                proposed = fixedTransform ?? .identity
+            }
+            guard !Task.isCancelled, preparationID == requestID else { return }
+            workingImage = rotated
+            workingCGImage = pixels
+            rotationQuarterTurns = turns
+            transform = PhotoCrop.clamped(proposed, imageSize: CGSize(width: pixels.width, height: pixels.height), spec: spec)
+            isPreparing = false
+        }
     }
 
     private func complete() {
-        guard !isCompleting else { return }
+        guard !isBusy, let pixels = workingCGImage, let originalCGImage else { return }
         isCompleting = true
         failure = nil
         let transform = self.transform
-        let sourceImage = self.sourceImage
+        let turns = rotationQuarterTurns
         let spec = self.spec
-
         completionTask = Task {
             let cropped = await Task.detached(priority: .userInitiated) {
-                PhotoCrop.croppedImage(from: sourceImage, transform: transform, spec: spec)
+                PhotoCrop.croppedCGImage(from: pixels, transform: transform, spec: spec)
             }.value
             guard !Task.isCancelled else { return }
             isCompleting = false
-            if let cropped {
-                onComplete(cropped)
-            } else {
-                failure = "The crop could not be prepared. Try another photo or a different crop."
+            guard let cropped else {
+                failure = "Try resetting the crop or choose another original."
+                return
+            }
+            onAccept(PreparedPhotoCrop(originalImage: UIImage(cgImage: originalCGImage),
+                                       image: UIImage(cgImage: cropped), transform: transform,
+                                       rotationQuarterTurns: turns))
+        }
+    }
+}
+
+private struct CropGuides: View {
+    let spec: DocumentSpec
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            ZStack(alignment: .topLeading) {
+                Path { path in
+                    for fraction in [CGFloat(1.0 / 3), CGFloat(2.0 / 3)] {
+                        path.move(to: CGPoint(x: size.width * fraction, y: 0))
+                        path.addLine(to: CGPoint(x: size.width * fraction, y: size.height))
+                        path.move(to: CGPoint(x: 0, y: size.height * fraction))
+                        path.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
+                    }
+                }
+                .stroke(.white.opacity(0.48), style: StrokeStyle(lineWidth: 0.7, dash: [3, 5]))
+                if let eyeRange = spec.eyeLineFromBottomMM {
+                    let top = size.height * CGFloat(1 - eyeRange.upperBound / spec.heightMM)
+                    let bottom = size.height * CGFloat(1 - eyeRange.lowerBound / spec.heightMM)
+                    Rectangle().fill(Theme.accent.opacity(0.15))
+                        .frame(width: size.width, height: bottom - top)
+                        .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.8)).frame(height: 1) }
+                        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.8)).frame(height: 1) }
+                        .offset(y: top)
+                    Text("EYE LINE")
+                        .font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(.black.opacity(0.52), in: Capsule())
+                        .offset(x: 10, y: max(8, top - 29))
+                }
             }
         }
+        .allowsHitTesting(false).accessibilityHidden(true)
     }
 }

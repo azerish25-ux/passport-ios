@@ -128,6 +128,9 @@ def main() -> int:
         print("error: no Swift sources found under", APP_DIR, file=sys.stderr)
         return 1
 
+    # One canonical configuration is copied only into the two test bundles.
+    shared_test_resources = ["StoreKit/PassportProof.storekit"]
+
     app_target = uid("target", APP_NAME)
     test_target = uid("target", TEST_NAME)
     ui_test_target = uid("target", UI_TEST_NAME)
@@ -199,6 +202,10 @@ def main() -> int:
             f"\t\t{uid('build', p)} /* {os.path.basename(p)} in Resources */ = "
             f"{{isa = PBXBuildFile; fileRef = {uid('file', p)} /* {os.path.basename(p)} */; }};"
         )
+    for target_name in (TEST_NAME, UI_TEST_NAME):
+        for p in shared_test_resources:
+            w(f"\t\t{uid('shared-resource', target_name, p)} /* {os.path.basename(p)} in Resources */ = "
+              f"{{isa = PBXBuildFile; fileRef = {uid('file', p)} /* {os.path.basename(p)} */; }};")
     w("/* End PBXBuildFile section */")
 
     # ------------------------------------------------------------ container proxy
@@ -238,6 +245,9 @@ def main() -> int:
             f"lastKnownFileType = {file_type(p)}; path = {os.path.basename(p)}; "
             f'sourceTree = "<group>"; }};'
         )
+    for p in shared_test_resources:
+        w(f"\t\t{uid('file', p)} /* {os.path.basename(p)} */ = {{isa = PBXFileReference; "
+          f'lastKnownFileType = text; path = "{p}"; sourceTree = SOURCE_ROOT; }};')
     w("/* End PBXFileReference section */")
 
     # -------------------------------------------------------------- frameworks
@@ -273,6 +283,8 @@ def main() -> int:
     if ui_test_tree:
         w(f"{TAB}{TAB}{TAB}{TAB}{uid('group', 'uitest', UI_TEST_DIR)} /* {UI_TEST_DIR} */,")
     w(f"{TAB}{TAB}{TAB}{TAB}{uid('group', 'Tools', 'Tools')} /* Tools */,")
+    for p in shared_test_resources:
+        w(f"{TAB}{TAB}{TAB}{TAB}{uid('file', p)} /* {os.path.basename(p)} */,")
     w(f"{TAB}{TAB}{TAB}{TAB}{products_group} /* Products */,")
     w(f"{TAB}{TAB}{TAB});")
     w(f'{TAB}{TAB}{TAB}sourceTree = "<group>";')
@@ -430,6 +442,10 @@ def main() -> int:
         w(f"{TAB}{TAB}{TAB}files = (")
         for p in files:
             w(f"{TAB}{TAB}{TAB}{TAB}{uid('build', p)} /* {os.path.basename(p)} in Resources */,")
+        target_name = TEST_NAME if phase == test_resources_phase else UI_TEST_NAME
+        if phase != app_resources_phase:
+            for p in shared_test_resources:
+                w(f"{TAB}{TAB}{TAB}{TAB}{uid('shared-resource', target_name, p)} /* {os.path.basename(p)} in Resources */,")
         w(f"{TAB}{TAB}{TAB});")
         w(f"{TAB}{TAB}{TAB}runOnlyForDeploymentPostprocessing = 0;")
         w(f"{TAB}{TAB}}};")
@@ -728,6 +744,8 @@ SCHEME = """<?xml version="1.0" encoding="UTF-8"?>
             ReferencedContainer = "container:{app_name}.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <StoreKitConfigurationFileReference identifier="../../StoreKit/PassportProof.storekit">
+      </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

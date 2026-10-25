@@ -34,6 +34,20 @@ enum DocumentWorkflow: String, Sendable {
     }
 }
 
+enum HeadMeasurement: String, Sendable {
+    /// Passport FAM: anatomical head, excluding the applicant's hair.
+    case skull
+    /// Visa/DV composition template: top of the head including hair.
+    case includingHair
+
+    var description: String {
+        switch self {
+        case .skull: return "chin to estimated skull crown"
+        case .includingHair: return "chin to top of the head, including hair"
+        }
+    }
+}
+
 struct DocumentSpec: Identifiable, Sendable {
     let id: String
     let country: String
@@ -46,8 +60,10 @@ struct DocumentSpec: Identifiable, Sendable {
     let widthPixels: Int
     let heightPixels: Int
 
-    /// Chin to top of skull, in millimetres.
+    /// Chin to the workflow's head reference, in millimetres. Digital workflow
+    /// values are the published fractions expressed on a 50.8 mm square.
     let headHeightMM: ClosedRange<Double>
+    let headMeasurement: HeadMeasurement
     /// Head height ÷ image height, as a 0…1 fraction, where published.
     let headHeightShare: ClosedRange<Double>?
     /// Eye line measured up from the bottom edge, where published.

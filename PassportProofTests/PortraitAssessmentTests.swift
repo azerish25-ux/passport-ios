@@ -9,6 +9,17 @@ import Vision
 final class PortraitAssessmentTests: XCTestCase {
     private let fixtureNames = ["FullResolutionPortrait", "NeutralPortrait", "BlueBackgroundPortrait", "WhiteBackgroundPortrait"]
 
+    func testFullResolutionPortraitRetainsMeasuredEyesAndChin() throws {
+        let source = try fixture(named: "FullResolutionPortrait")
+        let analysis = ValidationEngine.analyze(image: source, spec: DocumentCorpus.documents[1])
+        record(name: "full-resolution-landmark-regression", image: source, analysis: analysis)
+        let geometry = try XCTUnwrap(analysis.geometry, "The full-resolution frontal portrait must provide face geometry; uncertain hair/skull should be reported separately.")
+        XCTAssertGreaterThan(geometry.chinY, geometry.eyeY)
+        XCTAssertGreaterThan(geometry.eyeY, 0)
+        XCTAssertLessThanOrEqual(geometry.chinY, 1)
+        XCTAssertNotNil(analysis.findings.first { $0.id == .eyeLine }?.measurement)
+    }
+
     @MainActor
     func testOfficialPortraitsRecordRealVisionAndPreparedCropFindings() throws {
         let spec = try XCTUnwrap(DocumentCorpus.document(id: "us-visa"))
@@ -135,7 +146,7 @@ final class PortraitAssessmentTests: XCTestCase {
             context,
         ]
         if let geometry = analysis.geometry {
-            lines.append("geometry eyeY=\(geometry.eyeY) chinY=\(geometry.chinY) inferredCrownY=\(geometry.crownInferredY) envelopeY=\(geometry.crownEnvelopeY) crownDivergence=\(geometry.crownDivergence)")
+            lines.append("geometry eyeY=\(geometry.eyeY) chinY=\(geometry.chinY) inferredCrownY=\(geometry.crownInferredY) envelopeY=\(geometry.crownEnvelopeY) crownDivergence=\(geometry.crownDivergence) hasCrownSilhouette=\(geometry.hasCrownSilhouette)")
         } else {
             lines.append("geometry=nil")
         }
@@ -164,7 +175,17 @@ final class PortraitAssessmentTests: XCTestCase {
         do {
             try handler.perform([request])
             let faces = request.results ?? []
-            return "rawVisionLandmarkFaceCount=\(faces.count) facesWithLandmarks=\(faces.filter { $0.landmarks != nil }.count) (separate diagnostic request; app geometry may reject a detected face)"
+            var summary = "rawVisionLandmarkFaceCount=\(faces.count) facesWithLandmarks=\(faces.filter { $0.landmarks != nil }.count) (separate diagnostic request; app geometry may reject a detected face)"
+            if let face = faces.first, let landmarks = face.landmarks {
+                let eyePoints = (landmarks.leftEye?.normalizedPoints ?? []) + (landmarks.rightEye?.normalizedPoints ?? [])
+                let mappedEyes = eyePoints.map { FaceAnalyzer.imagePoint(fromNormalizedFacePoint: $0, in: face.boundingBox) }
+                let mappedChin = landmarks.faceContour?.normalizedPoints.map {
+                    FaceAnalyzer.imagePoint(fromNormalizedFacePoint: $0, in: face.boundingBox).y
+                }.max()
+                let mappedEyeY: CGFloat? = mappedEyes.isEmpty ? nil : mappedEyes.map(\.y).reduce(0, +) / CGFloat(mappedEyes.count)
+                summary += " box=\(face.boundingBox) mappedEyeY=\(mappedEyeY as Any) mappedChinY=\(mappedChin as Any)"
+            }
+            return summary
         } catch {
             return "rawVisionLandmarkError=\(error.localizedDescription)"
         }

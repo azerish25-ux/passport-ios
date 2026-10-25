@@ -1,199 +1,104 @@
-//
-//  FramingOverlay.swift
-//  PassportProof
-//
-//  E1: the live framing guide. Every line on it is computed from the selected
-//  document, so the band moves when the document changes and never otherwise.
-//
-//  Geometry. The guide is the document's aspect box. The chin is taken at the
-//  guide's bottom edge, so the crown must land inside the band between the
-//  minimum-height crown and the maximum-height crown. That is the only reading
-//  of the head-height clause that needs no invented vertical anchor.
-//
-//  Marks are `onInk` on an `ink` ground, which is how the design system draws
-//  both the readout strip and the camera guide.
-//
-
 import SwiftUI
 
+/// A composition aid, not a measured result. The photo is cropped and checked
+/// after capture; the guide deliberately leaves space below the chin.
 struct FramingOverlay: View {
     let spec: DocumentSpec
-
-    /// Paints an `ink` ground behind the guide. Off for the camera overlay,
-    /// where the ground is the live feed.
     var drawsGround: Bool = true
 
-    private var guideInk: Color { drawsGround ? Theme.onInk : Theme.captureInk }
+    private var ink: Color { drawsGround ? Theme.onInk : .white }
 
     var body: some View {
         GeometryReader { proxy in
             let guide = guideRect(in: proxy.size)
+            let headFraction = CGFloat((spec.headHeightMM.lowerBound + spec.headHeightMM.upperBound) / 2 / spec.heightMM)
+            let eyeFraction = spec.eyeLineFromBottomMM.map {
+                CGFloat(1 - ($0.lowerBound + $0.upperBound) / 2 / spec.heightMM)
+            } ?? 0.42
+            let headHeight = guide.height * headFraction
+            let eyeY = guide.minY + guide.height * eyeFraction
+            // Illustrative oval only: anatomy is not inferred from this drawing.
+            let headTop = eyeY - headHeight * 0.43
+            let headWidth = headHeight * 0.72
+            let head = CGRect(x: guide.midX - headWidth / 2, y: headTop,
+                              width: headWidth, height: headHeight)
 
             ZStack(alignment: .topLeading) {
-                if drawsGround {
-                    Theme.ink
+                if drawsGround { Theme.ink }
+                Path { path in
+                    path.move(to: CGPoint(x: guide.midX, y: guide.minY))
+                    path.addLine(to: CGPoint(x: guide.midX, y: guide.maxY))
+                }
+                .stroke(ink.opacity(0.28), style: StrokeStyle(lineWidth: 1, dash: [4, 6]))
+
+                RoundedRectangle(cornerRadius: min(head.width, head.height) * 0.46)
+                    .stroke(ink.opacity(0.78), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                    .frame(width: head.width, height: head.height)
+                    .offset(x: head.minX, y: head.minY)
+
+                Path { path in
+                    let shoulderY = min(guide.maxY, head.maxY + guide.height * 0.11)
+                    path.move(to: CGPoint(x: guide.minX + guide.width * 0.1, y: guide.maxY))
+                    path.addQuadCurve(to: CGPoint(x: head.minX + head.width * 0.22, y: shoulderY),
+                                      control: CGPoint(x: guide.minX + guide.width * 0.1, y: shoulderY))
+                    path.move(to: CGPoint(x: head.maxX - head.width * 0.22, y: shoulderY))
+                    path.addQuadCurve(to: CGPoint(x: guide.maxX - guide.width * 0.1, y: guide.maxY),
+                                      control: CGPoint(x: guide.maxX - guide.width * 0.1, y: shoulderY))
+                }
+                .stroke(ink.opacity(0.42), style: StrokeStyle(lineWidth: 1.2, lineCap: .round, dash: [5, 6]))
+
+                if let eyeRange = spec.eyeLineFromBottomMM {
+                    let top = guide.maxY - guide.height * CGFloat(eyeRange.upperBound / spec.heightMM)
+                    let bottom = guide.maxY - guide.height * CGFloat(eyeRange.lowerBound / spec.heightMM)
+                    Rectangle().fill(ink.opacity(0.07))
+                        .frame(width: guide.width, height: max(0, bottom - top))
+                        .offset(x: guide.minX, y: top)
+                    Path { path in
+                        path.move(to: CGPoint(x: guide.minX, y: eyeY))
+                        path.addLine(to: CGPoint(x: guide.maxX, y: eyeY))
+                    }
+                    .stroke(ink.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
                 }
 
-                headBand(guide)
-                crownLines(guide)
-                chinLine(guide)
-                eyeLine(guide)
-                centreLine(guide)
-                cornerTicks(guide)
+                cornerMarks(guide)
+                    .stroke(ink, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                Text("FACE FORWARD")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.2)
+                    .foregroundStyle(ink)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(drawsGround ? Color.clear : Color.black.opacity(0.36), in: Capsule())
+                    .position(x: guide.midX, y: max(12, guide.minY - 14))
             }
         }
+        .accessibilityHidden(true)
     }
-
-    // MARK: Geometry
 
     private func guideRect(in size: CGSize) -> CGRect {
-        let inset = Theme.Spacing.xl
-        let availableWidth = max(1, size.width - inset * 2)
-        let availableHeight = max(1, size.height - inset * 2)
-
-        let aspect = CGFloat(spec.widthMM / spec.heightMM)
-        var width = availableWidth
-        var height = width / aspect
-
-        if height > availableHeight {
-            height = availableHeight
-            width = height * aspect
-        }
-
-        return CGRect(
-            x: (size.width - width) / 2,
-            y: (size.height - height) / 2,
-            width: width,
-            height: height
-        )
+        let inset: CGFloat = 28
+        let widthAvailable = max(1, size.width - inset * 2)
+        let heightAvailable = max(1, size.height - inset * 2)
+        let aspect = CGFloat(spec.aspectRatio)
+        let width = min(widthAvailable, heightAvailable * aspect)
+        let height = width / aspect
+        return CGRect(x: (size.width - width) / 2, y: (size.height - height) / 2, width: width, height: height)
     }
 
-    /// Crown when the head is at the maximum permitted height — the highest the
-    /// crown may sit.
-    private func crownHighY(_ guide: CGRect) -> CGFloat {
-        guide.maxY - guide.height * CGFloat(spec.headHeightMM.upperBound / spec.heightMM)
-    }
-
-    /// Crown when the head is at the minimum permitted height — the lowest the
-    /// crown may sit.
-    private func crownLowY(_ guide: CGRect) -> CGFloat {
-        guide.maxY - guide.height * CGFloat(spec.headHeightMM.lowerBound / spec.heightMM)
-    }
-
-    // MARK: Band
-
-    private func headBand(_ guide: CGRect) -> some View {
-        let top = crownHighY(guide)
-        let bottom = crownLowY(guide)
-
-        return Rectangle()
-            .fill(drawsGround ? guideInk.opacity(0.10) : Theme.captureBand)
-            .frame(width: guide.width, height: max(0, bottom - top))
-            .overlay(alignment: .top) {
-                Theme.Rule(color: guideInk, weight: Theme.Stroke.rule)
-            }
-            .overlay(alignment: .bottom) {
-                Theme.Rule(color: guideInk, weight: Theme.Stroke.rule)
-            }
-            .offset(x: guide.minX, y: top)
-    }
-
-    // MARK: Lines
-
-    private func crownLines(_ guide: CGRect) -> some View {
-        let top = crownHighY(guide)
-        let bottom = crownLowY(guide)
-
-        return ZStack(alignment: .topLeading) {
-            // The solid line is the lower crown limit; the dashed line the upper.
-            dashedLine(x1: guide.minX, x2: guide.maxX, y: bottom, dash: [])
-            dashedLine(x1: guide.minX, x2: guide.maxX, y: top, dash: [3, 2])
-
-            label("HEAD BAND", at: CGPoint(x: guide.minX, y: top - 18))
-        }
-    }
-
-    private func chinLine(_ guide: CGRect) -> some View {
-        ZStack(alignment: .topLeading) {
-            dashedLine(x1: guide.minX, x2: guide.maxX, y: guide.maxY, dash: [3, 2])
-            label("CHIN", at: CGPoint(x: guide.minX, y: guide.maxY - 18))
-        }
-    }
-
-    @ViewBuilder
-    private func eyeLine(_ guide: CGRect) -> some View {
-        if let eye = spec.eyeLineFromBottomMM {
-            let mid = (eye.lowerBound + eye.upperBound) / 2
-            let y = guide.maxY - guide.height * CGFloat(mid / spec.heightMM)
-
-            ZStack(alignment: .topLeading) {
-                dashedLine(x1: guide.minX, x2: guide.maxX, y: y, dash: [4, 3])
-                label("EYE", at: CGPoint(x: guide.maxX - 38, y: y - 18))
-            }
-        }
-    }
-
-    private func centreLine(_ guide: CGRect) -> some View {
-        Path { path in
-            path.move(to: CGPoint(x: guide.midX, y: guide.minY))
-            path.addLine(to: CGPoint(x: guide.midX, y: guide.maxY))
-        }
-        .stroke(
-            guideInk.opacity(0.45),
-            style: StrokeStyle(lineWidth: Theme.Stroke.rule, dash: [4, 3])
-        )
-    }
-
-    private func cornerTicks(_ guide: CGRect) -> some View {
-        let length = Theme.Metrics.captureCornerTickLength
-
+    private func cornerMarks(_ rect: CGRect) -> Path {
+        let length = min(22, rect.width * 0.09)
         return Path { path in
-            // Top-left
-            path.move(to: CGPoint(x: guide.minX, y: guide.minY + length))
-            path.addLine(to: CGPoint(x: guide.minX, y: guide.minY))
-            path.addLine(to: CGPoint(x: guide.minX + length, y: guide.minY))
-
-            // Top-right
-            path.move(to: CGPoint(x: guide.maxX - length, y: guide.minY))
-            path.addLine(to: CGPoint(x: guide.maxX, y: guide.minY))
-            path.addLine(to: CGPoint(x: guide.maxX, y: guide.minY + length))
-
-            // Bottom-right
-            path.move(to: CGPoint(x: guide.maxX, y: guide.maxY - length))
-            path.addLine(to: CGPoint(x: guide.maxX, y: guide.maxY))
-            path.addLine(to: CGPoint(x: guide.maxX - length, y: guide.maxY))
-
-            // Bottom-left
-            path.move(to: CGPoint(x: guide.minX + length, y: guide.maxY))
-            path.addLine(to: CGPoint(x: guide.minX, y: guide.maxY))
-            path.addLine(to: CGPoint(x: guide.minX, y: guide.maxY - length))
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY + length))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX + length, y: rect.minY))
+            path.move(to: CGPoint(x: rect.maxX - length, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + length))
+            path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - length))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX - length, y: rect.maxY))
+            path.move(to: CGPoint(x: rect.minX + length, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - length))
         }
-        .stroke(guideInk, style: StrokeStyle(lineWidth: Theme.Stroke.cornerTick, lineCap: .butt))
-    }
-
-    // MARK: Primitives
-
-    private func dashedLine(x1: CGFloat, x2: CGFloat, y: CGFloat, dash: [CGFloat]) -> some View {
-        Path { path in
-            path.move(to: CGPoint(x: x1, y: y))
-            path.addLine(to: CGPoint(x: x2, y: y))
-        }
-        .stroke(
-            guideInk,
-            style: StrokeStyle(
-                lineWidth: Theme.Stroke.rule,
-                lineCap: .butt,
-                dash: dash.isEmpty ? [] : dash
-            )
-        )
-    }
-
-    private func label(_ text: String, at point: CGPoint) -> some View {
-        Typography.unit.text(text)
-            .foregroundStyle(guideInk)
-            .padding(.horizontal, Theme.Spacing.xs)
-            .padding(.vertical, Theme.Spacing.xxs)
-            .background(Theme.scrim)
-            .offset(x: point.x, y: point.y)
     }
 }

@@ -2,105 +2,321 @@
 //  PassportProofUITests.swift
 //  PassportProofUITests
 //
-//  Simulator smoke coverage and visual evidence. These tests do not depend on
-//  camera hardware, photo access or a live App Store purchase.
+//  Real navigation, PhotosPicker, image analysis, StoreKit and system sharing.
+//  CI seeds exactly one full-resolution portrait in the disposable simulator's
+//  Photos library. No photo fixture or entitlement bypass is added to the app.
+//  Run serially: StoreKitTest controls one shared environment per simulator.
 //
 
 import XCTest
+import StoreKitTest
 
 final class PassportProofUITests: XCTestCase {
+    private let productIdentifier = "com.passportproof.app.unlock"
+    private var storeSession: SKTestSession!
+    private var testedApp: XCUIApplication?
 
     override func setUpWithError() throws {
+        try super.setUpWithError()
         continueAfterFailure = false
+        let configuration = try XCTUnwrap(
+            Bundle(for: Self.self).url(forResource: "PassportProof", withExtension: "storekit"),
+            "The canonical StoreKit configuration must be copied into the UI-test bundle"
+        )
+        storeSession = try SKTestSession(contentsOf: configuration)
+        storeSession.resetToDefaultState()
+        storeSession.clearTransactions()
+        storeSession.disableDialogs = true
     }
 
+    override func tearDownWithError() throws {
+        testedApp?.terminate()
+        testedApp = nil
+        storeSession?.clearTransactions()
+        storeSession = nil
+        try super.tearDownWithError()
+    }
+
+    @MainActor
     func testLibraryCatalogueAndPrimaryAction() {
         let app = launchApp()
-
         XCTAssertTrue(app.buttons["library.start"].exists)
         XCTAssertTrue(app.buttons["library.document.us-passport"].exists)
         XCTAssertTrue(app.buttons["library.document.us-visa"].exists)
         XCTAssertTrue(app.buttons["library.document.us-dv-lottery"].exists)
         XCTAssertTrue(app.buttons["library.privacy"].exists)
-
         capture(app, named: "01-library")
     }
 
+    @MainActor
     func testLibraryRemainsActionableAtAccessibilityTextSize() {
-        let app = XCUIApplication()
-        app.launchArguments = [
-            "-AppleLanguages", "(en)",
-            "-AppleLocale", "en_US",
-            "-UITestLargeText",
-        ]
-        app.launch()
-
-        XCTAssertTrue(app.buttons["library.start"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.buttons["library.privacy"].isHittable)
+        let app = launchApp(arguments: ["-UITestLargeText"])
         scrollToHittable(app.buttons["library.start"], in: app)
         capture(app, named: "05-library-accessibility-text")
+        scrollToHittable(app.buttons["library.privacy"], in: app)
+        app.buttons["library.privacy"].tap()
+        require(app.staticTexts["Private by design"], in: app)
+        capture(app, named: "05-privacy-accessibility-text")
     }
 
+    @MainActor
     func testPrivacyDisclosureOpensFromLibrary() {
         let app = launchApp()
+        scrollToHittable(app.buttons["library.privacy"], in: app)
         app.buttons["library.privacy"].tap()
-
-        XCTAssertTrue(app.staticTexts["Private by design"].waitForExistence(timeout: 5))
+        require(app.staticTexts["Private by design"], in: app)
         XCTAssertTrue(app.staticTexts["Photos"].exists)
         XCTAssertTrue(app.staticTexts["Data collection"].exists)
         capture(app, named: "02-privacy")
     }
 
+    @MainActor
     func testDocumentDetailLeadsToCaptureSources() {
         let app = launchApp()
-        let document = app.buttons["library.document.us-visa"]
-        scrollToHittable(document, in: app)
-        document.tap()
-
-        let measure = app.buttons["detail.measure"]
-        scrollToHittable(measure, in: app)
-        measure.tap()
-
-        XCTAssertTrue(app.buttons["capture.camera"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)["capture.library"].exists)
+        openCapture(in: app)
+        XCTAssertTrue(app.buttons["capture.camera"].exists)
+        XCTAssertTrue(app.buttons["capture.library"].exists)
+        XCTAssertFalse(app.buttons["capture.camera"].isEnabled, "The simulator must offer import when camera hardware is absent")
+        XCTAssertTrue(app.buttons["capture.library"].isEnabled)
         capture(app, named: "03-capture-sources")
     }
 
+    @MainActor
     func testLibraryUnlockRouteShowsPurchaseArea() {
         let app = launchApp()
-        let unlock = app.buttons["library.unlock"]
-        scrollToHittable(unlock, in: app)
-        unlock.tap()
-
-        let purchaseArea = app.descendants(matching: .any)["unlock.purchaseArea"]
-        XCTAssertTrue(purchaseArea.waitForExistence(timeout: 8))
+        openUnlock(in: app)
+        require(app.buttons["unlock.purchase"], in: app, timeout: 20)
         XCTAssertTrue(app.navigationBars["Export unlock"].exists)
+        XCTAssertTrue(app.buttons["unlock.restore"].exists)
         capture(app, named: "04-unlock")
     }
 
-    // MARK: - Helpers
+    @MainActor
+    func testLibraryAndCaptureInDarkMode() {
+        let app = launchApp(arguments: ["-UITestDarkMode"])
+        capture(app, named: "06-library-dark")
+        openCapture(in: app)
+        scrollToHittable(app.buttons["capture.library"], in: app)
+        capture(app, named: "06-capture-dark")
+    }
 
-    private func launchApp() -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+    @MainActor
+    func testPurchaseButtonAndFreshLaunchRestoreVerifiedEntitlement() {
+        let app = launchApp()
+        openUnlock(in: app)
+        let purchase = app.buttons["unlock.purchase"]
+        require(purchase, in: app, timeout: 20)
+        scrollToHittable(purchase, in: app)
+        XCTAssertTrue(storeSession.allTransactions().isEmpty)
+        capture(app, named: "07-storekit-before-purchase")
+        purchase.tap()
+
+        waitUntil(in: app, description: "The app purchase must create a StoreKit transaction", timeout: 25) {
+            !self.storeSession.allTransactions().isEmpty
+        }
+        // UnlockView only dismisses after the production store has verified the
+        // purchase. The debug demonstration action is never used by this suite.
+        require(app.buttons["library.start"], in: app, timeout: 20)
+        XCTAssertEqual(storeSession.allTransactions().count, 1)
+        capture(app, named: "07-storekit-purchased")
+
+        app.terminate()
         app.launch()
-        XCTAssertTrue(
-            app.buttons["library.start"].waitForExistence(timeout: 20),
-            "The library did not finish launching"
-        )
+        require(app.buttons["library.start"], in: app, timeout: 20)
+        openUnlock(in: app)
+        let verified = app.staticTexts["Export is unlocked for this Apple Account."]
+        require(verified, in: app, timeout: 20)
+        XCTAssertFalse(app.buttons["unlock.purchase"].exists, "A fresh process must recover the verified non-consumable entitlement")
+        let restore = app.buttons["unlock.restore"]
+        scrollToHittable(restore, in: app)
+        restore.tap()
+        waitUntil(in: app, description: "Restore must finish with the verified entitlement intact", timeout: 20) {
+            verified.exists && restore.isEnabled
+        }
+        XCTAssertEqual(storeSession.allTransactions().count, 1, "Restore must not create another purchase")
+        capture(app, named: "07-storekit-restored-after-relaunch")
+    }
+
+    @MainActor
+    func testRealPhotoImportReviewCanceledEditAndDigitalShare() throws {
+        executionTimeAllowance = 300
+        // This transaction uses Apple's local StoreKit environment. The separate
+        // purchase test above exercises the application's purchase button.
+        try storeSession.buyProduct(productIdentifier: productIdentifier)
+        let app = launchApp()
+        openCapture(in: app)
+        importSeededPortrait(in: app)
+
+        let confirmCrop = app.buttons["crop.confirm"]
+        require(confirmCrop, in: app, timeout: 30)
+        waitUntil(in: app, description: "The original photo must finish preparing", timeout: 30) { confirmCrop.isEnabled }
+        capture(app, named: "08-real-photo-crop")
+        confirmCrop.tap()
+
+        let photo = app.images["analysis.photo"]
+        require(photo, in: app, timeout: 40)
+        capture(app, named: "08-real-photo-analysis")
+        attachHierarchy(app, named: "08-real-analysis-findings")
+
+        // These interactions test the required human confirmations; they do not
+        // claim that this public QA portrait is an accepted application photo.
+        let reviewIDs = ["review.expression", "review.glasses", "review.recent", "review.original"]
+        for identifier in reviewIDs {
+            let toggle = app.switches[identifier]
+            scrollToHittable(toggle, in: app)
+            XCTAssertEqual(toggle.value as? String, "0")
+            toggle.tap()
+            waitUntil(in: app, description: "The visual confirmation must persist: \(identifier)", timeout: 5) {
+                toggle.value as? String == "1"
+            }
+        }
+
+        // A draft rotation/reset must not destroy the accepted photo or its
+        // completed review when the user cancels. Session unit tests additionally
+        // verify original pixel retention and accepted-crop revision isolation.
+        let edit = app.buttons["analysis.editCrop"]
+        scrollToHittable(edit, in: app, towardTop: true)
+        edit.tap()
+        require(app.buttons["crop.cancel"], in: app)
+        waitUntil(in: app, description: "The retained original must reopen for editing", timeout: 30) {
+            app.buttons["crop.confirm"].isEnabled
+        }
+        let rotate = app.buttons["crop.rotate"]
+        scrollToHittable(rotate, in: app)
+        rotate.tap()
+        waitUntil(in: app, description: "Rotation must finish", timeout: 30) { app.buttons["crop.reset"].isEnabled }
+        app.buttons["crop.reset"].tap()
+        waitUntil(in: app, description: "Reset must finish", timeout: 30) { app.buttons["crop.confirm"].isEnabled }
+        capture(app, named: "08-real-photo-draft-edit")
+        app.buttons["crop.cancel"].tap()
+        require(photo, in: app)
+        for identifier in reviewIDs {
+            XCTAssertEqual(app.switches[identifier].value as? String, "1", "Canceling a crop must preserve the accepted photo's review")
+        }
+
+        let next = app.buttons["analysis.continue"]
+        // A genuine detected failure is a failed regression with its findings
+        // attached, never a skipped test or a fabricated passing analysis.
+        require(next, in: app, timeout: 10)
+        waitUntil(in: app, description: "The actual fixture findings must allow export after human review", timeout: 10) { next.isEnabled }
+        next.tap()
+        let uncertain = app.alerts["Review the uncertain measurements"]
+        if uncertain.waitForExistence(timeout: 2) {
+            capture(app, named: "08-uncertain-measurements-disclosure")
+            uncertain.buttons["Continue to export"].tap()
+        }
+
+        let export = app.buttons["export.primary"]
+        require(export, in: app, timeout: 15)
+        XCTAssertEqual(export.label, "Export JPEG", "The verified purchase and real review must unlock the digital export")
+        XCTAssertTrue(app.descendants(matching: .any)["export.preview"].exists)
+        capture(app, named: "08-digital-export-preview")
+        export.tap()
+
+        waitUntil(in: app, description: "A generated file must reach the system activity sheet", timeout: 25) {
+            app.buttons["Save to Files"].exists || app.buttons["Save Image"].exists ||
+                app.buttons["Copy"].exists || app.otherElements["ActivityListView"].exists
+        }
+        capture(app, named: "08-system-share-sheet")
+        attachHierarchy(app, named: "08-system-share-file-details")
+    }
+
+    // MARK: - Navigation and evidence
+
+    @MainActor
+    private func launchApp(arguments: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"] + arguments
+        testedApp = app
+        app.launch()
+        require(app.buttons["library.start"], in: app, timeout: 20)
         return app
     }
 
-    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(element.waitForExistence(timeout: 8))
+    @MainActor
+    private func openCapture(in app: XCUIApplication) {
+        let document = app.buttons["library.document.us-visa"]
+        scrollToHittable(document, in: app)
+        document.tap()
+        let measure = app.buttons["detail.measure"]
+        scrollToHittable(measure, in: app)
+        measure.tap()
+        require(app.buttons["capture.library"], in: app)
+    }
+
+    @MainActor
+    private func openUnlock(in app: XCUIApplication) {
+        let unlock = app.buttons["library.unlock"]
+        scrollToHittable(unlock, in: app)
+        unlock.tap()
+        require(app.descendants(matching: .any)["unlock.purchaseArea"], in: app, timeout: 15)
+    }
+
+    @MainActor
+    private func importSeededPortrait(in app: XCUIApplication) {
+        let library = app.buttons["capture.library"]
+        scrollToHittable(library, in: app)
+        library.tap()
+        // PhotosPicker accessibility varies with the runtime. Prefer its photo
+        // label; a single grid cell is unambiguous on the erased/seeded CI phone.
+        let photoLabel = NSPredicate(format: "label BEGINSWITH[c] 'Photo'")
+        let cell = app.cells.matching(photoLabel).firstMatch
+        let image = app.images.matching(photoLabel).firstMatch
+        let gridCells = app.collectionViews.cells
+        waitUntil(in: app, description: "PhotosPicker must expose the single seeded portrait; inspect the attached hierarchy if the runtime changed", timeout: 20) {
+            cell.exists || image.exists || gridCells.count == 1
+        }
+        attachHierarchy(app, named: "08-system-photos-picker")
+        capture(app, named: "08-photos-picker")
+        if cell.exists { cell.tap() }
+        else if image.exists { image.tap() }
+        else { gridCells.element(boundBy: 0).tap() }
+    }
+
+    @MainActor
+    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication, towardTop: Bool = false) {
+        require(element, in: app)
         var attempts = 0
-        while !element.isHittable && attempts < 6 {
-            app.swipeUp()
+        while !element.isHittable && attempts < 9 {
+            if towardTop { app.swipeDown() } else { app.swipeUp() }
             attempts += 1
         }
+        if !element.isHittable { failureEvidence(app, named: "unreachable-element") }
         XCTAssertTrue(element.isHittable, "Element should be reachable by scrolling: \(element)")
     }
 
+    @MainActor
+    private func require(_ element: XCUIElement, in app: XCUIApplication, timeout: TimeInterval = 10) {
+        let exists = element.waitForExistence(timeout: timeout)
+        if !exists { failureEvidence(app, named: "missing-element") }
+        XCTAssertTrue(exists, "Required UI is missing: \(element)")
+    }
+
+    @MainActor
+    private func waitUntil(in app: XCUIApplication, description: String, timeout: TimeInterval, condition: @escaping () -> Bool) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in condition() }, object: nil)
+        let ready = XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+        if !ready { failureEvidence(app, named: "timed-out-state") }
+        XCTAssertTrue(ready, description)
+    }
+
+    @MainActor
+    private func failureEvidence(_ app: XCUIApplication, named name: String) {
+        capture(app, named: name)
+        attachHierarchy(app, named: name + "-hierarchy")
+    }
+
+    @MainActor
+    private func attachHierarchy(_ app: XCUIApplication, named name: String) {
+        let hierarchy = app.debugDescription
+        print("UI DIAGNOSTIC \(name)\n\(hierarchy)")
+        let attachment = XCTAttachment(string: hierarchy)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     private func capture(_ app: XCUIApplication, named name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

@@ -4,10 +4,9 @@
 //
 //  Measures the background. Never replaces it.
 //
-//  This is a threshold test, not a perceptual one: the sources say any residual
-//  original-background pixels at the hair edge are a problem, and that there is
-//  no perceptual tolerance to appeal to. The numbers used here are app-selected
-//  defaults — the sources give no numeric threshold for the capture gate.
+//  These are app-selected screening signals, not a segmentation model. A
+//  rectangular ring near the face can include natural hair or ears; deviations
+//  in that ring require visual review and do not prove background replacement.
 //
 
 import Foundation
@@ -18,8 +17,9 @@ struct BackgroundReport: Sendable {
     let uniformitySigma: Double
     /// |head − background| at the crown, 0…1. Drives the shutter gate.
     let crownContrast: Double
-    /// Fraction of the ring just outside the head whose colour deviates from
-    /// the background, 0…1.
+    /// Fraction of a rectangular ring around the estimated head box whose
+    /// luminance differs from the background, 0…1. This is not a subject mask
+    /// and cannot distinguish natural subject edges from editing artifacts.
     let edgeResidualFraction: Double
     /// Normalised rects, origin top-left, where the background is not uniform.
     let failingRegions: [CGRect]

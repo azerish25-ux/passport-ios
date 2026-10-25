@@ -41,7 +41,9 @@ final class EntitlementStore: ObservableObject {
                 guard case .verified(let transaction) = result else { continue }
                 guard transaction.productID == EntitlementStore.productIdentifier else { continue }
                 let entitled = await self.refreshEntitlements()
-                self.state = entitled ? .purchased : .available
+                if entitled { self.state = .purchased }
+                else if self.product != nil { self.state = .available }
+                else { self.state = .unavailable("The store is unavailable. Refresh to try again.") }
                 await transaction.finish()
             }
         }
@@ -125,7 +127,11 @@ final class EntitlementStore: ObservableObject {
                 state = .available
             }
         } catch {
-            state = .failed(Self.message(for: error))
+            if Self.isCancellation(error) {
+                state = isUnlocked ? .purchased : .available
+            } else {
+                state = .failed(Self.message(for: error))
+            }
         }
     }
 
@@ -183,6 +189,12 @@ final class EntitlementStore: ObservableObject {
         isUnlocked = entitled
         #endif
         return entitled
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if let storeError = error as? StoreKitError, case .userCancelled = storeError { return true }
+        let nsError = error as NSError
+        return nsError.domain == SKErrorDomain && nsError.code == SKError.Code.paymentCancelled.rawValue
     }
 
     private static func message(for error: Error) -> String {

@@ -2,190 +2,211 @@
 //  DocumentDetailView.swift
 //  PassportProof
 //
-//  Requirements, provenance and output constraints for one complete workflow.
+//  A document brief: output first, practical preparation second, full sources
+//  available without making the first-use workflow read like a specification.
 //
 
 import SwiftUI
 
 struct DocumentDetailView: View {
     let spec: DocumentSpec
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var showRules = false
+    @State private var showHistory = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                 identity
-                quickFacts
+                outputCard
                 guidance
-                rulesSection
+                facts
                 sourceSection
-                changelogSection
             }
-            .padding(.bottom, Theme.Spacing.xxxl)
+            .padding(Theme.Spacing.margin)
+            .padding(.bottom, Theme.Spacing.xl)
         }
         .background(Theme.paper)
         .navigationTitle(spec.documentName)
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) { measureBar }
+        .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
     }
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            HStack {
-                Text(spec.countryCode)
-                    .font(.system(.headline, design: .monospaced, weight: .bold))
-                    .foregroundStyle(Theme.onInk)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(Theme.ink, in: RoundedRectangle(cornerRadius: 10))
-                Text(spec.workflow.shortTitle)
-                    .font(.caption.weight(.bold))
-                    .tracking(0.8)
-                    .foregroundStyle(Theme.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(Theme.accent.opacity(0.1), in: Capsule())
-                Spacer()
-            }
-
-            Text(spec.displayName)
-                .font(.largeTitle.weight(.bold))
+            StudioEyebrow(title: "United States · \(spec.workflow.shortTitle)")
+            Text(spec.documentName)
+                .font(.system(.largeTitle, design: .serif))
                 .tracking(-0.7)
                 .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
-
             Text(spec.supportsPrintSheet
-                 ? "A calibrated print workflow for a 2 × 2 inch photo."
-                 : "A portal-ready JPEG workflow with geometry and file-size checks.")
-                .font(.body)
+                 ? "For applications made in person or by mail."
+                 : (spec.id == "us-visa" ? "Prepare a digital photo for a US visa application." : "Prepare a digital photo for a Diversity Visa entry."))
+                .font(.subheadline)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
     }
 
-    private var quickFacts: some View {
-        VStack(spacing: 0) {
-            FactRow(
-                title: spec.supportsPrintSheet ? "Printed size" : "Digital geometry",
-                value: spec.supportsPrintSheet
-                    ? Format.sizeMM(width: spec.widthMM, height: spec.heightMM)
-                    : Format.sizePixels(width: spec.widthPixels, height: spec.heightPixels)
-            )
-            Theme.Rule()
-            FactRow(
-                title: "Head height",
-                value: Format.range(spec.headHeightMM.lowerBound, spec.headHeightMM.upperBound, unit: "mm")
-            )
-            Theme.Rule()
-            FactRow(title: "Photo age", value: "Within \(Format.compact(spec.maximumPhotoAgeMonths)) months")
-            if let maximum = spec.maximumFileSizeBytes {
-                Theme.Rule()
-                FactRow(title: "Maximum file size", value: "\(maximum / 1_000) kB")
+    private var outputCard: some View {
+        StudioCard(padding: 16) {
+            HStack(alignment: .center, spacing: Theme.Spacing.l) {
+                if !dynamicTypeSize.isAccessibilitySize {
+                    StudioPortraitArt(style: spec.supportsPrintSheet ? .printSheet : .digital)
+                        .frame(width: 112, height: 138)
+                }
+                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                    StudioEyebrow(title: "Your finished format")
+                    Text(spec.supportsPrintSheet ? "2 × 2 in" : "600 × 600")
+                        .font(.system(.title, design: .monospaced, weight: .medium))
+                        .tracking(-0.7)
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(spec.supportsPrintSheet ? "Print-ready PDF sheet" : "Pixels · sRGB JPEG")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(spec.supportsPrintSheet ? "300 DPI · choose your paper size" : "File size checked before sharing")
+                        .font(.caption)
+                        .foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(Theme.paperRaised)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Theme.rule, lineWidth: 0.5)
-        }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
     }
 
     private var guidance: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text("Before you capture")
-                .font(.title3.weight(.bold))
+            Text("Set up a good photo")
+                .font(.title3.weight(.semibold))
+                .tracking(-0.3)
                 .foregroundStyle(Theme.ink)
-            GuidanceRow(icon: "square.on.square", title: "Background", detail: spec.backgroundDescription)
-            GuidanceRow(icon: "face.smiling", title: "Expression", detail: spec.expressionRequirement)
-            GuidanceRow(icon: "eyeglasses", title: "Glasses", detail: spec.glassesRequirement)
+            GuidanceRow(number: "01", title: "Find a plain background", detail: spec.backgroundDescription)
+            GuidanceRow(number: "02", title: "Face the camera", detail: spec.expressionRequirement)
+            GuidanceRow(number: "03", title: "Keep your eyes visible", detail: spec.glassesRequirement)
+            HStack(alignment: .top, spacing: Theme.Spacing.s) {
+                Image(systemName: "lightbulb")
+                    .foregroundStyle(Theme.accent)
+                Text("Use an original photo. Retake it if the lighting or background needs fixing; avoid filters and retouching.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(Theme.Spacing.l)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: 16))
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
     }
 
-    private var rulesSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Theme.SectionHeader(title: "Rules encoded", trailing: "verified \(Format.day(spec.verifiedOn))")
-                .padding(.horizontal, Theme.Spacing.margin)
-            VStack(spacing: Theme.Spacing.s) {
-                if let share = spec.headHeightShare {
-                    RulePill(
-                        title: "Head share of frame",
-                        value: "\(Int((share.lowerBound * 100).rounded()))–\(Int((share.upperBound * 100).rounded()))% of image height"
-                    )
+    private var facts: some View {
+        StudioCard {
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                StudioEyebrow(title: "The essentials")
+                FactRow(title: "Head height", value: Format.range(spec.headHeightMM.lowerBound, spec.headHeightMM.upperBound, unit: "mm"))
+                Theme.Rule()
+                FactRow(title: "Photo taken", value: "Within \(Format.compact(spec.maximumPhotoAgeMonths)) months")
+                if let maximum = spec.maximumFileSizeBytes {
+                    Theme.Rule()
+                    FactRow(title: "File limit", value: "\(maximum / 1_000) kB")
                 }
-                if let eye = spec.eyeLineFromBottomMM {
-                    RulePill(
-                        title: "Eye line",
-                        value: "\(Format.range(eye.lowerBound, eye.upperBound, unit: "mm")) from the bottom edge"
-                    )
+                Theme.Rule()
+                DisclosureGroup(isExpanded: $showRules) {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                        if let share = spec.headHeightShare {
+                            RuleDetail(title: "Head share of frame", value: "\(Int((share.lowerBound * 100).rounded()))–\(Int((share.upperBound * 100).rounded()))% of image height")
+                        }
+                        if let eye = spec.eyeLineFromBottomMM {
+                            RuleDetail(title: "Eye line", value: "\(Format.range(eye.lowerBound, eye.upperBound, unit: "mm")) from the bottom edge")
+                        }
+                        RuleDetail(title: "Photo dimensions", value: Format.sizePixels(width: spec.widthPixels, height: spec.heightPixels))
+                        RuleDetail(title: "Original photo", value: "No filters, retouching or background replacement. Only the geometric crop is adjusted.")
+                    }
+                    .padding(.top, Theme.Spacing.m)
+                } label: {
+                    Text("All photo requirements")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.ink)
+                        .padding(.vertical, 10)
                 }
-                RulePill(title: "Output", value: spec.supportsPrintSheet ? "300 DPI physical print sheet" : "JPEG · sRGB · exact portal geometry")
-                RulePill(title: "Original photo", value: "No filters, retouching or background replacement; reviewed geometric crop only")
+                .tint(Theme.accent)
+                .accessibilityIdentifier("detail.requirements")
             }
         }
-        .padding(.top, Theme.Spacing.m)
     }
 
     private var sourceSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Theme.SectionHeader(title: "Source & verification")
-            Text("Rules are taken from the issuer's published guidance and dated when checked. App-selected measurement thresholds are labelled separately in findings.")
-                .typeStyle(Typography.bodySmall)
-                .foregroundStyle(Theme.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Link(destination: spec.sourceURL) {
-                Label("Open issuer guidance", systemImage: "safari")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .accessibilityHint("Opens in your browser. No photo or session data is shared.")
-            Text(spec.sourceURL.host ?? "Issuer website")
-                .font(.caption)
-                .foregroundStyle(Theme.inkTertiary)
-        }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
-    }
-
-    private var changelogSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Theme.SectionHeader(title: "Changelog")
-            ForEach(spec.changelog) { entry in
+            HStack(alignment: .top, spacing: Theme.Spacing.s) {
+                Image(systemName: "text.book.closed")
+                    .foregroundStyle(Theme.accent)
+                    .padding(.top, 2)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text(Format.day(entry.date))
-                        .typeStyle(Typography.tabular)
-                        .foregroundStyle(Theme.inkSecondary)
-                    Text(entry.note)
-                        .typeStyle(Typography.bodySmall)
+                    Text("Based on issuer guidance")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.ink)
+                    Text("Requirements checked \(Format.day(spec.verifiedOn)). App-selected measurement thresholds are identified separately in your results.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(Theme.Spacing.l)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, Theme.Spacing.margin)
             }
+            Link(destination: spec.sourceURL) {
+                HStack(spacing: Theme.Spacing.s) {
+                    Text("Read the official requirements")
+                        .font(.subheadline.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "arrow.up.right").font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(Theme.accent)
+                .frame(minHeight: 44)
+            }
+            .accessibilityHint("Opens \(spec.sourceURL.host ?? "the issuer website") in your browser. No photo or session data is shared.")
+
+            DisclosureGroup(isExpanded: $showHistory) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                    ForEach(spec.changelog) { entry in
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            Text(Format.day(entry.date))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.ink)
+                            Text(entry.note)
+                                .font(.caption)
+                                .foregroundStyle(Theme.inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.top, Theme.Spacing.s)
+            } label: {
+                Text("Requirement update history")
+                    .font(.caption)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .frame(minHeight: 44)
+            }
+            .tint(Theme.inkSecondary)
         }
-        .padding(.top, Theme.Spacing.m)
     }
 
-    private var measureBar: some View {
-        VStack(spacing: 0) {
+    private var actionBar: some View {
+        VStack(spacing: Theme.Spacing.s) {
             NavigationLink(value: AppRoute.capture(documentID: spec.id)) {
-                Text("Measure a photo")
+                HStack(spacing: Theme.Spacing.s) {
+                    Text("Take or choose a photo")
+                    Image(systemName: "arrow.right").font(.subheadline.weight(.semibold))
+                }
             }
-            .buttonStyle(PrimaryButtonStyle(isEnabled: true))
+            .buttonStyle(PrimaryButtonStyle())
             .accessibilityIdentifier("detail.measure")
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.m)
-            .padding(.bottom, Theme.Spacing.l)
+            Text("Photo checks are free · export is a one-time purchase")
+                .font(.caption2)
+                .foregroundStyle(Theme.inkSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.horizontal, Theme.Spacing.margin)
+        .padding(.vertical, Theme.Spacing.m)
         .background(Theme.paperRaised)
         .overlay(alignment: .top) { Theme.Rule() }
     }
@@ -194,64 +215,64 @@ struct DocumentDetailView: View {
 private struct FactRow: View {
     let title: String
     let value: String
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(Theme.inkSecondary)
-            Spacer()
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.ink)
-                .multilineTextAlignment(.trailing)
-                .fixedSize(horizontal: false, vertical: true)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) { titleText; valueText }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                    titleText
+                    Spacer(minLength: 4)
+                    valueText.multilineTextAlignment(.trailing)
+                }
+            }
         }
-        .padding(Theme.Spacing.l)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var titleText: some View {
+        Text(title).font(.subheadline).foregroundStyle(Theme.inkSecondary)
+    }
+    private var valueText: some View {
+        Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
 private struct GuidanceRow: View {
-    let icon: String
+    let number: String
     let title: String
     let detail: String
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.m) {
-            Image(systemName: icon)
+            Text(number)
+                .font(.system(.caption, design: .monospaced, weight: .medium))
                 .foregroundStyle(Theme.accent)
-                .frame(width: 24)
+                .frame(width: 30, height: 30)
+                .background(Theme.sageWash, in: Circle())
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.ink)
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
                 Text(detail)
-                    .typeStyle(Typography.bodySmall)
+                    .font(.subheadline)
                     .foregroundStyle(Theme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
-private struct RulePill: View {
+private struct RuleDetail: View {
     let title: String
     let value: String
-
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text(title.uppercased())
-                .font(.caption2.weight(.bold))
-                .tracking(0.7)
-                .foregroundStyle(Theme.inkSecondary)
-            Text(value)
-                .font(.subheadline)
-                .foregroundStyle(Theme.ink)
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(Theme.ink)
+            Text(value).font(.caption).foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(Theme.Spacing.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: 14))
-        .padding(.horizontal, Theme.Spacing.margin)
     }
 }

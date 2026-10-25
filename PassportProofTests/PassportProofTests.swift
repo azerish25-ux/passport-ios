@@ -24,19 +24,24 @@ final class PassportProofTests: XCTestCase {
         XCTAssertNil(DocumentCorpus.document(id: "uk-passport"))
     }
 
-    func testDocumentRulesAreOutputSpecific() {
+    func testDocumentRulesAreOutputSpecific() throws {
         let passport = DocumentCorpus.documents[0]
         XCTAssertEqual(passport.headHeightMM.lowerBound, 25, accuracy: 0.0001)
         XCTAssertEqual(passport.headHeightMM.upperBound, 35, accuracy: 0.0001)
         XCTAssertEqual(passport.maximumPhotoAgeMonths, 6)
         XCTAssertTrue(passport.supportsPrintSheet)
         XCTAssertFalse(passport.supportsDigitalExport)
+        XCTAssertEqual(passport.headMeasurement, .skull)
 
         for document in DocumentCorpus.documents.dropFirst() {
             XCTAssertEqual(document.headHeightMM.lowerBound, 25.4, accuracy: 0.0001)
-            XCTAssertEqual(document.headHeightMM.upperBound, 34.9, accuracy: 0.0001)
+            XCTAssertEqual(document.headHeightMM.upperBound, document.heightMM * 0.69, accuracy: 0.0001)
+            XCTAssertEqual(document.headMeasurement, .includingHair)
             XCTAssertEqual(document.headHeightShare?.lowerBound, 0.50)
             XCTAssertEqual(document.headHeightShare?.upperBound, 0.69)
+            let eyeLine = try XCTUnwrap(document.eyeLineFromBottomMM)
+            XCTAssertEqual(eyeLine.lowerBound, document.heightMM * 0.56, accuracy: 0.0001)
+            XCTAssertEqual(eyeLine.upperBound, document.heightMM * 0.69, accuracy: 0.0001)
             XCTAssertEqual(document.maximumFileSizeBytes, 240_000)
             XCTAssertNotEqual(document.headHeightMM.lowerBound, 22)
         }
@@ -163,13 +168,16 @@ final class PassportProofTests: XCTestCase {
         XCTAssertEqual(visa.count, 11)
     }
 
-    func testDivergingCrownCannotContradictItselfAcrossRules() {
-        let spec = DocumentCorpus.documents[1]
+    func testHeadMeasurementUsesWorkflowAndDoesNotEraseEyes() {
         let geometry = makeGeometry(diverging: true)
-        let results = findings(spec: spec, geometry: geometry)
-        for id in [RuleID.headHeight, .headHeightShare, .eyeLine] {
-            XCTAssertEqual(results.first { $0.id == id }?.status, .cannotVerify, id.rawValue)
-        }
+        let passport = findings(spec: DocumentCorpus.documents[0], geometry: geometry)
+        XCTAssertEqual(passport.first { $0.id == .headHeight }?.status, .cannotVerify)
+        let visa = findings(spec: DocumentCorpus.documents[1], geometry: geometry)
+        // This explicit geometry has a known hair outline spanning 77% of the
+        // image. The visa template includes hair, so both head rules must fail.
+        XCTAssertEqual(visa.first { $0.id == .headHeight }?.status, .fail)
+        XCTAssertEqual(visa.first { $0.id == .headHeightShare }?.status, .fail)
+        XCTAssertEqual(visa.first { $0.id == .eyeLine }?.status, .fail)
     }
 
     func testAgreeingCrownCanPassHeadHeight() {

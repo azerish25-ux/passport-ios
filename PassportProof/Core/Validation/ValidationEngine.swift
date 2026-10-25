@@ -153,6 +153,17 @@ enum ValidationEngine {
 
     // MARK: R1 / R2 — head height
 
+    private static func canMeasureHead(_ geometry: FaceGeometry, spec: DocumentSpec) -> Bool {
+        guard geometry.hasCrownSilhouette else { return false }
+        switch spec.headMeasurement {
+        case .skull:
+            return geometry.crownInferredY > 0 && geometry.crownDivergence <= crownDivergenceLimit
+        case .includingHair:
+            return geometry.crownEnvelopeY > 0 && geometry.crownEnvelopeY < geometry.eyeY
+                && geometry.headHeightEnvelope > 0.02
+        }
+    }
+
     private static func headHeight(geometry: FaceGeometry?, spec: DocumentSpec) -> Finding {
         let range = spec.headHeightMM
         let rangeText = MeasurementFormat.range(range.lowerBound, range.upperBound, unit: "mm")
@@ -168,21 +179,21 @@ enum ValidationEngine {
             )
         }
 
-        let measuredMM = geometry.headHeight * spec.heightMM
+        let measuredMM = geometry.headHeight(for: spec.headMeasurement) * spec.heightMM
         let measurement = MeasurementFormat.millimetres(
             value: measuredMM,
             lowerBound: range.lowerBound,
             upperBound: range.upperBound
         )
 
-        // Two estimators, one answer. If they disagree, neither is trustworthy.
-        if geometry.crownDivergence > crownDivergenceLimit {
-            let percent = Int((geometry.crownDivergence * 100).rounded())
+        if !canMeasureHead(geometry, spec: spec) {
             return Finding(
                 id: .headHeight,
                 title: "Head height",
                 status: .cannotVerify,
-                detail: "The top of the silhouette and the chin-to-eye estimate disagree by \(percent)% of head height. Hair volume, an updo, a head covering or a wig can put the outline well above the crown, so this measurement cannot be trusted in either direction. A reviewer can measure the original.",
+                detail: spec.headMeasurement == .skull
+                    ? "The anatomical crown is estimated from facial proportions, not a Vision landmark. The visible outline is unavailable or does not sufficiently agree with that estimate. Hair volume, a covering or a clipped head can cause this. Check the original with the issuer's template; this is not a verified skull measurement."
+                    : "The top of the head including hair could not be separated reliably from the background, or touches the frame edge. Retake with the entire head visible against a plain background. The eye and chin landmarks remain available independently.",
                 measurement: measurement,
                 provenance: .source
             )
@@ -194,7 +205,7 @@ enum ValidationEngine {
                 id: .headHeight,
                 title: "Head height",
                 status: .fail,
-                detail: "Chin to crown measures \(formatted) mm. \(spec.documentName) requires \(rangeText). Move closer, or crop tighter, so the head fills more of the frame.",
+                detail: "The \(spec.headMeasurement.description) estimate is \(formatted) mm. This workflow requires \(rangeText). Crop tighter or move closer.",
                 measurement: measurement,
                 provenance: .source
             )
@@ -204,7 +215,7 @@ enum ValidationEngine {
                 id: .headHeight,
                 title: "Head height",
                 status: .fail,
-                detail: "Chin to crown measures \(formatted) mm. \(spec.documentName) requires \(rangeText). Move back, or crop looser, so the head fills less of the frame.",
+                detail: "The \(spec.headMeasurement.description) estimate is \(formatted) mm. This workflow requires \(rangeText). Crop looser or move back.",
                 measurement: measurement,
                 provenance: .source
             )
@@ -213,7 +224,7 @@ enum ValidationEngine {
             id: .headHeight,
             title: "Head height",
             status: .pass,
-            detail: "Chin to crown measures \(formatted) mm, inside the required \(rangeText).",
+            detail: "The \(spec.headMeasurement.description) estimate is \(formatted) mm, inside \(rangeText). Confirm the outline against the original; the issuer makes the final decision.",
             measurement: measurement,
             provenance: .source
         )
@@ -246,22 +257,19 @@ enum ValidationEngine {
             )
         }
 
-        // The same crown measurement feeds every head-based rule. Divergence
-        // must not turn into a contradictory PASS on a different row.
-        if geometry.crownDivergence > crownDivergenceLimit {
+        // Both head-based findings use the workflow's same measurement basis.
+        if !canMeasureHead(geometry, spec: spec) {
             return Finding(
                 id: .headHeightShare,
                 title: "Head height share",
                 status: .cannotVerify,
-                detail: "The crown estimators disagree, so the head's share of the frame cannot be measured reliably.",
+                detail: "The required head outline is unresolved, so the head's share of the frame cannot be measured reliably.",
                 measurement: nil,
                 provenance: .source
             )
         }
 
-        // `headHeight` is already normalised against image height, which is
-        // exactly the proportion the document states.
-        let measured = geometry.headHeight
+        let measured = geometry.headHeight(for: spec.headMeasurement)
         let measurement = Measurement(
             value: measured * 100,
             unit: "%",
@@ -328,17 +336,8 @@ enum ValidationEngine {
             )
         }
 
-        if geometry.crownDivergence > crownDivergenceLimit {
-            return Finding(
-                id: .eyeLine,
-                title: "Eye line",
-                status: .cannotVerify,
-                detail: "The crown estimators disagree, so the eye-line position cannot be trusted against this crop.",
-                measurement: nil,
-                provenance: .source
-            )
-        }
-
+        // Eye landmarks do not depend on the skull/hair estimate. An uncertain
+        // crown must not erase an independently measured eye-line position.
         // eyeY is measured from the top, so the distance from the bottom is 1 − eyeY.
         let measuredMM = (1 - geometry.eyeY) * spec.heightMM
         let measurement = MeasurementFormat.millimetres(
@@ -452,7 +451,7 @@ enum ValidationEngine {
         )
 
         let residualPercent = background.edgeResidualFraction * 100
-        let base = "Background spread is \(MeasurementFormat.percent(sigmaPercent)) (limit \(rangeText)) with \(MeasurementFormat.percent(residualPercent)) of the ring at the head edge deviating from it. This is a threshold test on pixel values, not a perceptual judgement."
+        let base = "Sampled background spread is \(MeasurementFormat.percent(sigmaPercent)) (app limit \(rangeText)). The rectangular edge sample differs from the background in \(MeasurementFormat.percent(residualPercent)) of its pixels; it is not a subject mask."
 
         guard let color = background.color else {
             return Finding(
@@ -489,8 +488,8 @@ enum ValidationEngine {
             return Finding(
                 id: .backgroundUniformity,
                 title: "Background uniformity",
-                status: .fail,
-                detail: base + " Something other than the plain background is showing at the edge of the head. Clear the frame behind you and keep hair clear of the outline.",
+                status: .cannotVerify,
+                detail: base + " Natural hair, ears or clothing can cross this sample. Inspect the original around the entire head for background objects, shadows or editing halos. This signal cannot establish that the background was replaced, and natural hair should not be removed to satisfy it.",
                 measurement: measurement,
                 provenance: .appDefault
             )

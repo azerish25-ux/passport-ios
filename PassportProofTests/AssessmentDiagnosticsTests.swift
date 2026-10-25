@@ -36,11 +36,18 @@ final class AssessmentDiagnosticsTests: XCTestCase {
         XCTAssertEqual(finding.status, .cannotVerify, "Borderline lighting must be disclosed, not called definitely compliant or noncompliant.")
     }
 
+    func testSubjectBeyondFaceBoxRequiresEdgeReviewRatherThanRejection() throws {
+        let finding = try backgroundFinding(name: "white-wide-subject", red: 1, green: 1, blue: 1, wideSubject: true)
+        XCTAssertEqual(finding.status, .cannotVerify,
+                       "A face rectangle is not a subject mask. Pixels from a wider subject are not proof of background editing.")
+    }
+
     private func backgroundFinding(
         name: String,
         red: CGFloat,
         green: CGFloat,
-        blue: CGFloat
+        blue: CGFloat,
+        wideSubject: Bool = false
     ) throws -> Finding {
         let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
         let context = try XCTUnwrap(CGContext(
@@ -57,7 +64,7 @@ final class AssessmentDiagnosticsTests: XCTestCase {
         // Integer-aligned and symmetric on both axes so coordinate orientation
         // and interpolation cannot manufacture a background edge in this probe.
         context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
-        context.fill(CGRect(x: 80, y: 80, width: 96, height: 96))
+        context.fill(CGRect(x: wideSubject ? 64 : 80, y: 80, width: wideSubject ? 128 : 96, height: 96))
         let image = try XCTUnwrap(context.makeImage())
         let faceBox = CGRect(x: 80.0 / 256, y: 80.0 / 256, width: 96.0 / 256, height: 96.0 / 256)
         let report = BackgroundAnalyzer.analyze(image, faceBox: faceBox)
@@ -72,7 +79,12 @@ final class AssessmentDiagnosticsTests: XCTestCase {
         let finding = try XCTUnwrap(findings.first { $0.id == .backgroundUniformity })
         print("ASSESSMENT background=\(name) status=\(finding.status.rawValue) sigma=\(report.uniformitySigma) edgeResidual=\(report.edgeResidualFraction) luminance=\(color.meanLuminance) chroma=\(color.meanChroma) whiteFraction=\(color.whiteFraction)")
         XCTAssertEqual(report.uniformitySigma, 0, accuracy: 0.000_001, "The fixture must have a uniform sampled background.")
-        XCTAssertEqual(report.edgeResidualFraction, 0, accuracy: 0.000_001, "The subject must stay clear of the sampled background ring.")
+        if wideSubject {
+            XCTAssertGreaterThan(report.edgeResidualFraction, BackgroundAnalyzer.edgeResidualFractionLimit,
+                                 "This fixture must exercise subject pixels crossing the unsegmented ring.")
+        } else {
+            XCTAssertEqual(report.edgeResidualFraction, 0, accuracy: 0.000_001, "The subject must stay clear of the sampled background ring.")
+        }
         return finding
     }
 }

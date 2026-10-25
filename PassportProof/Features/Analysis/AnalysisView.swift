@@ -1,38 +1,32 @@
-//
-//  AnalysisView.swift
-//  PassportProof
-//
-//  On-device diagnosis of the exact prepared crop. Vision work is revision-
-//  scoped; visual confirmations update only the cached rule layer.
-//
-
 import SwiftUI
 import UIKit
 
+/// Analysis always describes the accepted pixels. Reframing opens the retained
+/// original and commits a new revision only when the user accepts the edit.
 @MainActor
 struct AnalysisView: View {
     let spec: DocumentSpec
-
     @EnvironmentObject private var session: PhotoSession
     @Environment(\.dismiss) private var dismiss
-
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isMeasuring = true
     @State private var settled = false
     @State private var goToExport = false
     @State private var showExportReview = false
-    @State private var filter: FindingFilter = .all
+    @State private var showMeasurements = false
+    @State private var editContext: PhotoEditContext?
+    @State private var filter: FindingFilter = .attention
 
     private enum FindingFilter: String, CaseIterable {
-        case all = "All"
-        case attention = "Needs attention"
+        case attention = "To review"
+        case all = "All checks"
         case passed = "Passed"
     }
-
     private var result: PhotoAnalysis? {
-        guard session.analyzedDocumentID == spec.id else { return nil }
+        guard session.hasPhoto(for: spec), session.analyzedDocumentID == spec.id else { return nil }
         return session.analysis
     }
-
     private var visibleFindings: [Finding] {
         guard let result else { return [] }
         switch filter {
@@ -41,354 +35,313 @@ struct AnalysisView: View {
         case .passed: return result.findings.filter { $0.status == .pass }
         }
     }
+    private var confirmedCount: Int {
+        [session.review.expressionConfirmed, session.review.glassesConfirmed,
+         session.review.recentPhotoConfirmed, session.review.originalUneditedConfirmed].filter { $0 }.count
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ScreenTitle(title: "Photo check", subtitle: spec.displayName)
-
+            VStack(alignment: .leading, spacing: 22) {
+                StudioStepProgress(current: 2)
+                VStack(alignment: .leading, spacing: 7) {
+                    StudioEyebrow(title: "\(spec.documentName) · Photo review")
+                    Text("A closer look.")
+                        .font(.system(.largeTitle, design: .serif, weight: .medium))
+                        .foregroundStyle(Theme.ink)
+                    Text("Your photo, checked on your device. Review the details before you export.")
+                        .font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if isMeasuring {
                     measuring
                 } else if let result {
-                    verdict(result)
-                    if let firstFailure = result.failures.first {
-                        retakeBanner(firstFailure)
-                    }
                     photo(result)
+                    verdict(result)
+                    if let failure = result.failures.first { improvement(failure) }
                     visualChecklist
                     findings
-                    disclaimer
+                    Label("These checks help you prepare a photo. The issuing authority makes the final decision.", systemImage: "info.circle")
+                        .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     noPhoto
                 }
             }
-            .padding(.bottom, Theme.Spacing.xxxl)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, 12)
+            .padding(.bottom, 28)
         }
         .background(Theme.paper)
-        .navigationTitle(spec.documentName)
+        .navigationTitle("Photo review")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) { bottomBar }
         .task(id: "\(spec.id)-\(session.revision.uuidString)") { await run() }
-        .navigationDestination(isPresented: $goToExport) {
-            ExportView(spec: spec)
+        .navigationDestination(isPresented: $goToExport) { ExportView(spec: spec) }
+        .sheet(item: $editContext) { context in
+            CropEditorView(context: context, spec: spec, onAccept: { crop in
+                _ = session.acceptCrop(crop, for: spec, captureDate: context.captureDate)
+                editContext = nil
+            }, onCancel: { editContext = nil })
         }
-        .alert("Some checks remain unresolved", isPresented: $showExportReview) {
+        .alert("Review the uncertain measurements", isPresented: $showExportReview) {
             Button("Continue to export") { goToExport = true }
-            Button("Stay and review", role: .cancel) {}
+            Button("Keep reviewing", role: .cancel) {}
         } message: {
-            Text("The app cannot measure every issuer requirement. Your visual confirmations are recorded for this session, and the issuer makes the final decision.")
+            Text("Still uncertain: \(result?.unresolved.map(\.title).joined(separator: ", ") ?? "some measurements"). Compare these with the issuer's guidance. Export formats the photo; it does not certify acceptance.")
         }
     }
 
     private var measuring: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            if let image = session.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 320)
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .opacity(0.72)
-                    .accessibilityHidden(true)
-            }
-            HStack(spacing: Theme.Spacing.m) {
-                ProgressView()
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    Text("Checking your photo")
-                        .font(.headline)
-                        .foregroundStyle(Theme.ink)
-                    Text("Face geometry, lighting, background and output quality — all on this device.")
-                        .typeStyle(Typography.meta)
-                        .foregroundStyle(Theme.inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+        StudioCard {
+            VStack(spacing: 18) {
+                if let image = session.image, session.hasPhoto(for: spec) {
+                    Image(uiImage: image).resizable().scaledToFit()
+                        .frame(maxHeight: 290)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .accessibilityHidden(true)
+                }
+                HStack(spacing: 12) {
+                    ProgressView().tint(Theme.accent)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Checking the details…").font(.headline).foregroundStyle(Theme.ink)
+                        Text("Framing, background, lighting and resolution.")
+                            .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                    }
+                    Spacer(minLength: 0)
                 }
             }
         }
-        .padding(Theme.Spacing.margin)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.paperRaised)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
+        .accessibilityIdentifier("analysis.measuring")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.updatesFrequently)
     }
 
-    private func verdict(_ result: PhotoAnalysis) -> some View {
-        let presentation = VerdictPresentation(status: result.overall)
-        return VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            HStack(alignment: .top, spacing: Theme.Spacing.m) {
-                Image(systemName: presentation.icon)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(presentation.tint)
-                    .frame(width: 44, height: 44)
-                    .background(presentation.tint.opacity(0.12), in: Circle())
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text(presentation.title)
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(Theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(presentation.message)
-                        .typeStyle(Typography.bodySmall)
-                        .foregroundStyle(Theme.inkSecondary)
+    private func photo(_ analysis: PhotoAnalysis) -> some View {
+        StudioCard(padding: 16) {
+            VStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    StudioEyebrow(title: "Your prepared photo")
+                    Text("\(Int(analysis.imagePixelSize.width)) × \(Int(analysis.imagePixelSize.height)) px")
+                        .font(.caption.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                if let image = session.image {
+                    Group {
+                        if showMeasurements {
+                            FaceOverlayView(image: image, geometry: analysis.geometry,
+                                            background: analysis.background, spec: spec)
+                        } else {
+                            Image(uiImage: image).resizable().scaledToFit()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: 300)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityLabel("The exact crop used for these checks and your export")
+                    .accessibilityIdentifier("analysis.photo")
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { editButton; measurementsButton }
+                    VStack(spacing: 8) { editButton; measurementsButton }
+                }
+            }
+        }
+    }
+    private var editButton: some View {
+        Button { editContext = session.cropEditingContext(for: spec) } label: {
+            Label("Edit framing", systemImage: "crop.rotate")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain).foregroundStyle(Theme.accent)
+        .disabled(session.cropEditingContext(for: spec) == nil)
+        .accessibilityIdentifier("analysis.editCrop")
+    }
+    private var measurementsButton: some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { showMeasurements.toggle() }
+        } label: {
+            Label(showMeasurements ? "Hide guides" : "Show guides", systemImage: "viewfinder")
+                .font(.subheadline.weight(.medium))
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.plain).foregroundStyle(Theme.inkSecondary)
+        .accessibilityValue(showMeasurements ? "Visible" : "Hidden")
+        .accessibilityIdentifier("analysis.guides")
+    }
+
+    private func verdict(_ analysis: PhotoAnalysis) -> some View {
+        let presentation = VerdictPresentation(status: analysis.overall)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: presentation.icon).font(.title2)
+                    .foregroundStyle(presentation.tint).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(presentation.title).font(.title3.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text(presentation.message).font(.subheadline).foregroundStyle(Theme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-
-            HStack(spacing: Theme.Spacing.s) {
-                CountPill(count: result.findings.filter { $0.status == .pass }.count, title: "Passed", tint: Theme.signalPass)
-                CountPill(count: result.failures.count, title: "Failed", tint: Theme.signalFail)
-                CountPill(count: result.unresolved.count, title: "Review", tint: Theme.signalVerify)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { counts(analysis) }
+                VStack(alignment: .leading, spacing: 8) { counts(analysis) }
             }
         }
-        .padding(Theme.Spacing.l)
-        .background(StatusInk.wash(for: result.overall))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(alignment: .leading) {
-            UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 20)
-                .fill(StatusInk.color(for: result.overall))
-                .frame(width: 4)
-        }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
-        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("analysis.verdict")
     }
-
-    private func retakeBanner(_ failure: Finding) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Label("Retake required before export", systemImage: "camera.rotate")
-                .font(.headline)
-                .foregroundStyle(Theme.signalFail)
-            Text("\(failure.title): \(failure.detail)")
-                .typeStyle(Typography.bodySmall)
-                .foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            PrimaryButton(title: "Retake photo") { dismiss() }
-        }
-        .padding(Theme.Spacing.l)
-        .background(Theme.failWash)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
+    @ViewBuilder private func counts(_ analysis: PhotoAnalysis) -> some View {
+        CountPill(count: analysis.findings.filter { $0.status == .pass }.count, title: "passed", tint: Theme.signalPass)
+        CountPill(count: analysis.failures.count, title: "to fix", tint: Theme.signalFail)
+        CountPill(count: analysis.unresolved.count, title: "to review", tint: Theme.signalVerify)
     }
-
-    private func photo(_ result: PhotoAnalysis) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Theme.SectionHeader(title: "Measured crop", trailing: "\(Int(result.imagePixelSize.width)) × \(Int(result.imagePixelSize.height)) px")
-            if let image = session.image {
-                FaceOverlayView(
-                    image: image,
-                    geometry: result.geometry,
-                    background: result.background,
-                    spec: spec
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .accessibilityHidden(true)
-                .accessibilityElement(children: .ignore)
-            }
-            Text(result.geometry == nil
-                 ? "No reliable face geometry was found. Retake with one unobstructed face in clear light."
-                 : "Overlay shows the measured face, crown estimate and background regions. Decorative lines are hidden from VoiceOver.")
-                .typeStyle(Typography.meta)
-                .foregroundStyle(Theme.inkSecondary)
+    private func improvement(_ finding: Finding) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(finding.title, systemImage: "arrow.triangle.2.circlepath")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.signalFail)
+            Text(finding.detail).font(.footnote).foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            Text("Adjust the framing below, or return to choose another original photo.")
+                .font(.footnote).foregroundStyle(Theme.inkSecondary)
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.l)
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.failWash, in: RoundedRectangle(cornerRadius: 18))
     }
 
     private var visualChecklist: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Text("Your visual check")
-                .font(.title3.weight(.bold))
-                .foregroundStyle(Theme.ink)
-            Text("Some requirements need human judgement. Confirm each item against the photo above; these checks update instantly.")
-                .typeStyle(Typography.bodySmall)
-                .foregroundStyle(Theme.inkSecondary)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Your final look").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("\(confirmedCount) of 4 confirmed").font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(confirmedCount == 4 ? Theme.signalPass : Theme.inkSecondary)
+            }
+            Text("Check each statement against the original photo. These details need your judgement.")
+                .font(.footnote).foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 0) {
-                ConfirmationRow(
-                    title: "Expression and eyes",
-                    detail: spec.expressionRequirement,
-                    isOn: reviewBinding(\.expressionConfirmed)
-                )
-                Theme.Rule().padding(.leading, 44)
-                ConfirmationRow(
-                    title: "Glasses and visibility",
-                    detail: spec.glassesRequirement,
-                    isOn: reviewBinding(\.glassesConfirmed)
-                )
-                Theme.Rule().padding(.leading, 44)
-                ConfirmationRow(
-                    title: "Recent photograph",
-                    detail: "Taken within the last \(Format.decimal(spec.maximumPhotoAgeMonths)) months and reflects your current appearance",
-                    isOn: reviewBinding(\.recentPhotoConfirmed)
-                )
-                Theme.Rule().padding(.leading, 44)
-                ConfirmationRow(
-                    title: "Original source",
-                    detail: "No filters, retouching, background replacement or digital alteration before this geometric crop",
-                    isOn: reviewBinding(\.originalUneditedConfirmed)
-                )
-            }
-            .background(Theme.paperRaised)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Theme.rule, lineWidth: 0.5)
-            }
-        }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
-        .accessibilityIdentifier("analysis.visualChecklist")
-    }
-
-    private var findings: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            HStack {
-                Text("Detailed findings")
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(Theme.ink)
-                Spacer()
-                Text("\(visibleFindings.count)")
-                    .typeStyle(Typography.tabular)
-                    .foregroundStyle(Theme.inkSecondary)
-            }
-
-            Picker("Filter findings", selection: $filter) {
-                ForEach(FindingFilter.allCases, id: \.self) { filter in
-                    Text(filter.rawValue).tag(filter)
+            StudioCard(padding: 4) {
+                VStack(spacing: 0) {
+                    ConfirmationRow(title: "Expression & eyes", detail: spec.expressionRequirement,
+                                    isOn: reviewBinding(\.expressionConfirmed), identifier: "review.expression")
+                    Theme.Rule().padding(.horizontal, 12)
+                    ConfirmationRow(title: "Glasses & visibility", detail: spec.glassesRequirement,
+                                    isOn: reviewBinding(\.glassesConfirmed), identifier: "review.glasses")
+                    Theme.Rule().padding(.horizontal, 12)
+                    ConfirmationRow(title: "A recent photo", detail: "Taken within \(Format.decimal(spec.maximumPhotoAgeMonths)) months and shows your current appearance.",
+                                    isOn: reviewBinding(\.recentPhotoConfirmed), identifier: "review.recent")
+                    Theme.Rule().padding(.horizontal, 12)
+                    ConfirmationRow(title: "An unaltered original", detail: "No filters, retouching or background replacement before this crop.",
+                                    isOn: reviewBinding(\.originalUneditedConfirmed), identifier: "review.original")
                 }
             }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("analysis.filter")
-
+        }
+        .accessibilityIdentifier("analysis.visualChecklist")
+    }
+    private var findings: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("The details").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink)
+                Spacer()
+                Text("\(visibleFindings.count) checks").font(.caption).foregroundStyle(Theme.inkSecondary)
+            }
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    filterPicker.pickerStyle(.menu).frame(minHeight: 44)
+                } else {
+                    filterPicker.pickerStyle(.segmented)
+                }
+            }.accessibilityIdentifier("analysis.filter")
             if visibleFindings.isEmpty {
-                ContentUnavailableView(
-                    "Nothing in this view",
-                    systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text("Choose another filter to see the remaining checks.")
-                )
-                .frame(minHeight: 180)
+                Label("Nothing to review in this group.", systemImage: "checkmark.circle")
+                    .font(.subheadline).foregroundStyle(Theme.signalPass)
+                    .padding(.vertical, 16)
             } else {
-                VStack(spacing: Theme.Spacing.s) {
+                VStack(spacing: 10) {
                     ForEach(Array(visibleFindings.enumerated()), id: \.element.id) { index, finding in
-                        FindingRow(
-                            finding: finding,
-                            verifiedOn: spec.verifiedOn,
-                            isSettled: settled,
-                            index: index
-                        )
+                        FindingRow(finding: finding, verifiedOn: spec.verifiedOn, isSettled: settled, index: index)
                     }
                 }
             }
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.xl)
     }
-
-    private var disclaimer: some View {
-        Label("Informational diagnosis only. PassportProof does not decide whether a document will be issued, and photos never leave this device during analysis.", systemImage: "info.circle")
-            .typeStyle(Typography.meta)
-            .foregroundStyle(Theme.inkSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.xl)
+    private var filterPicker: some View {
+        Picker("Filter findings", selection: $filter) {
+            ForEach(FindingFilter.allCases, id: \.self) { item in Text(item.rawValue).tag(item) }
+        }
     }
 
     private var noPhoto: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            ContentUnavailableView(
-                "No photo in this session",
-                systemImage: "photo.on.rectangle.angled",
-                description: Text("For privacy, photos stay in memory and are removed when the session ends.")
-            )
-            NavigationLink(value: AppRoute.capture(documentID: spec.id)) {
-                Text("Choose a photo")
+        StudioCard {
+            VStack(alignment: .leading, spacing: 16) {
+                StudioPortraitArt(style: .portrait, compact: true).frame(height: 140)
+                Text("Start with a photo.").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Choose an original for this document. Your images stay in this session.")
+                    .font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                NavigationLink(value: AppRoute.capture(documentID: spec.id)) { Text("Choose a photo") }
+                    .buttonStyle(PrimaryButtonStyle())
             }
-            .buttonStyle(PrimaryButtonStyle(isEnabled: true))
         }
-        .padding(Theme.Spacing.margin)
     }
-
     private var bottomBar: some View {
-        VStack(spacing: Theme.Spacing.xs) {
-            if let result, result.geometry == nil {
-                PrimaryButton(title: "Retake with a visible face") { dismiss() }
-                Text("Export requires one measurable face in the prepared crop.")
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkSecondary)
-            } else if let result, !result.failures.isEmpty {
-                PrimaryButton(title: "Retake photo") { dismiss() }
-            } else {
-                PrimaryButton(
-                    title: "Continue to export",
-                    isEnabled: !isMeasuring && session.canExport(for: spec)
-                ) {
-                    if result?.unresolved.isEmpty == false {
-                        showExportReview = true
-                    } else {
-                        goToExport = true
-                    }
+        VStack(spacing: 8) {
+            if let analysis = result, analysis.geometry == nil || !analysis.failures.isEmpty {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { correctionActions }
+                    VStack(spacing: 8) { correctionActions }
                 }
-                if !isMeasuring, let result, result.failures.isEmpty, !session.review.allConfirmed {
-                    Text("Complete all four visual checks to continue.")
-                        .typeStyle(Typography.meta)
-                        .foregroundStyle(Theme.inkSecondary)
+            } else {
+                PrimaryButton(title: "Continue to export", isEnabled: !isMeasuring && session.canExport(for: spec)) {
+                    if result?.unresolved.isEmpty == false { showExportReview = true }
+                    else { goToExport = true }
+                }
+                .accessibilityIdentifier("analysis.continue")
+                if !isMeasuring && result != nil && confirmedCount < 4 {
+                    Text("Confirm the \(4 - confirmedCount) remaining visual checks.")
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
             }
         }
-        .padding(.horizontal, Theme.Spacing.margin)
-        .padding(.top, Theme.Spacing.m)
-        .padding(.bottom, Theme.Spacing.l)
+        .padding(.horizontal, Theme.Spacing.margin).padding(.top, 12).padding(.bottom, 12)
         .background(Theme.paperRaised)
         .overlay(alignment: .top) { Theme.Rule() }
     }
-
-    private func reviewBinding(_ keyPath: WritableKeyPath<PhotoReview, Bool>) -> Binding<Bool> {
-        Binding(
-            get: { session.review[keyPath: keyPath] },
-            set: { value in
-                var review = session.review
-                review[keyPath: keyPath] = value
-                session.updateReview(review)
-            }
-        )
+    @ViewBuilder private var correctionActions: some View {
+        Button { dismiss() } label: { Text("Choose another").frame(minHeight: 44) }
+            .font(.subheadline.weight(.medium)).foregroundStyle(Theme.inkSecondary)
+            .accessibilityIdentifier("analysis.chooseAnother")
+        PrimaryButton(title: "Adjust framing", isEnabled: session.cropEditingContext(for: spec) != nil) {
+            editContext = session.cropEditingContext(for: spec)
+        }.accessibilityIdentifier("analysis.adjust")
     }
-
+    private func reviewBinding(_ keyPath: WritableKeyPath<PhotoReview, Bool>) -> Binding<Bool> {
+        Binding(get: { session.review[keyPath: keyPath] }, set: { value in
+            var review = session.review
+            review[keyPath: keyPath] = value
+            session.updateReview(review)
+        })
+    }
     private func run() async {
-        if let cached = session.analysis,
-           session.analyzedDocumentID == spec.id,
-           cached.review == session.review {
+        guard session.hasPhoto(for: spec), let image = session.cgImage else {
+            isMeasuring = false
+            return
+        }
+        if let cached = result, cached.review == session.review {
             isMeasuring = false
             settled = true
             return
         }
-
-        guard let cgImage = session.cgImage else {
-            isMeasuring = false
-            return
-        }
-
         isMeasuring = true
         settled = false
         let revision = session.revision
         let spec = self.spec
         let captureDate = session.captureDate
         let review = session.review
-        let value = await Task.detached(priority: .userInitiated) {
-            ValidationEngine.analyze(image: cgImage, spec: spec, captureDate: captureDate, review: review)
+        let analysis = await Task.detached(priority: .userInitiated) {
+            ValidationEngine.analyze(image: image, spec: spec, captureDate: captureDate, review: review)
         }.value
-
         guard !Task.isCancelled, session.revision == revision else { return }
-        session.store(value, for: spec.id)
+        session.store(analysis, for: spec.id, revision: revision)
         isMeasuring = false
         await Task.yield()
         settled = true
-        UINotificationFeedbackGenerator().notificationOccurred(
-            value.failures.isEmpty ? .success : .error
-        )
     }
 }
 
@@ -397,66 +350,51 @@ private struct VerdictPresentation {
     let message: String
     let icon: String
     let tint: Color
-
     init(status: FindingStatus) {
         switch status {
         case .pass:
-            title = "Checks complete"
-            message = "Every applicable check is inside its requirement or has been visually confirmed."
-            icon = "checkmark.circle.fill"
-            tint = Theme.signalPass
+            title = "Ready for your next step"
+            message = "Measured checks passed and your visual review is complete."
+            icon = "checkmark.circle.fill"; tint = Theme.signalPass
         case .fail:
-            title = "This photo needs work"
-            message = "At least one requirement is outside its limit. Export stays locked until you retake it."
-            icon = "exclamationmark.circle.fill"
-            tint = Theme.signalFail
+            title = "A few details to adjust"
+            message = "Review the highlighted findings before exporting. Your original is available to reframe."
+            icon = "exclamationmark.circle.fill"; tint = Theme.signalFail
         case .cannotVerify:
-            title = "Review the remaining checks"
-            message = "Nothing has failed, but some items need your judgement before you continue."
-            icon = "eye.circle.fill"
-            tint = Theme.signalVerify
+            title = "Give it your final look"
+            message = "Some details need your review. Uncertain measurements stay clearly marked."
+            icon = "eye.circle.fill"; tint = Theme.signalVerify
         }
     }
 }
-
 private struct CountPill: View {
     let count: Int
     let title: String
     let tint: Color
-
     var body: some View {
-        HStack(spacing: 4) {
-            Circle().fill(tint).frame(width: 6, height: 6)
-            Text("\(count) \(title)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.ink)
+        HStack(spacing: 5) {
+            Circle().fill(tint).frame(width: 5, height: 5)
+            Text("\(count) \(title)").font(.caption.weight(.medium)).foregroundStyle(Theme.inkSecondary)
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .background(Theme.paperRaised.opacity(0.74), in: Capsule())
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(Theme.paperRaised, in: Capsule())
     }
 }
-
 private struct ConfirmationRow: View {
     let title: String
     let detail: String
     @Binding var isOn: Bool
-
+    let identifier: String
     var body: some View {
         Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.ink)
-                Text(detail)
-                    .typeStyle(Typography.meta)
-                    .foregroundStyle(Theme.inkSecondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text(detail).font(.footnote).foregroundStyle(Theme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .tint(Theme.accent)
-        .padding(Theme.Spacing.m)
-        .frame(minHeight: 64)
-        .accessibilityHint(isOn ? "Confirmed for this session" : "Not yet confirmed")
+        .tint(Theme.accent).padding(14).frame(minHeight: 64)
+        .accessibilityIdentifier(identifier)
+        .accessibilityHint(isOn ? "Confirmed for this photo" : "Confirm after checking the original photo")
     }
 }

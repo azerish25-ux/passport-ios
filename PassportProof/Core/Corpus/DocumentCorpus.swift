@@ -22,6 +22,7 @@ enum DocumentCorpus {
             widthPixels: 600,
             heightPixels: 600,
             headHeightMM: 25...35,
+            headMeasurement: .skull,
             headHeightShare: nil,
             eyeLineFromBottomMM: nil,
             maximumPhotoAgeMonths: 6,
@@ -33,7 +34,7 @@ enum DocumentCorpus {
             verifiedOn: verifiedDate,
             changelog: [
                 ChangelogEntry(
-                    id: "us-passport-2026-10-24",
+                    id: "us-passport-2026-10-25",
                     date: verifiedDate,
                     note: "Printed-photo workflow verified against current issuer guidance: 2 × 2 inches, 25–35 mm head height, and a six-month recency limit."
                 )
@@ -50,9 +51,10 @@ enum DocumentCorpus {
             heightMM: 50.8,
             widthPixels: 600,
             heightPixels: 600,
-            headHeightMM: 25.4...34.9,
+            headHeightMM: digitalHeadHeightRange,
+            headMeasurement: .includingHair,
             headHeightShare: 0.50...0.69,
-            eyeLineFromBottomMM: 28...35,
+            eyeLineFromBottomMM: digitalEyeLineRange,
             maximumPhotoAgeMonths: 6,
             maximumFileSizeBytes: 240_000,
             backgroundDescription: "Plain white or off-white background",
@@ -62,9 +64,9 @@ enum DocumentCorpus {
             verifiedOn: verifiedDate,
             changelog: [
                 ChangelogEntry(
-                    id: "us-visa-2026-10-24",
+                    id: "us-visa-2026-10-25",
                     date: verifiedDate,
-                    note: "Digital workflow verified: square JPEG in sRGB, 600–1200 pixels, no more than 240 kB, with composition and recency rules linked to the issuer's photo guidance."
+                    note: "Digital workflow: square JPEG in sRGB, 600–1200 pixels and no more than 240 kB. Composition uses the top of hair to chin at 50–69% and eye line at 56–69% from the bottom; displayed millimetres are derived from those fractions, not rounded paper-photo limits."
                 )
             ]
         ),
@@ -79,9 +81,10 @@ enum DocumentCorpus {
             heightMM: 50.8,
             widthPixels: 600,
             heightPixels: 600,
-            headHeightMM: 25.4...34.9,
+            headHeightMM: digitalHeadHeightRange,
+            headMeasurement: .includingHair,
             headHeightShare: 0.50...0.69,
-            eyeLineFromBottomMM: 28...35,
+            eyeLineFromBottomMM: digitalEyeLineRange,
             maximumPhotoAgeMonths: 6,
             maximumFileSizeBytes: 240_000,
             backgroundDescription: "Plain white or off-white background",
@@ -91,19 +94,25 @@ enum DocumentCorpus {
             verifiedOn: verifiedDate,
             changelog: [
                 ChangelogEntry(
-                    id: "us-dv-lottery-2026-10-24",
+                    id: "us-dv-lottery-2026-10-25",
                     date: verifiedDate,
-                    note: "DV digital workflow verified without a year-specific label: 600 × 600 pixel JPEG, square aspect ratio, 50–69% head height, and no more than 240 kB."
+                    note: "DV digital workflow: 600 × 600 JPEG, no more than 240 kB, head including hair at 50–69% of image height and eye line at 56–69% from the bottom."
                 )
             ]
         )
     ]
 
+    // https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos/photo-composition-template.html
+    // These digital percentages are authoritative; converting rounded printed
+    // millimetres back to fractions creates contradictory boundary decisions.
+    private static let digitalHeadHeightRange = (50.8 * 0.50)...(50.8 * 0.69)
+    private static let digitalEyeLineRange = (50.8 * 0.56)...(50.8 * 0.69)
+
     static func document(id: String) -> DocumentSpec? {
         documents.first { $0.id == id }
     }
 
-    private static let verifiedDate: Date = makeDate(year: 2026, month: 10, day: 24)
+    private static let verifiedDate: Date = makeDate(year: 2026, month: 10, day: 25)
 
     private static func makeDate(year: Int, month: Int, day: Int) -> Date {
         var components = DateComponents()

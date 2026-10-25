@@ -3,8 +3,8 @@
 //  PassportProof
 //
 //  The single source of truth for colour, type, space, stroke, and motion.
-//  Precision-instrument direction: warm paper, warm ink, hairlines, no shadows,
-//  no gradients, no rounded-card containers.
+//  A quiet photo studio: warm paper, deep green ink, measured space and
+//  carefully drawn portrait/document artwork.
 //
 //  Every colour is resolved through a dynamic UIColor provider, so call sites
 //  never branch on `colorScheme`.
@@ -49,38 +49,44 @@ enum Theme {
     // MARK: Surfaces
 
     /// Screen ground. Warm paper in light, warm near-black in dark. Never pure white or black.
-    static let paper = adaptiveColor(light: 0xF4F1EA, dark: 0x17140E)
+    static let paper = adaptiveColor(light: 0xF5F4EF, dark: 0x121B19)
 
     /// Recessed areas: expanded row bodies, selected rows, wells.
-    static let paperSunk = adaptiveColor(light: 0xEAE5D8, dark: 0x100E09)
+    static let paperSunk = adaptiveColor(light: 0xEAEDE5, dark: 0x0D1513)
 
     /// Slightly lifted surfaces: top bar, readout strip off-camera.
-    static let paperRaised = adaptiveColor(light: 0xFBF9F4, dark: 0x201C14)
+    static let paperRaised = adaptiveColor(light: 0xFFFEFA, dark: 0x1C2824)
+
+    /// Quiet illustration grounds and selected controls, never a result status.
+    static let sageWash = adaptiveColor(light: 0xE3ECE3, dark: 0x243B31)
+    static let sageStrong = adaptiveColor(light: 0xBBCDBB, dark: 0x42634F)
+    static let illustrationPaper = adaptiveColor(light: 0xFFFEFA, dark: 0xDDE6D8)
+    static let illustrationInk = Color(uiColor: hexUIColor(0x24483B))
 
     // MARK: Ink
 
-    static let ink = adaptiveColor(light: 0x14120F, dark: 0xEDE8DC)
-    static let inkSecondary = adaptiveColor(light: 0x4C463A, dark: 0xA9A292)
-    static let inkTertiary = adaptiveColor(light: 0x6F6758, dark: 0x9C9483)
+    static let ink = adaptiveColor(light: 0x19312B, dark: 0xEFF3EA)
+    static let inkSecondary = adaptiveColor(light: 0x52625A, dark: 0xB4C5B9)
+    static let inkTertiary = adaptiveColor(light: 0x66756C, dark: 0x9CAF9E)
 
     // MARK: Rules
 
     /// Hairline separator. Always drawn at `Stroke.hairline` (0.5pt).
-    static let rule = adaptiveColor(light: 0xD8D2C4, dark: 0x332F26)
+    static let rule = adaptiveColor(light: 0xD9DFD4, dark: 0x35453B)
 
     /// Section rules and the measurement axis. Drawn at `Stroke.rule` (1pt).
-    static let ruleStrong = adaptiveColor(light: 0xB4AC99, dark: 0x4C4638)
+    static let ruleStrong = adaptiveColor(light: 0xBBC7B9, dark: 0x526653)
 
     // MARK: Accent — interaction only
 
     /// Marks position and primary interaction.
-    static let accent = adaptiveColor(light: 0x0D6B60, dark: 0x63D3BD)
-    static let onAccent = adaptiveColor(light: 0xFFFFFF, dark: 0x092821)
+    static let accent = adaptiveColor(light: 0x186B54, dark: 0x8BDBB9)
+    static let onAccent = adaptiveColor(light: 0xFFFFFF, dark: 0x103328)
 
     /// Always-dark hero surfaces and their fixed foreground roles. These do not
     /// invert with the rest of the interface because the ground stays dark.
-    static let heroTop = adaptiveColor(light: 0x183E3B, dark: 0x102C2A)
-    static let heroBottom = adaptiveColor(light: 0x0C2529, dark: 0x081C1E)
+    static let heroTop = adaptiveColor(light: 0x1D493A, dark: 0x153C2F)
+    static let heroBottom = adaptiveColor(light: 0x143B30, dark: 0x0D281E)
     static let heroInk = Color(uiColor: hexUIColor(0xF7F4EC))
     static let heroMuted = Color(uiColor: hexUIColor(0xC4D1C9))
     static let captureInk = Color.white
@@ -107,15 +113,15 @@ enum Theme {
     static let bandFill = adaptiveColor(light: 0xDCD5C4, dark: 0x2E2A21)
 
     /// Pressed primary button fill.
-    static let inkPressed = adaptiveColor(light: 0x2B2721, dark: 0xD6D0C2)
+    static let inkPressed = adaptiveColor(light: 0x305345, dark: 0xD8E5D5)
 
     // MARK: On-ink
 
     /// Text and marks placed on an `ink` fill.
-    static let onInk = adaptiveColor(light: 0xF4F1EA, dark: 0x16140F)
+    static let onInk = adaptiveColor(light: 0xF7F7EF, dark: 0x13271D)
 
     /// Secondary text and dividers on an `ink` fill.
-    static let onInkMuted = adaptiveColor(light: 0xC6BFAE, dark: 0x4C4638)
+    static let onInkMuted = adaptiveColor(light: 0xC4D5C3, dark: 0x465A48)
 
     // MARK: Camera
 
@@ -150,8 +156,9 @@ enum Theme {
         /// Rules, buttons, camera guides.
         static let none: CGFloat = 0
 
-        /// The only container radius permitted.
-        static let container: CGFloat = 2
+        static let container: CGFloat = 16
+        static let card: CGFloat = 22
+        static let hero: CGFloat = 28
     }
 
     // MARK: - Stroke
@@ -264,10 +271,10 @@ enum Typography {
     // MARK: Scale
 
     /// 34 / 40, Regular, −0.6. Screen titles only.
-    static let display = Style(font: text(34, .regular), tracking: -0.6, lineSpacing: 0, uppercased: false)
+    static let display = Style(font: .system(.largeTitle, design: .serif, weight: .regular), tracking: -0.7, lineSpacing: 1, uppercased: false)
 
     /// 24 / 28, Medium, −0.3.
-    static let title = Style(font: text(24, .medium), tracking: -0.3, lineSpacing: 0, uppercased: false)
+    static let title = Style(font: text(24, .semibold), tracking: -0.4, lineSpacing: 0, uppercased: false)
 
     /// 16 / 24, Regular.
     static let body = Style(font: text(16, .regular), tracking: 0, lineSpacing: 5, uppercased: false)
@@ -279,7 +286,7 @@ enum Typography {
     static let meta = Style(font: text(12, .regular), tracking: 0.1, lineSpacing: 2, uppercased: false)
 
     /// 11 / 14, Semibold, +1.6, uppercase. Section headers.
-    static let sectionLabel = Style(font: text(11, .semibold), tracking: 1.6, lineSpacing: 1, uppercased: true)
+    static let sectionLabel = Style(font: text(11, .semibold), tracking: 1.1, lineSpacing: 1, uppercased: true)
 
     /// 10 / 12, Semibold, +1.4, uppercase. PASS / FAIL / CANNOT VERIFY.
     static let findingLabel = Style(font: mono(10, .semibold), tracking: 1.4, lineSpacing: 0, uppercased: true)
@@ -300,7 +307,7 @@ enum Typography {
     static let mrz = Style(font: mono(13, .medium), tracking: 2.2, lineSpacing: 2, uppercased: true)
 
     /// 14 / 18, Semibold, +1.1, uppercase. Buttons.
-    static let button = Style(font: text(14, .semibold), tracking: 1.1, lineSpacing: 1, uppercased: true)
+    static let button = Style(font: text(16, .semibold), tracking: 0, lineSpacing: 1, uppercased: false)
 
     // MARK: Composition
 

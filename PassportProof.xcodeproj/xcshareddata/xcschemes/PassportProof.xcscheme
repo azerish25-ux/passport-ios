@@ -80,6 +80,8 @@
             ReferencedContainer = "container:PassportProof.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <StoreKitConfigurationFileReference identifier="../../StoreKit/PassportProof.storekit">
+      </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

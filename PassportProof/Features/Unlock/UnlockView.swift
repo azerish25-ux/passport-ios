@@ -12,6 +12,7 @@ import SwiftUI
 struct UnlockView: View {
     @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var price: String {
         entitlements.state == .loading ? "—" : entitlements.displayPrice
@@ -21,11 +22,12 @@ struct UnlockView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                 hero
+                StudioCard { purchaseArea }
                 benefits
-                purchaseArea
                 reassurance
             }
             .padding(Theme.Spacing.margin)
+            .padding(.bottom, Theme.Spacing.xl)
         }
         .background(Theme.paper)
         .navigationTitle("Export unlock")
@@ -37,40 +39,56 @@ struct UnlockView: View {
     }
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.largeTitle)
-                .foregroundStyle(Theme.accent)
-                .frame(width: 64, height: 64)
-                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
-            Text("One unlock.\nEvery export.")
-                .font(.largeTitle.weight(.bold))
-                .tracking(-0.8)
-                .foregroundStyle(Theme.ink)
-            Text("Precise print sheets or portal-ready digital files, created from the photo you reviewed.")
-                .font(.body)
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            StudioEyebrow(title: "One-time export access")
+            HStack(alignment: .center, spacing: Theme.Spacing.s) {
+                Text("Your photo.\nYour finished file.")
+                    .font(.system(.largeTitle, design: .serif))
+                    .tracking(-0.8)
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    StudioPortraitArt(style: .printSheet)
+                        .frame(width: 112, height: 140)
+                }
+            }
+            Text("Export the exact crop you reviewed as a print sheet or a digital photo. Yours to save and share.")
+                .font(.subheadline)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
-                Text(price)
-                    .font(.system(.largeTitle, design: .monospaced, weight: .bold))
-                    .foregroundStyle(Theme.ink)
-                Text("one time")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.inkSecondary)
-            }
         }
     }
 
     private var benefits: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            BenefitRow(icon: "printer.fill", title: "Precision print sheets", detail: "Physical page geometry and a free calibration sheet.")
-            BenefitRow(icon: "square.and.arrow.up.fill", title: "Portal-ready digital files", detail: "Exact pixels, sRGB JPEG and verified file-size limits.")
-            BenefitRow(icon: "infinity", title: "No subscription", detail: "One purchase linked to your Apple Account, with restore support.")
-            BenefitRow(icon: "lock.shield.fill", title: "Private by design", detail: "No account, analytics or photo upload.")
+            HStack(alignment: .top, spacing: Theme.Spacing.m) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.title3)
+                    .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("Everything before export stays free")
+                        .font(.headline)
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Document guidance, capture, crop, photo checks and the printer calibration page.")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(Theme.Spacing.l)
+            .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+
+            Text("Included in your unlock")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Theme.ink)
+                .padding(.top, Theme.Spacing.xs)
+            BenefitRow(icon: "printer", title: "Print sheets, made to measure", detail: "PDF layouts for the supported US passport workflow. Choose your paper size and print at actual size.")
+            BenefitRow(icon: "arrow.up.doc", title: "Digital files with the right format", detail: "600 × 600 pixel JPEGs with file-size checks for US visa and DV Lottery photos.")
+            BenefitRow(icon: "infinity", title: "Unlimited supported exports", detail: "One purchase for your Apple Account. Restore it on another device using the same account.")
+            BenefitRow(icon: "lock", title: "Processing stays on your device", detail: "No photo upload, account or tracking. Apple handles the purchase.")
         }
-        .padding(Theme.Spacing.l)
-        .background(Theme.paperRaised, in: RoundedRectangle(cornerRadius: 20))
     }
 
     @ViewBuilder
@@ -87,7 +105,21 @@ struct UnlockView: View {
                             .foregroundStyle(Theme.inkSecondary)
                     }
                 case .available:
-                    purchaseButtons
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                        Text("EXPORT ACCESS")
+                            .font(.caption2.weight(.semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(Theme.accent)
+                        Text(price)
+                            .font(.system(.largeTitle, design: .monospaced, weight: .medium))
+                            .tracking(-0.7)
+                            .foregroundStyle(Theme.ink)
+                            .accessibilityIdentifier("unlock.price")
+                        Text("Pay once. No subscription.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.inkSecondary)
+                        purchaseButtons.padding(.top, Theme.Spacing.s)
+                    }
                 case .purchased:
                     unlockedBlock
                 case .pending:
@@ -150,18 +182,27 @@ struct UnlockView: View {
     }
 
     private var unlockedBlock: some View {
-        Label(
-            entitlements.isPrototypeUnlock
-                ? "Debug demonstration unlock is active. No purchase was made."
-                : "Export is unlocked for this Apple Account.",
-            systemImage: "checkmark.circle.fill"
-        )
-        .font(.body.weight(.semibold))
-        .foregroundStyle(Theme.signalPass)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(Theme.Spacing.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.signalPass.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            Label(
+                entitlements.isPrototypeUnlock
+                    ? "Debug demonstration unlock is active. No purchase was made."
+                    : "Export is unlocked for this Apple Account.",
+                systemImage: "checkmark.circle.fill"
+            )
+            .font(.body.weight(.semibold))
+            .foregroundStyle(Theme.signalPass)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(Theme.Spacing.l)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.signalPass.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+
+            if !entitlements.isPrototypeUnlock {
+                SecondaryAction(title: "Restore purchases", isEnabled: !entitlements.isWorking) {
+                    Task { await entitlements.restore() }
+                }
+                .accessibilityIdentifier("unlock.restore")
+            }
+        }
     }
 
     #if DEBUG
@@ -181,11 +222,11 @@ struct UnlockView: View {
 
     private var reassurance: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Text("Purchase unlocks file export only. It does not change findings, buy a review or promise a different outcome.")
+            Text("Your results stay honest. A purchase unlocks export; it does not change photo findings or guarantee acceptance.")
                 .typeStyle(Typography.meta)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Calibration, document guidance and on-device analysis remain available without purchase.")
+            Text("PassportProof is independent of the issuing authority. The authority makes the final decision about your photo.")
                 .typeStyle(Typography.meta)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -202,7 +243,8 @@ private struct BenefitRow: View {
         HStack(alignment: .top, spacing: Theme.Spacing.m) {
             Image(systemName: icon)
                 .foregroundStyle(Theme.accent)
-                .frame(width: 24)
+                .frame(width: 36, height: 36)
+                .background(Theme.sageWash, in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
