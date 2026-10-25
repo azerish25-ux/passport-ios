@@ -7,6 +7,10 @@ name: iOS Build
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - Tools/VisionProbe.swift
+      - Tools/run_vision_probe.py
+      - .github/workflows/vision-probe.yml
   pull_request:
     branches: [main]
   workflow_dispatch:

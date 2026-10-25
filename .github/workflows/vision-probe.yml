@@ -1,0 +1,45 @@
+name: Isolated Vision diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Tools/VisionProbe.swift
+      - Tools/run_vision_probe.py
+      - .github/workflows/vision-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vision-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-vision:
+    name: Native Vision on ${{ matrix.runtime }}
+    runs-on: macos-15
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [macos, '18.5', '26.2']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26.3
+        run: |
+          set -euo pipefail
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          xcrun simctl list runtimes
+      - name: Run independent native Vision processes
+        run: python3 Tools/run_vision_probe.py '${{ matrix.runtime }}'
+      - name: Preserve every result, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-vision-${{ matrix.runtime }}
+          path: build/vision-probe/*.log
+          if-no-files-found: warn
+          retention-days: 14
