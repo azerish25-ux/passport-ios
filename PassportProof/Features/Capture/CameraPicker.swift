@@ -184,7 +184,9 @@ private final class CameraModel: ObservableObject {
     }
 
     var canCapture: Bool {
-        isRunning && !isCapturing && error == nil && gate?.canCapture == true
+        // A processing failure must not permanently disable the shutter. The
+        // session/gate state prevents capture when configuration itself failed.
+        isRunning && !isCapturing && gate?.canCapture == true
     }
 
     func start(spec: DocumentSpec) {
@@ -198,6 +200,7 @@ private final class CameraModel: ObservableObject {
 
     func capture() {
         guard canCapture else { return }
+        error = nil
         isCapturing = true
         controller.capturePhoto()
     }
@@ -275,8 +278,7 @@ private final class CameraSessionController: NSObject {
                 DispatchQueue.main.async { self?.onError?("The camera is not ready. Wait a moment and try again.") }
                 return
             }
-            let settings = AVCapturePhotoSettings()
-            settings.photoQualityPrioritization = .quality
+            let settings = CameraCaptureConfiguration.settings(for: self.photoOutput)
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
@@ -318,6 +320,9 @@ private final class CameraSessionController: NSObject {
                 return
             }
             session.addOutput(photoOutput)
+            // Apple's per-capture default maximum is balanced. Configure the
+            // output before starting the session, then never exceed it.
+            photoOutput.maxPhotoQualityPrioritization = .quality
             configured = true
         } catch {
             report("The camera could not be opened. Check access in Settings or choose a library photo.")
@@ -370,10 +375,24 @@ extension CameraSessionController: AVCapturePhotoCaptureDelegate {
             return
         }
         guard let data = photo.fileDataRepresentation(),
-              let image = UIImage(data: data) else {
+              let decoded = PhotoImporter.decodeImage(from: data) else {
             report("The captured photo could not be read. Try again or choose a library photo.")
             return
         }
-        DispatchQueue.main.async { self.onPhoto?(image) }
+        DispatchQueue.main.async { self.onPhoto?(decoded.image) }
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
+        if error != nil {
+            report("Capture did not finish. Hold still and tap the shutter to try again, or choose a library photo.")
+        }
+    }
+}
+
+enum CameraCaptureConfiguration {
+    static func settings(for output: AVCapturePhotoOutput) -> AVCapturePhotoSettings {
+        let settings = AVCapturePhotoSettings()
+        settings.photoQualityPrioritization = output.maxPhotoQualityPrioritization
+        return settings
     }
 }

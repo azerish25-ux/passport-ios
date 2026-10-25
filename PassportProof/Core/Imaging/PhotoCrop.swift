@@ -30,8 +30,19 @@ enum PhotoCrop {
     /// the validator still measures the resulting pixels independently.
     static func automaticTransform(for image: CGImage, spec: DocumentSpec) -> CropTransform {
         guard let geometry = FaceAnalyzer.geometry(of: image) else { return .identity }
+        return automaticTransform(
+            imageSize: CGSize(width: image.width, height: image.height),
+            geometry: geometry,
+            spec: spec
+        )
+    }
 
-        let imageSize = CGSize(width: image.width, height: image.height)
+    /// Pure placement calculation shared by the camera/import suggestion and
+    /// regression tests. The final crop is still independently measured.
+    static func automaticTransform(imageSize: CGSize, geometry: FaceGeometry, spec: DocumentSpec) -> CropTransform {
+        guard imageSize.width > 0, imageSize.height > 0,
+              geometry.headHeight.isFinite, geometry.headHeight > 0,
+              geometry.eyeY.isFinite, geometry.faceCenterX.isFinite else { return .identity }
         let targetFraction = (spec.headHeightMM.lowerBound + spec.headHeightMM.upperBound) / 2 / spec.heightMM
         let baseHeight = cropRect(
             imageSize: imageSize,
@@ -41,10 +52,18 @@ enum PhotoCrop {
         ).height
         let desiredHeight = imageSize.height * CGFloat(geometry.headHeight) / CGFloat(targetFraction)
         let proposedZoom = baseHeight / max(desiredHeight, 1)
-        let headCentreY = (geometry.crownInferredY + geometry.chinY) / 2
+        let zoom = proposedZoom.clamped(to: zoomRange)
+        let actualHeight = baseHeight / zoom
+        // Eyes belong above the image centre. Use the document's published
+        // eye-line band when present; the print-only workflow uses a framing
+        // suggestion without claiming a new issuer requirement.
+        let eyeFromBottom = spec.eyeLineFromBottomMM.map {
+            ($0.lowerBound + $0.upperBound) / 2 / spec.heightMM
+        } ?? 0.60
+        let centerY = CGFloat(geometry.eyeY) + (CGFloat(eyeFromBottom) - 0.5) * actualHeight / imageSize.height
         let transform = CropTransform(
-            zoom: proposedZoom.clamped(to: zoomRange),
-            center: CGPoint(x: geometry.faceCenterX, y: headCentreY)
+            zoom: zoom,
+            center: CGPoint(x: geometry.faceCenterX, y: centerY)
         )
         return clamped(transform, imageSize: imageSize, spec: spec)
     }

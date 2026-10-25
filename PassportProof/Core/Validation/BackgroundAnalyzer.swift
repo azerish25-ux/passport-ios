@@ -23,6 +23,26 @@ struct BackgroundReport: Sendable {
     let edgeResidualFraction: Double
     /// Normalised rects, origin top-left, where the background is not uniform.
     let failingRegions: [CGRect]
+    /// Measured background colour, independent of uniformity. Nil is unknown,
+    /// not evidence of a white background.
+    var color: BackgroundColorReport? = nil
+}
+
+struct BackgroundColorReport: Sendable {
+    let meanLuminance: Double
+    let meanChroma: Double
+    let whiteFraction: Double
+    let sampleCount: Int
+
+    var status: FindingStatus {
+        guard sampleCount > 0 else { return .cannotVerify }
+        if whiteFraction >= 0.90 { return .pass }
+        if meanLuminance < 0.65 || meanChroma > 0.20
+            || (whiteFraction < 0.50 && (meanLuminance < 0.75 || meanChroma > 0.15)) {
+            return .fail
+        }
+        return .cannotVerify
+    }
 }
 
 enum BackgroundAnalyzer {
@@ -32,6 +52,10 @@ enum BackgroundAnalyzer {
     static let uniformitySigmaLimit = 0.045
     static let crownContrastLimit = 0.18
     static let edgeResidualFractionLimit = 0.002
+    // White/off-white has no issuer-published RGB cutoff. These conservative
+    // screening tolerances are app defaults; borderline cases require review.
+    static let minimumWhiteLuminance = 0.80
+    static let maximumWhiteChroma = 0.12
 
     // MARK: - Analysis
 
@@ -59,6 +83,7 @@ enum BackgroundAnalyzer {
 
         let sigma = sample.luminanceSigma(inNormalizedRects: backgroundRegions, excluding: exclusion) ?? 1
         let backgroundLuminance = sample.meanLuminance(inNormalizedRects: backgroundRegions, excluding: exclusion) ?? 0
+        let color = backgroundColor(in: sample, regions: backgroundRegions, excluding: exclusion)
 
         let crownY = FaceAnalyzer.crownEnvelopeY(in: sample, faceBox: clampedFace) ?? Double(clampedFace.minY)
 
@@ -86,7 +111,47 @@ enum BackgroundAnalyzer {
             uniformitySigma: min(max(sigma, 0), 1),
             crownContrast: min(max(contrast, 0), 1),
             edgeResidualFraction: min(max(edgeResidual, 0), 1),
-            failingRegions: regions
+            failingRegions: regions,
+            color: color
+        )
+    }
+
+    private static func backgroundColor(
+        in sample: SampledImage,
+        regions: [CGRect],
+        excluding exclusion: CGRect
+    ) -> BackgroundColorReport? {
+        var count = 0
+        var whiteCount = 0
+        var luminanceSum = 0.0
+        var chromaSum = 0.0
+        for region in regions {
+            guard let bounds = sample.pixelBounds(for: region) else { continue }
+            for y in bounds.minY...bounds.maxY {
+                for x in bounds.minX...bounds.maxX {
+                    let point = CGPoint(x: (Double(x) + 0.5) / Double(sample.width),
+                                        y: (Double(y) + 0.5) / Double(sample.height))
+                    guard !exclusion.contains(point) else { continue }
+                    let red = sample.red(x: x, y: y)
+                    let green = sample.green(x: x, y: y)
+                    let blue = sample.blue(x: x, y: y)
+                    let luminance = sample.luminance(x: x, y: y)
+                    let chroma = max(red, max(green, blue)) - min(red, min(green, blue))
+                    luminanceSum += luminance
+                    chromaSum += chroma
+                    count += 1
+                    if luminance >= minimumWhiteLuminance && chroma <= maximumWhiteChroma {
+                        whiteCount += 1
+                    }
+                }
+            }
+        }
+        guard count > 0 else { return nil }
+        return BackgroundColorReport(
+            meanLuminance: luminanceSum / Double(count),
+            meanChroma: chromaSum / Double(count),
+            whiteFraction: Double(whiteCount) / Double(count),
+            sampleCount: count
         )
     }
 

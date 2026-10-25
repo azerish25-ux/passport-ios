@@ -13,16 +13,27 @@ final class AssessmentDiagnosticsTests: XCTestCase {
 
     func testUniformSaturatedBlueBackgroundMustNotPass() throws {
         let finding = try backgroundFinding(name: "saturated-blue", red: 0, green: 0, blue: 1)
-        XCTExpectFailure("Known assessment defect: US workflows require white/off-white backgrounds, but the rule only tests luminance variation and edge residuals.") {
-            XCTAssertNotEqual(finding.status, .pass, "A saturated blue background must not receive a passing background finding.")
-        }
+        XCTAssertEqual(finding.status, .fail, "A saturated blue background must be rejected.")
     }
 
     func testUniformDarkBackgroundMustNotPass() throws {
         let finding = try backgroundFinding(name: "dark-gray", red: 0.20, green: 0.20, blue: 0.20)
-        XCTExpectFailure("Known assessment defect: no absolute background brightness check distinguishes a uniform dark wall from white/off-white.") {
-            XCTAssertNotEqual(finding.status, .pass, "A dark gray background must not receive a passing background finding.")
-        }
+        XCTAssertEqual(finding.status, .fail, "A dark gray background must be rejected.")
+    }
+
+    func testOffWhiteBackgroundPassesPositiveControl() throws {
+        let finding = try backgroundFinding(name: "off-white", red: 0.96, green: 0.94, blue: 0.90)
+        XCTAssertEqual(finding.status, .pass)
+    }
+
+    func testLightBlueBackgroundMustNotPass() throws {
+        let finding = try backgroundFinding(name: "light-blue", red: 0.78, green: 0.90, blue: 1)
+        XCTAssertEqual(finding.status, .fail, "Brightness alone must not make a coloured background acceptable.")
+    }
+
+    func testBorderlineGrayBackgroundRequiresReview() throws {
+        let finding = try backgroundFinding(name: "borderline-gray", red: 0.78, green: 0.78, blue: 0.78)
+        XCTAssertEqual(finding.status, .cannotVerify, "Borderline lighting must be disclosed, not called definitely compliant or noncompliant.")
     }
 
     private func backgroundFinding(
@@ -50,6 +61,7 @@ final class AssessmentDiagnosticsTests: XCTestCase {
         let image = try XCTUnwrap(context.makeImage())
         let faceBox = CGRect(x: 80.0 / 256, y: 80.0 / 256, width: 96.0 / 256, height: 96.0 / 256)
         let report = BackgroundAnalyzer.analyze(image, faceBox: faceBox)
+        let color = try XCTUnwrap(report.color, "Background colour must actually be sampled.")
         let findings = ValidationEngine.findings(
             geometry: nil,
             background: report,
@@ -58,7 +70,7 @@ final class AssessmentDiagnosticsTests: XCTestCase {
             captureDate: nil
         )
         let finding = try XCTUnwrap(findings.first { $0.id == .backgroundUniformity })
-        print("ASSESSMENT background=\(name) status=\(finding.status.rawValue) sigma=\(report.uniformitySigma) edgeResidual=\(report.edgeResidualFraction)")
+        print("ASSESSMENT background=\(name) status=\(finding.status.rawValue) sigma=\(report.uniformitySigma) edgeResidual=\(report.edgeResidualFraction) luminance=\(color.meanLuminance) chroma=\(color.meanChroma) whiteFraction=\(color.whiteFraction)")
         XCTAssertEqual(report.uniformitySigma, 0, accuracy: 0.000_001, "The fixture must have a uniform sampled background.")
         XCTAssertEqual(report.edgeResidualFraction, 0, accuracy: 0.000_001, "The subject must stay clear of the sampled background ring.")
         return finding

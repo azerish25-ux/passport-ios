@@ -454,6 +454,27 @@ enum ValidationEngine {
         let residualPercent = background.edgeResidualFraction * 100
         let base = "Background spread is \(MeasurementFormat.percent(sigmaPercent)) (limit \(rangeText)) with \(MeasurementFormat.percent(residualPercent)) of the ring at the head edge deviating from it. This is a threshold test on pixel values, not a perceptual judgement."
 
+        guard let color = background.color else {
+            return Finding(
+                id: .backgroundUniformity,
+                title: "Background colour and uniformity",
+                status: .cannotVerify,
+                detail: "The background colour could not be measured. Use a plain white or off-white wall and check the original photograph.",
+                measurement: measurement,
+                provenance: .appDefault
+            )
+        }
+        if color.status == .fail {
+            return Finding(
+                id: .backgroundUniformity,
+                title: "Background colour and uniformity",
+                status: .fail,
+                detail: "The sampled background appears coloured or too dark. These US workflows require white or off-white; a uniform blue, grey or dark wall is not sufficient. Retake against a suitable wall without replacing the background digitally. Colour thresholds are app-selected screening tolerances.",
+                measurement: measurement,
+                provenance: .appDefault
+            )
+        }
+
         if background.uniformitySigma > BackgroundAnalyzer.uniformitySigmaLimit {
             return Finding(
                 id: .backgroundUniformity,
@@ -470,6 +491,16 @@ enum ValidationEngine {
                 title: "Background uniformity",
                 status: .fail,
                 detail: base + " Something other than the plain background is showing at the edge of the head. Clear the frame behind you and keep hair clear of the outline.",
+                measurement: measurement,
+                provenance: .appDefault
+            )
+        }
+        if color.status == .cannotVerify {
+            return Finding(
+                id: .backgroundUniformity,
+                title: "Background colour and uniformity",
+                status: .cannotVerify,
+                detail: "The background is near the app's white/off-white screening boundary. Inspect the original in neutral light or retake against a brighter, plain wall. The issuer does not publish an RGB threshold.",
                 measurement: measurement,
                 provenance: .appDefault
             )

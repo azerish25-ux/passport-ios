@@ -7,7 +7,7 @@ import Vision
 /// benchmark. Some reference images are smaller than the required export size;
 /// their complete verdict is recorded rather than assumed to be a global pass.
 final class PortraitAssessmentTests: XCTestCase {
-    private let fixtureNames = ["NeutralPortrait", "BlueBackgroundPortrait", "WhiteBackgroundPortrait"]
+    private let fixtureNames = ["FullResolutionPortrait", "NeutralPortrait", "BlueBackgroundPortrait", "WhiteBackgroundPortrait"]
 
     @MainActor
     func testOfficialPortraitsRecordRealVisionAndPreparedCropFindings() throws {
@@ -82,17 +82,10 @@ final class PortraitAssessmentTests: XCTestCase {
             XCTAssertLessThan(rect.maxY, CGFloat(padded.height))
             assertAnalysisContract(prepared, image: cropped)
 
-            let options = XCTExpectedFailure.Options()
-            options.isStrict = true
-            XCTExpectFailure(
-                "Known assessment defect: automaticTransform centres the inferred head midpoint, which is the eye line, at half the crop height (25.4 mm); the visa workflow requires 28–35 mm from the bottom.",
-                options: options
-            ) {
-                XCTAssertTrue(required.contains(eyeFromBottomMM), context)
-            }
+            XCTAssertTrue(required.contains(eyeFromBottomMM), context)
             return
         }
-        throw XCTSkip("None of the three low-resolution illustrative portraits established measurable, unconstrained source geometry. The photographic auto-crop regression was not exercised; no successful face detection or reproduction is claimed.")
+        XCTFail("No portrait established measurable, unconstrained source geometry, including the full-resolution fixture. The photographic crop regression was not exercised.")
     }
 
     private func fixture(named name: String) throws -> CGImage {

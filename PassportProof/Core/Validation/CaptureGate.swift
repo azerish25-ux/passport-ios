@@ -46,6 +46,15 @@ enum CaptureGate {
         let top = geometry.crownEnvelopeY
         let bottom = geometry.chinY
 
+        if background.color?.status == .fail {
+            return CaptureGateResult(
+                canCapture: false,
+                message: "Use a white or off-white background. The wall appears coloured or too dark.",
+                headTopFraction: top,
+                headBottomFraction: bottom
+            )
+        }
+
         // Background first: without an even background the silhouette scan that
         // produces `top` is not trustworthy in the first place.
         if background.uniformitySigma > BackgroundAnalyzer.uniformitySigmaLimit {
