@@ -20,6 +20,8 @@ The simulator assessment found a missing white/off-white background check, a cro
 
 Reopening the crop uses the same full-screen workspace as the first edit. A synchronous per-scene privacy window covers app presentations on backgrounding; active sharing is kept usable. The UI suite backgrounds and resumes a draft edit, then verifies its zoom and dimensions survive and cancel preserves the accepted review. This is state-restoration coverage, not proof of every OS app-switcher snapshot.
 
+The app declares `UIRequiresFullScreen` compatibility mode to match its existing restricted iPad orientations and address the device-build orientation warning. Device families and orientation lists are unchanged. This does not promise a literal full-screen presentation: Stage Manager and iPadOS 26 Windowed Apps can display a scaled scene alongside other apps. Apple deprecated this compatibility mode in iPadOS 26; builds using the iOS 27 SDK can resize discretely. The camera remains configured for portrait capture. Landscape camera behavior and resizable iPad workspaces have not been verified; this declaration is an interim compatibility measure, not that validation.
+
 ## Verification contract
 
 GitHub Actions builds the simulator and unsigned device Release app, runs unit tests, and exports real test attachments. A successful repair unit gate requires zero failed, skipped or expected-failure tests. UI tests use a real PhotosPicker input and local StoreKit transactions; no pre-approved PhotoAnalysis or debug entitlement is injected into the main-flow test.
@@ -35,3 +37,5 @@ Consult the workflow result for the exact commit. Physical camera capture, print
 - [Passport photograph FAM](https://fam.state.gov/FAM/08FAM/08FAM040201.html): anatomical head reference.
 - [Apple photo output maximum quality](https://developer.apple.com/documentation/avfoundation/avcapturephotooutput/maxphotoqualityprioritization).
 - [Apple StoreKit Test](https://developer.apple.com/documentation/storekittest/sktestsession).
+- [Apple full-screen compatibility behavior](https://developer.apple.com/documentation/bundleresources/information-property-list/uirequiresfullscreen).
+- [Apple TN3192: migrate away from full-screen compatibility mode](https://developer.apple.com/documentation/technotes/tn3192-migrating-your-app-from-the-deprecated-uirequiresfullscreen-key).

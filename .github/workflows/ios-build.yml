@@ -346,12 +346,20 @@ jobs:
             fi
           done
 
-          if strings "$BINARY" | grep -Fq "Continue with debug unlock"; then
+          # Read the complete strings output first. grep -q in a pipe can close
+          # early, make strings fail with SIGPIPE and hide a match under pipefail.
+          strings "$BINARY" > build/release-strings.txt
+          if grep -Fq "Continue with debug unlock" build/release-strings.txt; then
             echo "::error::DEBUG purchase bypass text is present in the Release binary"
             exit 1
           fi
-          if strings "$BINARY" | grep -Fq "Debug demonstration unlock"; then
+          if grep -Fq "Debug demonstration unlock" build/release-strings.txt; then
             echo "::error::DEBUG entitlement path is present in the Release binary"
+            exit 1
+          fi
+
+          if [ -n "$(find "$APP" -name '*.storekit' -print -quit)" ]; then
+            echo "::error::Local StoreKit test configuration is present in the Release app"
             exit 1
           fi
 

@@ -184,9 +184,7 @@ struct UnlockView: View {
     private var unlockedBlock: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Label(
-                entitlements.isPrototypeUnlock
-                    ? "Debug demonstration unlock is active. No purchase was made."
-                    : "Export is unlocked for this Apple Account.",
+                unlockConfirmation,
                 systemImage: "checkmark.circle.fill"
             )
             .font(.body.weight(.semibold))
@@ -203,6 +201,15 @@ struct UnlockView: View {
                 .accessibilityIdentifier("unlock.restore")
             }
         }
+    }
+
+    private var unlockConfirmation: String {
+        #if DEBUG
+        if entitlements.isPrototypeUnlock {
+            return "Debug demonstration unlock is active. No purchase was made."
+        }
+        #endif
+        return "Export is unlocked for this Apple Account."
     }
 
     #if DEBUG
