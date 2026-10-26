@@ -168,7 +168,9 @@ app and restores it through the real screen.
 A red gating job now means an application defect, not a known-broken build
 machine. Failures are published as workflow annotations by `Tools/ci_report.py`,
 so a failing run names the test and the assertion without downloading the
-`.xcresult`.
+`.xcresult`. The UI leg also compares the number of test methods in the source
+with the number of named results in the log, so a crashed runner that resumes
+with only some journeys cannot pass as if the whole suite had run.
 
 ### Why the photo-picker test can report a skip
 

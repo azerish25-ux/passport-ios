@@ -383,6 +383,27 @@ jobs:
             exit 1
           fi
 
+          # A crashed UI runner restarts and runs only what is left. Run 47 ended
+          # with "Executed 2 tests" while the suite declares more, so a green
+          # exit alone did not prove every journey ran. Count a named result for
+          # every test method before calling this leg successful; a skipped test
+          # still reports a result, which is honest, while a silent omission is
+          # not.
+          EXPECTED=$(grep -cE '^[[:space:]]*func test[A-Za-z0-9_]+\(' PassportProofUITests/PassportProofUITests.swift || true)
+          REPORTED=$(grep -oE "Test Case '-\[PassportProofUITests\.[A-Za-z0-9_]+ [A-Za-z0-9_]+\]' (passed|failed|skipped)" build/ui-test.log \
+            | sort -u | wc -l | tr -d ' ')
+          echo "UI test methods reported: $REPORTED of $EXPECTED" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${EXPECTED:-0}" -lt 1 ]; then
+            echo "::error::No UI test methods were found to compare against; the harness itself is missing"
+            exit 1
+          fi
+          if [ "${REPORTED:-0}" -lt "$EXPECTED" ]; then
+            echo "::error::Only $REPORTED of $EXPECTED UI test methods reported a result; a runner restart dropped journeys"
+            grep -oE "Test Case '-\[PassportProofUITests\.[A-Za-z0-9_]+ [A-Za-z0-9_]+\]'" build/ui-test.log \
+              | sort -u | sed 's/^/reported: /' || true
+            exit 1
+          fi
+
       - name: Report simulator crashes
         # A crashed app or test runner exits the step with 65 and prints no
         # failing test case, so without this a red UI leg has no named cause.
