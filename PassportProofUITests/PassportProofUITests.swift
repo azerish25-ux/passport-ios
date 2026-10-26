@@ -95,8 +95,15 @@ final class PassportProofUITests: XCTestCase {
         let photos = app.navigationBars["Photos"]
         require(photos, in: app, timeout: 45)
         capture(app, named: "03-photos-picker")
-        if photos.buttons["Cancel"].exists { photos.buttons["Cancel"].tap() }
-        require(app.buttons["capture.library"], in: app, timeout: 15)
+        let cancel = photos.buttons["Cancel"]
+        if cancel.waitForExistence(timeout: 10) {
+            cancel.tap()
+        } else {
+            // Some runtimes present the picker without a Cancel button in the
+            // navigation bar; a downward swipe dismisses the sheet.
+            app.swipeDown()
+        }
+        require(app.buttons["capture.library"], in: app, timeout: 20)
     }
 
     // MARK: - Store
