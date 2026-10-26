@@ -17,10 +17,17 @@ final class PassportProofTests: XCTestCase {
     // MARK: - Corpus and output contracts
 
     func testCorpusContainsOnlyCompleteWorkflows() {
-        XCTAssertEqual(DocumentCorpus.documents.map(\.id), ["us-passport", "us-visa", "us-dv-lottery"])
+        XCTAssertEqual(DocumentCorpus.documents.map(\.id), [
+            "us-passport", "us-visa", "us-dv-lottery", "ca-passport", "de-schengen-visa"
+        ])
         XCTAssertEqual(DocumentCorpus.document(id: "us-passport")?.workflow, .printedPhoto)
         XCTAssertEqual(DocumentCorpus.document(id: "us-visa")?.workflow, .digitalPhoto)
         XCTAssertEqual(DocumentCorpus.document(id: "us-dv-lottery")?.workflow, .digitalPhoto)
+        XCTAssertEqual(DocumentCorpus.document(id: "ca-passport")?.workflow, .printedPhoto)
+        XCTAssertEqual(DocumentCorpus.document(id: "de-schengen-visa")?.workflow, .printedPhoto)
+        // UK printed photos demand a cream or light-grey background while the
+        // digital route has different pixel rules; one generic output cannot
+        // honour both, so it is deliberately absent rather than approximated.
         XCTAssertNil(DocumentCorpus.document(id: "uk-passport"))
     }
 
@@ -33,7 +40,8 @@ final class PassportProofTests: XCTestCase {
         XCTAssertFalse(passport.supportsDigitalExport)
         XCTAssertEqual(passport.headMeasurement, .skull)
 
-        for document in DocumentCorpus.documents.dropFirst() {
+        for id in ["us-visa", "us-dv-lottery"] {
+            let document = try XCTUnwrap(DocumentCorpus.document(id: id))
             XCTAssertEqual(document.headHeightMM.lowerBound, 25.4, accuracy: 0.0001)
             XCTAssertEqual(document.headHeightMM.upperBound, document.heightMM * 0.69, accuracy: 0.0001)
             XCTAssertEqual(document.headMeasurement, .includingHair)
@@ -139,13 +147,15 @@ final class PassportProofTests: XCTestCase {
 
     func testPrintLayoutsAndPDF() {
         XCTAssertEqual(PrintSheetLayout.fourBySix.pageSizePoints, CGSize(width: 288, height: 432))
-        XCTAssertEqual(PrintSheetLayout.fourBySix.columns, 2)
-        XCTAssertEqual(PrintSheetLayout.fourBySix.rows, 2)
         XCTAssertEqual(PrintSheetLayout.letter12.pageSizePoints, CGSize(width: 612, height: 792))
         XCTAssertTrue(PrintSheetLayout.letter12.supportsCutMarks)
 
         let image = makeImage(width: 900, height: 900)
         let spec = DocumentCorpus.documents[0]
+        let plan = PrintPlan(layout: .fourBySix, spec: spec)
+        XCTAssertEqual(plan.columns, 2)
+        XCTAssertEqual(plan.rows, 2)
+        XCTAssertEqual(plan.count, 4)
         guard let data = PrintSheetRenderer.pdfData(photo: image, layout: .fourBySix, spec: spec) else {
             return XCTFail("PDF rendering failed")
         }
