@@ -407,7 +407,6 @@ final class PassportProofUITests: XCTestCase {
         if unique.isEmpty { return "(no identifiers)" }
         return unique.prefix(25).joined(separator: ", ")
     }
-    }
 
     @MainActor
     private func waitUntil(in app: XCUIApplication, description: String, timeout: TimeInterval, condition: @escaping () -> Bool) {
