@@ -348,21 +348,35 @@ final class PassportProofUITests: XCTestCase {
 
     // MARK: - Assertions and evidence
 
-    /// Scrolls in bounded steps until the element is hittable. Deliberately
-    /// simple: the previous suite recomputed viewport rectangles and dragged
-    /// sliders by hand, which made the tests fail whenever padding moved.
+    /// Scrolls in bounded steps until the element is hittable.
+    ///
+    /// The drag starts on the 20 pt horizontal page margin rather than in the
+    /// middle of the screen. A drag that begins on a slider is consumed by that
+    /// slider, so the scroll view never moves — which is exactly how the framing
+    /// attestations became unreachable in the previous run.
     @MainActor
     private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, towardTop: Bool = false) {
         require(element, in: app)
         var attempts = 0
-        while !(element.exists && element.isHittable) && attempts < 8 {
-            if towardTop { app.swipeDown() } else { app.swipeUp() }
+        while !(element.exists && element.isHittable) && attempts < 10 {
+            dragInGutter(in: app, towardTop: towardTop)
             attempts += 1
         }
         if !element.isHittable {
             capture(app, named: "unreachable-\(element.identifier.isEmpty ? "element" : element.identifier)")
             XCTFail("Element never became hittable: \(element)")
         }
+    }
+
+    @MainActor
+    private func dragInGutter(in app: XCUIApplication, towardTop: Bool) {
+        let gutter = 0.955
+        let lower = 0.78
+        let upper = 0.30
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: gutter, dy: towardTop ? upper : lower))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: gutter, dy: towardTop ? lower : upper))
+        start.press(forDuration: 0.05, thenDragTo: end,
+                    withVelocity: XCUIGestureVelocity(300), thenHoldForDuration: 0.1)
     }
 
     @MainActor

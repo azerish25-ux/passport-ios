@@ -35,8 +35,15 @@ final class CatalogueContractTests: XCTestCase {
                            "\(label): \(spec.widthMM)×\(spec.heightMM) mm is not \(spec.widthPixels)×\(spec.heightPixels) px")
 
             XCTAssertTrue(spec.widthMM > 0 && spec.heightMM > 0, label)
-            XCTAssertTrue(spec.widthPixels >= 600 && spec.heightPixels >= 600,
-                          "\(label): output must be at least 600 px for print quality")
+            // Print quality is a density, not a pixel count. A 35 × 45 mm photo
+            // reaches 300 DPI at 420 × 540 px; requiring 600 px on both sides
+            // would reject correct small-format media.
+            let horizontalDPI = Double(spec.widthPixels) / (spec.widthMM / 25.4)
+            let verticalDPI = Double(spec.heightPixels) / (spec.heightMM / 25.4)
+            XCTAssertGreaterThanOrEqual(horizontalDPI, 299.5,
+                                        "\(label): \(spec.widthPixels) px over \(spec.widthMM) mm is under 300 DPI")
+            XCTAssertGreaterThanOrEqual(verticalDPI, 299.5,
+                                        "\(label): \(spec.heightPixels) px over \(spec.heightMM) mm is under 300 DPI")
 
             XCTAssertGreaterThan(spec.headHeightMM.lowerBound, 0, label)
             XCTAssertLessThan(spec.headHeightMM.lowerBound, spec.headHeightMM.upperBound, label)
