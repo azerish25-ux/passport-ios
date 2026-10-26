@@ -110,6 +110,15 @@ final class PassportProofUITests: XCTestCase {
 
     @MainActor
     func testUnlimitedPurchaseSurvivesRelaunchAndRestores() {
+        // StoreKit Test keeps a non-consumable owned on this simulator between
+        // sessions, so a journey test that bought the unlock would leave this
+        // test starting from an already-entitled store — and then the purchase
+        // button it needs does not exist. Revoke anything left behind first.
+        for transaction in storeSession.allTransactions() {
+            try? storeSession.refundTransaction(identifier: transaction.identifier)
+        }
+        storeSession.clearTransactions()
+
         let app = launchApp()
         openUnlock(in: app)
         let purchase = app.buttons["unlock.purchase"]
@@ -302,24 +311,29 @@ final class PassportProofUITests: XCTestCase {
     private func switchOn(_ identifier: String, in app: XCUIApplication, description: String) {
         let row = app.buttons[identifier]
         scrollTo(row, in: app)
-        XCTAssertFalse(row.isSelected, "\(identifier) must start unconfirmed")
+        XCTAssertEqual(row.value as? String, "Not confirmed", "\(identifier) must start unconfirmed")
         for _ in 0..<3 {
             if !row.isHittable { scrollTo(row, in: app) }
             row.tap()
             if waitForSwitch(row, on: true, timeout: 4) { return }
         }
         capture(app, named: "confirm-\(identifier)")
-        XCTFail("\(description): \(identifier). On screen: \(visibleIdentifiers(app))")
+        XCTFail("\(description): \(identifier) still reads \(row.value as? String ?? "no value"). "
+                + "On screen: \(visibleIdentifiers(app))")
     }
 
+    /// Reads the state VoiceOver reads. The `Selected` trait is applied for
+    /// VoiceOver, but XCTest does not surface it for a SwiftUI button, so the
+    /// spoken value is the honest signal to assert.
     @MainActor
     private func waitForSwitch(_ row: XCUIElement, on: Bool, timeout: TimeInterval) -> Bool {
+        let expected = on ? "Confirmed" : "Not confirmed"
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if row.isSelected == on { return true }
+            if (row.value as? String) == expected { return true }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
-        return row.isSelected == on
+        return (row.value as? String) == expected
     }
 
     @MainActor
@@ -382,8 +396,8 @@ final class PassportProofUITests: XCTestCase {
             attempts += 1
         }
         if !element.isHittable {
-            capture(app, named: "unreachable-\(element.identifier.isEmpty ? "element" : element.identifier)")
-            XCTFail("Element never became hittable: \(element) after \(attempts) drags. On screen: \(visibleIdentifiers(app))")
+            capture(app, named: "unreachable-\(describe(element))")
+            XCTFail("Element never became hittable: \(describe(element)) after \(attempts) drags. On screen: \(visibleIdentifiers(app))")
         }
     }
 
@@ -403,9 +417,10 @@ final class PassportProofUITests: XCTestCase {
 
     @MainActor
     private func require(_ element: XCUIElement, in app: XCUIApplication, timeout: TimeInterval = 15) {
-        if !element.waitForExistence(timeout: timeout) {
+        let found = element.waitForExistence(timeout: timeout)
+        if !found {
             let attachment = XCTAttachment(screenshot: app.screenshot())
-            attachment.name = "missing-\(element.identifier.isEmpty ? "element" : element.identifier)"
+            attachment.name = "missing-\(describe(element))"
             attachment.lifetime = .keepAlways
             add(attachment)
             print("UI DIAGNOSTIC hierarchy\n\(app.debugDescription)")
@@ -414,7 +429,17 @@ final class PassportProofUITests: XCTestCase {
         // screenshot and hierarchy in the artifact cannot be read. Naming the
         // identifiers that were on screen distinguishes "wrong screen" from
         // "right screen, element not built yet" without another run.
-        XCTAssertTrue(element.exists, "Required UI is missing: \(element). On screen: \(visibleIdentifiers(app))")
+        //
+        // The message is built only from the identifier: describing a missing
+        // `XCUIElement` resolves its snapshot and throws, which previously
+        // replaced this explanation with "Failed to get matching snapshot".
+        XCTAssertTrue(found, "Required UI is missing: \(describe(element)). On screen: \(visibleIdentifiers(app))")
+    }
+
+    /// Names an element without resolving a snapshot, which throws when the
+    /// element matches nothing.
+    private func describe(_ element: XCUIElement) -> String {
+        element.identifier.isEmpty ? "unnamed \(element.elementType.rawValue) element" : element.identifier
     }
 
     /// Identifiers of the elements present right now, bounded so a failure

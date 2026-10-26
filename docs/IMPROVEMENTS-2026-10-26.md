@@ -157,3 +157,48 @@ Known risks introduced by this pass:
   and dates are in the corpus; they have not been reviewed by anyone else.
 - **The German figures are the German Schengen profile**, not a claim that every
   member state applies identical details.
+
+## 8. Later same-day pass: three defects the pipeline exposed
+
+### Attestations were a 44 pt target on a two-line row
+
+Both review screens used a SwiftUI `Toggle` whose label was two lines of text.
+The switch is the only interactive part, so the usable target was the control at
+the trailing edge; a tap on the words did nothing. UI tests missed it repeatedly
+(run 44 lost confirmations at the first statement in one test and the last in
+another), which is the same failure a thumb makes at arm's length.
+
+Confirmations are now `ConfirmationRow`, a full-width button with an explicit
+checkmark, a pressed state and a `Selected` trait. VoiceOver announces the state
+in words instead of a numeric switch value, and one component now serves both
+the visual checklist and the framing guides.
+
+### Restore could spin forever
+
+`AppStore.sync()` has no deadline and does not honour cancellation. With no
+signed-in account or during an App Store outage, the paywall stayed on
+"Contacting App Store…" with every control disabled. It is now raced against a
+25 s deadline, and the losing branch is abandoned rather than awaited, so the
+screen always reaches a retryable sentence. The StoreKit suite caught this by
+exceeding a three-minute allowance and killing the test process; it now fails
+fast with a short test-only timeout.
+
+### Submission blockers in the bundle
+
+- `Info.plist` declared `ITSAppUsesNonExistentEncryption`. That key does not
+  exist, so every upload would have waited on a manual export-compliance answer.
+  The declared key is now `ITSAppUsesNonExemptEncryption = false`.
+- `PrivacyInfo.xcprivacy` declared no accessed API types while the app writes
+  `UserDefaults` (credit balance, granted transaction IDs). It now declares
+  `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1`. An
+  undeclared required-reason API is a documented upload warning and a review
+  risk.
+
+Both files are validated by parsing them, not by inspection.
+
+### What this pass still does not prove
+
+- Print scaling on a real printer.
+- Camera framing on a physical device.
+- A sandbox purchase of the consumable credit.
+- Anything about demand: no amount of code guarantees revenue.

@@ -185,7 +185,9 @@ final class EntitlementStore: ObservableObject {
         isWorking = true
         purchasingProduct = .unlimited
         lastPurchaseErrorDiagnostic = nil
+        let watchdog = startPurchaseWatchdog()
         defer {
+            watchdog.cancel()
             isWorking = false
             purchasingProduct = nil
         }
@@ -232,7 +234,9 @@ final class EntitlementStore: ObservableObject {
         isWorking = true
         purchasingProduct = .singleExport
         lastPurchaseErrorDiagnostic = nil
+        let watchdog = startPurchaseWatchdog()
         defer {
+            watchdog.cancel()
             isWorking = false
             purchasingProduct = nil
         }
@@ -290,6 +294,22 @@ final class EntitlementStore: ObservableObject {
     /// bounded so the screen can always reach a retryable state. Shortened in
     /// tests.
     static var restoreTimeout: Duration = .seconds(25)
+
+    /// `Product.purchase()` has the same open-ended wait. If the store never
+    /// answers, the paywall's button was disabled forever with no explanation.
+    /// A watchdog releases the screen; a late success still unlocks normally.
+    static var purchaseTimeout: Duration = .seconds(30)
+
+    @MainActor
+    private func startPurchaseWatchdog() -> Task<Void, Never> {
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.purchaseTimeout)
+            guard !Task.isCancelled, let self, self.purchasingProduct != nil else { return }
+            self.isWorking = false
+            self.purchasingProduct = nil
+            self.state = .failed("The App Store did not answer in time. Nothing was charged. Check your connection, then try again.")
+        }
+    }
 
     func restore() async {
         guard !isWorking else { return }

@@ -115,7 +115,7 @@ debug build's demonstration unlock.
 >
 > If the review reports that automatic measurement is unavailable, tap
 > **Place framing guides**, position the four guides on the actual features and
-> switch on all four attestations. Then complete the four ordinary visual
+> confirm all four statements. Then complete the four ordinary visual
 > confirmations. Both the review and the export screen label the photo
 > **Manually framed**.
 >
@@ -136,6 +136,9 @@ debug build's demonstration unlock.
 
 | Field | Value |
 |---|---|
+| Bundle ID | `com.passportproof.app`, version `1.1.0` (build 2) |
+| Export compliance | Declared in `Info.plist` as `ITSAppUsesNonExemptEncryption = false`; no answer needed per upload |
+| Privacy manifest | `PrivacyInfo.xcprivacy` declares no tracking, no collected data and the `UserDefaults` required-reason API (`CA92.1`) |
 | Privacy policy | Publish [`PRIVACY.md`](PRIVACY.md); URL required |
 | Support | Maintained support page with a contact method; URL required |
 | Marketing URL | Optional |

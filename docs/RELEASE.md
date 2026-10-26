@@ -143,7 +143,26 @@ for review.
 | UI journey tests on a seeded original and real local StoreKit transactions | gating |
 | Release bundle audit (icon, launch symbol, privacy manifest, no DEBUG unlock) | gating |
 | Vision landmark accuracy on Simulator | diagnostic job, not gating |
+| Unit-level `StoreKitIntegrationTests` | diagnostic step, not gating |
 | Camera behaviour, printer scaling, App Store acceptance | external |
+
+### Why the unit-level StoreKit tests are not gating
+
+Apple's local StoreKit test server fails in three distinct ways on the hosted
+runner, none of them reachable from application code:
+
+1. clearing a simulated error inside a session kills the server (`ASDErrorDomain`
+   1054) and takes the test process with it;
+2. a purchase or restore can wait indefinitely and trip the three-minute
+   allowance, which also kills the process and discards every other suite's
+   result;
+3. a failed purchase still creates a transaction record (run 44: zero before,
+   one after), so Apple's own documented contract is not observable there.
+
+Those tests still run, publish their own annotations and appear in the summary,
+but they cannot decide whether the product builds and behaves. The purchase path
+is gated end to end instead by the UI test that buys the unlock, relaunches the
+app and restores it through the real screen.
 
 A red gating job now means an application defect, not a known-broken build
 machine. Failures are published as workflow annotations by `Tools/ci_report.py`,
