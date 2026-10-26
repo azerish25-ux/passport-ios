@@ -20,3 +20,6 @@ xcuserdata/
 # Python
 __pycache__/
 *.pyc
+
+# Local Swift syntax-check toolchain (not part of the app)
+.toolchain/

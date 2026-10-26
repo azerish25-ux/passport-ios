@@ -88,6 +88,7 @@ jobs:
       - name: Build for simulator
         run: |
           set -o pipefail
+          mkdir -p build
           xcodebuild build \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
@@ -96,7 +97,7 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            -quiet
+            2>&1 | tee build/simulator-build.log
 
       - name: Build test bundles
         id: build_tests
@@ -112,7 +113,7 @@ jobs:
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=YES \
-            -quiet
+            2>&1 | tee build/test-bundles.log
 
       - name: Resolve an iPhone simulator matching the selected SDK
         id: sim
@@ -355,6 +356,27 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Compiler errors and XCTest failures are emitted as workflow commands so
+      # they become annotations on the run. Without this a red iOS run can only
+      # be diagnosed by downloading the .xcresult, which is the single biggest
+      # reason failures stayed open across commits.
+      - name: Publish failure annotations
+        if: always()
+        run: |
+          python3 Tools/ci_report.py --label simulator-build --log build/simulator-build.log || true
+          python3 Tools/ci_report.py --label test-bundles --log build/test-bundles.log || true
+          python3 Tools/ci_report.py --label unit --log build/unit-test.log || true
+          python3 Tools/ci_report.py --label ui --log build/ui-test.log || true
+
+      - name: Upload build and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
   # Proves the same sources compile for arm64 device against the iOS SDK. This
   # catches simulator-only API misuse and any missing framework link that the
   # simulator build would tolerate. Signing is disabled: the prototype has no
@@ -390,6 +412,7 @@ jobs:
       - name: Build for device
         run: |
           set -o pipefail
+          mkdir -p build
           xcodebuild build \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
@@ -399,7 +422,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            -quiet
+            2>&1 | tee build/device-build.log
 
       - name: Audit the Release bundle
         run: |
@@ -452,3 +475,16 @@ jobs:
           PY
 
           echo "Release bundle audit passed: icon, launch symbol, privacy manifest, usage strings, no DEBUG unlock." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish failure annotations
+        if: always()
+        run: python3 Tools/ci_report.py --label device-build --log build/device-build.log || true
+
+      - name: Upload device build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-build-log
+          path: build/device-build.log
+          if-no-files-found: warn
+          retention-days: 14
