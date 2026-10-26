@@ -5,19 +5,34 @@
   ],
   "products" : [
     {
-      "displayPrice" : "17.99",
+      "displayPrice" : "7.99",
       "familyShareable" : false,
       "internalID" : "6F1C2A90-3E4B-4D77-8A15-9B2C7D4E5F60",
       "localizations" : [
         {
-          "description" : "Unlimited print-sheet and digital-file exports for every supported document workflow. One non-consumable purchase, not a subscription.",
-          "displayName" : "PassportProof Export Unlock",
+          "description" : "Unlimited print-sheet and digital-file exports for every supported document workflow. One non-consumable purchase, not a subscription, restorable with your Apple Account.",
+          "displayName" : "PassportProof Unlimited Exports",
           "locale" : "en_US"
         }
       ],
       "productID" : "com.passportproof.app.unlock",
-      "referenceName" : "PassportProof Unlock",
+      "referenceName" : "PassportProof Unlimited",
       "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "3.99",
+      "familyShareable" : false,
+      "internalID" : "B71E4D38-9C55-4F1A-8E23-7D6A0C4B91F2",
+      "localizations" : [
+        {
+          "description" : "One export credit for this device. It does not expire, cannot be restored, and does not unlock unlimited exports.",
+          "displayName" : "One PassportProof Export",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.passportproof.app.single-export",
+      "referenceName" : "PassportProof Single Export",
+      "type" : "Consumable"
     }
   ],
   "settings" : {

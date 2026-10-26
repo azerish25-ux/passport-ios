@@ -11,7 +11,13 @@ import SwiftUI
 
 /// A comfortably sized, wrapping primary action.
 struct PrimaryButtonStyle: ButtonStyle {
+    /// `filled` is the single primary action on a screen. `outline` is a
+    /// deliberate second choice, such as a lower-commitment purchase tier, and
+    /// must never compete visually with the filled action.
+    enum Emphasis { case filled, outline }
+
     var isEnabled: Bool = true
+    var emphasis: Emphasis = .filled
     @Environment(\.isEnabled) private var environmentEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -19,7 +25,7 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.semibold))
             .multilineTextAlignment(.center)
-            .foregroundStyle(isEnabled && environmentEnabled ? Theme.onInk : Theme.inkTertiary)
+            .foregroundStyle(foreground)
             .padding(.horizontal, Theme.Spacing.l)
             .frame(maxWidth: .infinity)
             .frame(minHeight: Theme.Metrics.buttonHeight)
@@ -28,13 +34,29 @@ struct PrimaryButtonStyle: ButtonStyle {
                 fill(isPressed: configuration.isPressed),
                 in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(emphasis == .outline ? borderColor : .clear, lineWidth: Theme.Stroke.rule)
+            )
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .opacity(configuration.isPressed ? 0.9 : 1)
             .animation(reduceMotion ? nil : Theme.Motion.press, value: configuration.isPressed)
     }
 
+    private var foreground: Color {
+        guard isEnabled && environmentEnabled else { return Theme.inkTertiary }
+        return emphasis == .outline ? Theme.accent : Theme.onInk
+    }
+
+    private var borderColor: Color {
+        isEnabled && environmentEnabled ? Theme.accent.opacity(0.45) : Theme.rule
+    }
+
     private func fill(isPressed: Bool) -> Color {
-        guard isEnabled && environmentEnabled else { return Theme.rule }
+        guard isEnabled && environmentEnabled else { return Theme.rule.opacity(emphasis == .outline ? 0.25 : 1) }
+        if emphasis == .outline {
+            return isPressed ? Theme.sageWash.opacity(0.9) : Theme.paperRaised
+        }
         return isPressed ? Theme.inkPressed : Theme.ink
     }
 }
@@ -65,6 +87,7 @@ struct AccentButtonStyle: ButtonStyle {
 /// Convenience wrapper for a primary action that is not a navigation link.
 struct PrimaryButton: View {
     let title: String
+    var emphasis: PrimaryButtonStyle.Emphasis = .filled
     var isEnabled: Bool = true
     let action: () -> Void
 
@@ -72,7 +95,7 @@ struct PrimaryButton: View {
         Button(action: action) {
             Text(title)
         }
-        .buttonStyle(PrimaryButtonStyle(isEnabled: isEnabled))
+        .buttonStyle(PrimaryButtonStyle(isEnabled: isEnabled, emphasis: emphasis))
         .disabled(!isEnabled)
     }
 }

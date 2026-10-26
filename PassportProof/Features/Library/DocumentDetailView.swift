@@ -34,19 +34,24 @@ struct DocumentDetailView: View {
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            StudioEyebrow(title: "United States · \(spec.workflow.shortTitle)")
+            StudioEyebrow(title: "\(spec.country) · \(spec.workflow.shortTitle)")
             Text(spec.documentName)
                 .font(.system(.largeTitle, design: .serif))
                 .tracking(-0.7)
                 .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(spec.supportsPrintSheet
-                 ? "For applications made in person or by mail."
-                 : (spec.id == "us-visa" ? "Prepare a digital photo for a US visa application." : "Prepare a digital photo for a Diversity Visa entry."))
+            Text(subtitle)
                 .font(.subheadline)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private var subtitle: String {
+        if spec.supportsPrintSheet { return "For applications made in person or by mail." }
+        if spec.id == "us-visa" { return "Prepare a digital photo for a US visa application." }
+        if spec.id == "us-dv-lottery" { return "Prepare a digital photo for a Diversity Visa entry." }
+        return "Prepare a digital photo for your \(spec.documentName) application."
     }
 
     private var outputCard: some View {
@@ -58,7 +63,7 @@ struct DocumentDetailView: View {
                 }
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     StudioEyebrow(title: "Your finished format")
-                    Text(spec.supportsPrintSheet ? "2 × 2 in" : "600 × 600")
+                    Text(spec.outputSummaryLabel)
                         .font(.system(.title, design: .monospaced, weight: .medium))
                         .tracking(-0.7)
                         .foregroundStyle(Theme.ink)
@@ -120,7 +125,7 @@ struct DocumentDetailView: View {
                         if let eye = spec.eyeLineFromBottomMM {
                             RuleDetail(title: "Eye line", value: "\(Format.range(eye.lowerBound, eye.upperBound, unit: "mm")) from the bottom edge")
                         }
-                        RuleDetail(title: "Photo dimensions", value: Format.sizePixels(width: spec.widthPixels, height: spec.heightPixels))
+                        RuleDetail(title: "Photo dimensions", value: "\(Format.sizePixels(width: spec.widthPixels, height: spec.heightPixels)) · \(spec.millimetreLabel)")
                         RuleDetail(title: "Original photo", value: "No filters, retouching or background replacement. Only the geometric crop is adjusted.")
                     }
                     .padding(.top, Theme.Spacing.m)

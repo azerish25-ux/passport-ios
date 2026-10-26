@@ -2,8 +2,19 @@
 //  EntitlementStore.swift
 //  PassportProof
 //
-//  StoreKit 2, one non-consumable, no server. Entitlement is recomputed from
-//  verified current transactions, including launch, restore and live updates.
+//  StoreKit 2, no server. Two products:
+//
+//    * an unlimited non-consumable, recomputed from verified current
+//      transactions on launch, restore and every live update;
+//    * a single-export consumable, credited only from a verified transaction.
+//
+//  The consumable exists because a passport photo is a once-a-year need. Asking
+//  every customer for the unlimited price up front loses the majority of them;
+//  a low-commitment single export converts, and the unlimited option is the
+//  obvious better value beside it. Export credits are local to this device: a
+//  consumable cannot be restored by Apple, and the paywall says so rather than
+//  implying otherwise.
+//
 //  The demonstration bypass exists only in DEBUG and has no Release symbol.
 //
 
@@ -20,35 +31,89 @@ enum EntitlementState: Equatable, Sendable {
     case failed(String)
 }
 
+/// The two ways to pay. Identifiers are stable: changing one would orphan
+/// existing purchases and break restore.
+enum ExportProduct: String, CaseIterable, Identifiable, Sendable {
+    case unlimited
+    case singleExport
+
+    var id: String { rawValue }
+
+    var productIdentifier: String {
+        switch self {
+        case .unlimited: return "com.passportproof.app.unlock"
+        case .singleExport: return "com.passportproof.app.single-export"
+        }
+    }
+}
+
 @MainActor
 final class EntitlementStore: ObservableObject {
-    static let productIdentifier = "com.passportproof.app.unlock"
-    static let fallbackPrice = "$17.99"
+    /// Retained for existing tests, the release audit and restore compatibility.
+    static let productIdentifier = ExportProduct.unlimited.productIdentifier
+    static let singleExportIdentifier = ExportProduct.singleExport.productIdentifier
+
+    /// Shown only while StoreKit metadata is unavailable. The App Store is the
+    /// source of truth; these are never presented as a live price.
+    static let fallbackPrice = "$7.99"
+    static let fallbackSinglePrice = "$3.99"
 
     @Published private(set) var isUnlocked = false
     @Published private(set) var displayPrice = EntitlementStore.fallbackPrice
+    @Published private(set) var singleExportPrice: String? = EntitlementStore.fallbackSinglePrice
+    @Published private(set) var exportCredits: Int
     @Published private(set) var state: EntitlementState = .loading
     @Published private(set) var isWorking = false
     @Published private(set) var isPrototypeUnlock = false
+    @Published private(set) var purchasingProduct: ExportProduct?
 
     /// Session-only diagnostics for a failed attempt. Contains error types,
     /// domains and codes, never descriptions, account data or full userInfo.
     private(set) var lastPurchaseErrorDiagnostic: String?
 
-    private var product: Product?
+    private var unlimitedProduct: Product?
+    private var singleProduct: Product?
     private var transactionUpdatesTask: Task<Void, Never>?
 
+    private static let creditsKey = "passportproof.exportCredits.v1"
+    private static let grantedKey = "passportproof.grantedConsumables.v1"
+    private static let grantedLimit = 200
+
+    /// Consumable transaction IDs that have already produced a credit. Apple
+    /// can deliver the same finished transaction through `Transaction.updates`
+    /// after the direct purchase result, so granting without this would double
+    /// the credit for one payment.
+    private var grantedTransactionIDs: Set<UInt64>
+
+    /// True when the customer may export: unlimited purchased, or a verified
+    /// single-export credit is available.
+    var canExport: Bool { isUnlocked || exportCredits > 0 }
+
+    var canBuySingleExport: Bool { singleProduct != nil }
+
     init() {
+        let defaults = UserDefaults.standard
+        exportCredits = max(0, defaults.integer(forKey: Self.creditsKey))
+        let stored = defaults.array(forKey: Self.grantedKey) as? [NSNumber] ?? []
+        grantedTransactionIDs = Set(stored.map { $0.uint64Value })
+
         transactionUpdatesTask = Task { [weak self] in
             for await result in Transaction.updates {
                 guard let self else { return }
                 guard case .verified(let transaction) = result else { continue }
-                guard transaction.productID == EntitlementStore.productIdentifier else { continue }
-                let entitled = await self.refreshEntitlements()
-                if entitled { self.state = .purchased }
-                else if self.product != nil { self.state = .available }
-                else { self.state = .unavailable("The store is unavailable. Refresh to try again.") }
-                await transaction.finish()
+                switch transaction.productID {
+                case Self.productIdentifier:
+                    let entitled = await self.refreshEntitlements()
+                    if entitled { self.state = .purchased }
+                    else if self.unlimitedProduct != nil { self.state = .available }
+                    else { self.state = .unavailable("The store is unavailable. Refresh to try again.") }
+                    await transaction.finish()
+                case Self.singleExportIdentifier:
+                    self.grantConsumable(transaction)
+                    await transaction.finish()
+                default:
+                    continue
+                }
             }
         }
     }
@@ -72,23 +137,31 @@ final class EntitlementStore: ObservableObject {
         if alreadyEntitled { state = .purchased }
 
         do {
-            let products = try await Product.products(for: [Self.productIdentifier])
-            guard let product = products.first else {
-                self.product = nil
+            let products = try await Product.products(for: [
+                Self.productIdentifier,
+                Self.singleExportIdentifier
+            ])
+            unlimitedProduct = products.first { $0.id == Self.productIdentifier }
+            singleProduct = products.first { $0.id == Self.singleExportIdentifier }
+
+            if let unlimited = unlimitedProduct {
+                displayPrice = unlimited.displayPrice
+            } else {
                 displayPrice = Self.fallbackPrice
-                if !isUnlocked {
+            }
+            singleExportPrice = singleProduct?.displayPrice
+
+            if !isUnlocked {
+                if unlimitedProduct == nil {
                     #if DEBUG
                     state = .unavailable("StoreKit has no product configured. A debug-only demonstration unlock is available.")
                     #else
                     state = .unavailable("The one-time unlock is not available yet. Check your connection and try again shortly.")
                     #endif
+                } else {
+                    state = .available
                 }
-                return
             }
-
-            self.product = product
-            displayPrice = product.displayPrice
-            if !isUnlocked { state = .available }
         } catch {
             if isUnlocked {
                 state = .purchased
@@ -100,19 +173,25 @@ final class EntitlementStore: ObservableObject {
 
     // MARK: - Purchase
 
+    /// Buys the unlimited non-consumable. Kept parameterless so the existing
+    /// integration tests and any future restore-only caller stay stable.
     func purchase() async {
         guard !isWorking else { return }
-        guard let product else {
+        guard let unlimitedProduct else {
             state = .unavailable("The one-time unlock is not available yet. Try again shortly.")
             return
         }
 
         isWorking = true
+        purchasingProduct = .unlimited
         lastPurchaseErrorDiagnostic = nil
-        defer { isWorking = false }
+        defer {
+            isWorking = false
+            purchasingProduct = nil
+        }
 
         do {
-            let result = try await product.purchase()
+            let result = try await unlimitedProduct.purchase()
             switch result {
             case .success(let verification):
                 switch verification {
@@ -139,6 +218,66 @@ final class EntitlementStore: ObservableObject {
                 state = .failed(Self.message(for: error))
             }
         }
+    }
+
+    /// Buys one export credit. The credit is granted only from a verified
+    /// transaction; a pending or unverified purchase grants nothing.
+    func purchaseSingleExport() async {
+        guard !isWorking else { return }
+        guard let singleProduct else {
+            state = .unavailable("Single-export purchases are not available right now.")
+            return
+        }
+
+        isWorking = true
+        purchasingProduct = .singleExport
+        lastPurchaseErrorDiagnostic = nil
+        defer {
+            isWorking = false
+            purchasingProduct = nil
+        }
+
+        do {
+            let result = try await singleProduct.purchase()
+            switch result {
+            case .success(let verification):
+                switch verification {
+                case .verified(let transaction):
+                    grantConsumable(transaction)
+                    await transaction.finish()
+                    // The customer stays in the store view only if the credit
+                    // could not be granted; the view dismisses on credit change.
+                    if state != .purchased { state = .available }
+                case .unverified(_, _):
+                    state = .failed("The purchase could not be verified on this device. Nothing was unlocked.")
+                }
+            case .userCancelled:
+                state = isUnlocked ? .purchased : .available
+            case .pending:
+                state = .pending
+            @unknown default:
+                state = .available
+            }
+        } catch {
+            lastPurchaseErrorDiagnostic = Self.purchaseErrorDiagnostic(error)
+            if Self.isCancellation(error) {
+                state = isUnlocked ? .purchased : .available
+            } else {
+                state = .failed(Self.message(for: error))
+            }
+        }
+    }
+
+    /// Called only after a file has actually been staged for sharing, so a
+    /// failed export never costs a credit. Unlimited accounts are never
+    /// decremented.
+    @discardableResult
+    func consumeExportCredit() -> Bool {
+        if isUnlocked { return true }
+        guard exportCredits > 0 else { return false }
+        exportCredits -= 1
+        persistCredits()
+        return true
     }
 
     // MARK: - Restore
@@ -195,6 +334,26 @@ final class EntitlementStore: ObservableObject {
         isUnlocked = entitled
         #endif
         return entitled
+    }
+
+    private func grantConsumable(_ transaction: Transaction) {
+        guard transaction.productID == Self.singleExportIdentifier,
+              transaction.revocationDate == nil,
+              !grantedTransactionIDs.contains(transaction.id) else { return }
+        grantedTransactionIDs.insert(transaction.id)
+        exportCredits += 1
+        persistCredits()
+        persistGranted()
+    }
+
+    private func persistCredits() {
+        UserDefaults.standard.set(exportCredits, forKey: Self.creditsKey)
+    }
+
+    private func persistGranted() {
+        // Bounded so the stored list cannot grow without limit.
+        let trimmed = grantedTransactionIDs.sorted().suffix(Self.grantedLimit)
+        UserDefaults.standard.set(trimmed.map { NSNumber(value: $0) }, forKey: Self.grantedKey)
     }
 
     /// Recognize only Apple's cancellation values through documented wrappers.

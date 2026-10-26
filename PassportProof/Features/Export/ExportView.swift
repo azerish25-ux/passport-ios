@@ -30,7 +30,9 @@ struct ExportView: View {
     @State private var isPreparingPreview = false
 
     private var layout: PrintSheetLayout { session.layout }
+    private var plan: PrintPlan { PrintPlan(layout: layout, spec: spec) }
     private var isReady: Bool { session.canExport(for: spec) }
+    private var hasExportAccess: Bool { entitlements.canExport }
     private var isManuallyFramed: Bool { session.manualFraming(for: spec) != nil }
     private var reviewCount: Int { session.analysis?.unresolved.count ?? 0 }
     private var previewKey: String { "\(session.revision.uuidString)-\(spec.id)-\(layout.rawValue)" }
@@ -45,7 +47,7 @@ struct ExportView: View {
                 if spec.supportsPrintSheet { printContent } else { digitalContent }
                 outputSummary
                 if let failure { failureCard(failure) }
-                if !entitlements.isUnlocked { lockedCard }
+                if !hasExportAccess { lockedCard }
                 privacyFooter
             }
             .padding(Theme.Spacing.margin)
@@ -125,7 +127,7 @@ struct ExportView: View {
                                     .resizable()
                                     .scaledToFit()
                                     .frame(maxHeight: 330)
-                                    .accessibilityLabel("Preview of the actual \(layout.title) PDF with \(layout.columns * layout.rows) copies of your reviewed photo")
+                                    .accessibilityLabel("Preview of the actual \(layout.title) PDF with \(plan.count) copies of your reviewed photo")
                             } else if isPreparingPreview {
                                 ProgressView("Preparing sheet preview…")
                                     .tint(Theme.accent)
@@ -158,7 +160,7 @@ struct ExportView: View {
                 .background(Theme.paperSunk, in: RoundedRectangle(cornerRadius: 14))
 
                 Text(spec.supportsPrintSheet
-                     ? "\(layout.title) · \(layout.columns * layout.rows) photos · print at 100%"
+                     ? "\(layout.title) · \(plan.count) photos · print at 100%"
                      : "\(spec.widthPixels) × \(spec.heightPixels) px · your reviewed crop")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.inkSecondary)
@@ -279,7 +281,7 @@ struct ExportView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                SecondaryAction(title: "View export access") { goToUnlock = true }
+                SecondaryAction(title: hasExportAccess ? "Review export options" : "View export access") { goToUnlock = true }
                     .accessibilityIdentifier("export.unlock")
             }
         }
@@ -292,13 +294,12 @@ struct ExportView: View {
         VStack(spacing: Theme.Spacing.s) {
             PrimaryButton(title: primaryTitle, isEnabled: !isExporting && share == nil) {
                 if !isReady { dismiss() }
-                else if !entitlements.isUnlocked { goToUnlock = true }
+                else if !hasExportAccess { goToUnlock = true }
                 else if spec.supportsPrintSheet { exportPrintSheet() }
                 else { exportDigital() }
             }
             .accessibilityIdentifier("export.primary")
-            Text(!isReady ? "Complete the photo check to prepare your file"
-                 : (entitlements.isUnlocked ? "Choose where to save or send in the next step" : "One-time purchase · no subscription"))
+            Text(exportBarDetail)
                 .font(.caption2)
                 .foregroundStyle(Theme.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -313,8 +314,19 @@ struct ExportView: View {
     private var primaryTitle: String {
         if isExporting { return "Preparing your file…" }
         if !isReady { return "Return to photo checks" }
-        if !entitlements.isUnlocked { return "Unlock export" }
+        if !hasExportAccess { return "Unlock export" }
         return spec.supportsPrintSheet ? "Export PDF" : "Export JPEG"
+    }
+
+    /// Says exactly what the next tap costs. A single-export credit is spent
+    /// only after a file has been staged, so this wording never promises more
+    /// than the code does.
+    private var exportBarDetail: String {
+        if !isReady { return "Complete the photo check to prepare your file" }
+        if entitlements.isUnlocked { return "Choose where to save or send in the next step" }
+        if entitlements.exportCredits == 1 { return "Uses your 1 export credit · no subscription" }
+        if entitlements.exportCredits > 1 { return "Uses 1 of your \(entitlements.exportCredits) export credits" }
+        return "One-time purchase · no subscription"
     }
 
     private var privacyFooter: some View {
@@ -362,7 +374,7 @@ struct ExportView: View {
         let layout = self.layout
         exportTask = Task {
             let data = await Task.detached(priority: .userInitiated) {
-                PrintSheetRenderer.calibrationPDFData(layout: layout)
+                PrintSheetRenderer.calibrationPDFData(layout: layout, spec: spec)
             }.value
             guard !Task.isCancelled else {
                 isExporting = false
@@ -378,7 +390,7 @@ struct ExportView: View {
     }
 
     private func exportPrintSheet() {
-        guard requireReady(), requireUnlock(), !isExporting else { return }
+        guard requireReady(), requireExportAccess(), !isExporting else { return }
         guard let photo = session.cgImage else { return }
         isExporting = true
         failure = nil
@@ -386,13 +398,16 @@ struct ExportView: View {
         let revision = session.revision
         let layout = self.layout
         let spec = self.spec
+        let unlimited = entitlements.isUnlocked
 
         exportTask = Task {
             let data = await Task.detached(priority: .userInitiated) {
                 PrintSheetRenderer.pdfData(photo: photo, layout: layout, spec: spec)
             }.value
             guard !Task.isCancelled, session.revision == revision,
-                  session.canExport(for: spec), entitlements.isUnlocked, session.layout == layout else {
+                  session.canExport(for: spec),
+                  unlimited || entitlements.exportCredits > 0,
+                  session.layout == layout else {
                 isExporting = false
                 return
             }
@@ -402,26 +417,29 @@ struct ExportView: View {
                 return
             }
             if stage(data, name: "\(spec.id)-\(layout.rawValue)", fileExtension: "pdf") {
+                entitlements.consumeExportCredit()
                 preparedSummary = "\(layout.title) PDF prepared · \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))"
             }
         }
     }
 
     private func exportDigital() {
-        guard requireReady(), requireUnlock(), !isExporting else { return }
+        guard requireReady(), requireExportAccess(), !isExporting else { return }
         guard let photo = session.cgImage else { return }
         isExporting = true
         failure = nil
         preparedSummary = nil
         let revision = session.revision
         let spec = self.spec
+        let unlimited = entitlements.isUnlocked
 
         exportTask = Task {
             let data = await Task.detached(priority: .userInitiated) {
                 DigitalExport.jpegData(from: photo, spec: spec)
             }.value
             guard !Task.isCancelled, session.revision == revision,
-                  session.canExport(for: spec), entitlements.isUnlocked else {
+                  session.canExport(for: spec),
+                  unlimited || entitlements.exportCredits > 0 else {
                 isExporting = false
                 return
             }
@@ -432,6 +450,7 @@ struct ExportView: View {
             }
             let size = ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
             if stage(data, name: spec.id, fileExtension: "jpg") {
+                entitlements.consumeExportCredit()
                 preparedSummary = "\(spec.widthPixels) × \(spec.heightPixels) JPEG prepared · \(size)"
             }
         }
@@ -443,8 +462,8 @@ struct ExportView: View {
         return false
     }
 
-    private func requireUnlock() -> Bool {
-        if entitlements.isUnlocked { return true }
+    private func requireExportAccess() -> Bool {
+        if entitlements.canExport { return true }
         goToUnlock = true
         return false
     }

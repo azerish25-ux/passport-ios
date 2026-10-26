@@ -127,7 +127,7 @@ enum ValidationEngine {
         }
         output.append(contentsOf: [
             centring(geometry: geometry, spec: spec),
-            backgroundUniformity(background: background),
+            backgroundUniformity(background: background, spec: spec),
             shadow(delta: shadowDelta),
             expression(geometry: geometry, review: review),
             glasses(review: review, glareSuspected: glareSuspected),
@@ -425,7 +425,7 @@ enum ValidationEngine {
 
     // MARK: R5 / R15 — background uniformity
 
-    private static func backgroundUniformity(background: BackgroundReport?) -> Finding {
+    private static func backgroundUniformity(background: BackgroundReport?, spec: DocumentSpec) -> Finding {
         let sigmaLimitPercent = BackgroundAnalyzer.uniformitySigmaLimit * 100
         let rangeText = MeasurementFormat.range(0, sigmaLimitPercent, unit: "%")
 
@@ -458,7 +458,7 @@ enum ValidationEngine {
                 id: .backgroundUniformity,
                 title: "Background colour and uniformity",
                 status: .cannotVerify,
-                detail: "The background colour could not be measured. Use a plain white or off-white wall and check the original photograph.",
+                detail: "The background colour could not be measured. This workflow asks for a \(spec.backgroundDescription.lowercased()). Check the original photograph.",
                 measurement: measurement,
                 provenance: .appDefault
             )
@@ -468,7 +468,7 @@ enum ValidationEngine {
                 id: .backgroundUniformity,
                 title: "Background colour and uniformity",
                 status: .fail,
-                detail: "The sampled background appears coloured or too dark. These US workflows require white or off-white; a uniform blue, grey or dark wall is not sufficient. Retake against a suitable wall without replacing the background digitally. Colour thresholds are app-selected screening tolerances.",
+                detail: "The sampled background appears coloured or too dark. This workflow asks for a \(spec.backgroundDescription.lowercased()). A uniform blue or dark wall is not sufficient. Retake against a suitable wall without replacing the background digitally. Colour thresholds are app-selected screening tolerances.",
                 measurement: measurement,
                 provenance: .appDefault
             )
@@ -499,7 +499,7 @@ enum ValidationEngine {
                 id: .backgroundUniformity,
                 title: "Background colour and uniformity",
                 status: .cannotVerify,
-                detail: "The background is near the app's white/off-white screening boundary. Inspect the original in neutral light or retake against a brighter, plain wall. The issuer does not publish an RGB threshold.",
+                detail: "The background is near the app's light-background screening boundary. Inspect the original in neutral light or retake against a brighter, plain wall. The issuer does not publish an RGB threshold.",
                 measurement: measurement,
                 provenance: .appDefault
             )

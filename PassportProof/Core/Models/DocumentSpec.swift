@@ -84,4 +84,30 @@ struct DocumentSpec: Identifiable, Sendable {
     var aspectRatio: Double { widthMM / heightMM }
     var supportsPrintSheet: Bool { workflow == .printedPhoto }
     var supportsDigitalExport: Bool { workflow == .digitalPhoto }
+
+    /// Physical size for a printed workflow. Whole inches are shown in inches
+    /// because that is how the issuer states them ("2 × 2 inches"); everything
+    /// else is shown in millimetres rather than a misleading decimal inch value.
+    var printSizeLabel: String {
+        let inchesWidth = widthMM / 25.4
+        let inchesHeight = heightMM / 25.4
+        func isWholeOrHalf(_ value: Double) -> Bool {
+            abs(value - value.rounded()) < 0.01 || abs(value * 2 - (value * 2).rounded()) < 0.01
+        }
+        if isWholeOrHalf(inchesWidth), isWholeOrHalf(inchesHeight) {
+            return "\(Format.compact(inchesWidth)) × \(Format.compact(inchesHeight)) in"
+        }
+        return Format.sizeMM(width: widthMM, height: heightMM)
+    }
+
+    /// The one-line output description used by library cards and detail views.
+    var outputSummaryLabel: String {
+        supportsPrintSheet ? printSizeLabel : Format.sizePixels(width: widthPixels, height: heightPixels)
+    }
+
+    /// Physical size at the export pixel density. Used in print footers and the
+    /// requirements disclosure, where both units are useful.
+    var millimetreLabel: String {
+        Format.sizeMM(width: widthMM, height: heightMM)
+    }
 }

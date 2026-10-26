@@ -8,6 +8,14 @@
 
 import Foundation
 
+struct DocumentCountry: Identifiable, Sendable {
+    let name: String
+    let code: String
+    let documents: [DocumentSpec]
+
+    var id: String { code }
+}
+
 enum DocumentCorpus {
 
     static let documents: [DocumentSpec] = [
@@ -99,7 +107,67 @@ enum DocumentCorpus {
                     note: "DV digital workflow: 600 × 600 JPEG, no more than 240 kB, head including hair at 50–69% of image height and eye line at 56–69% from the bottom."
                 )
             ]
-        )
+        ),
+
+        DocumentSpec(
+            id: "ca-passport",
+            country: "Canada",
+            countryCode: "CA",
+            documentName: "Passport",
+            workflow: .printedPhoto,
+            widthMM: 50,
+            heightMM: 70,
+            widthPixels: 600,
+            heightPixels: 840,
+            headHeightMM: 31...36,
+            headMeasurement: .skull,
+            headHeightShare: nil,
+            eyeLineFromBottomMM: nil,
+            maximumPhotoAgeMonths: 6,
+            maximumFileSizeBytes: nil,
+            backgroundDescription: "Plain white or light-coloured, with no shadows or objects",
+            expressionRequirement: "Neutral expression, mouth closed, with both eyes open and clearly visible",
+            glassesRequirement: "No sunglasses; eyeglasses must not hide the eyes or cast a shadow",
+            sourceURL: url("https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports/photos.html"),
+            verifiedOn: verifiedDate,
+            changelog: [
+                ChangelogEntry(
+                    id: "ca-passport-2026-10-26",
+                    date: verifiedDate,
+                    note: "Printed-photo workflow verified against IRCC guidance: 50 × 70 mm, chin to crown of the head at 31–36 mm (hair excluded), taken within six months."
+                )
+            ]
+        ),
+
+        DocumentSpec(
+            id: "de-schengen-visa",
+            country: "Germany",
+            countryCode: "DE",
+            documentName: "Schengen visa",
+            workflow: .printedPhoto,
+            widthMM: 35,
+            heightMM: 45,
+            widthPixels: 420,
+            heightPixels: 540,
+            headHeightMM: 32...36,
+            headMeasurement: .skull,
+            headHeightShare: nil,
+            eyeLineFromBottomMM: nil,
+            maximumPhotoAgeMonths: 3,
+            maximumFileSizeBytes: nil,
+            backgroundDescription: "Plain white or off-white, without shadows or pattern",
+            expressionRequirement: "Neutral expression, mouth closed, eyes open and directed at the camera",
+            glassesRequirement: "No tinted lenses; frames must not cover the eyes or reflect the light",
+            sourceURL: url("https://uk.diplo.de/uk-en/02/visa/visa-faq-2442852"),
+            verifiedOn: verifiedDate,
+            changelog: [
+                ChangelogEntry(
+                    id: "de-schengen-visa-2026-10-26",
+                    date: verifiedDate,
+                    note: "Printed-photo workflow verified against the German Foreign Office visa FAQ: 35 × 45 mm, face 32–36 mm (70–80% of the photo), no older than three months. This is the German Schengen profile, not a claim that every member state applies identical details."
+                )
+            ]
+        ),
     ]
 
     // https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos/photo-composition-template.html
@@ -111,6 +179,26 @@ enum DocumentCorpus {
     static func document(id: String) -> DocumentSpec? {
         documents.first { $0.id == id }
     }
+
+    /// The catalogue grouped by issuing country, in corpus order. Grouping is
+    /// derived from the corpus rather than maintained as a second list, so a
+    /// document can never appear under the wrong country or go missing from
+    /// the library.
+    static var countries: [DocumentCountry] {
+        var order: [String] = []
+        var grouped: [String: [DocumentSpec]] = [:]
+        for document in documents {
+            if grouped[document.countryCode] == nil { order.append(document.countryCode) }
+            grouped[document.countryCode, default: []].append(document)
+        }
+        return order.compactMap { code in
+            guard let items = grouped[code], let first = items.first else { return nil }
+            return DocumentCountry(name: first.country, code: code, documents: items)
+        }
+    }
+
+    /// The default document offered by the library's primary action.
+    static var featured: DocumentSpec? { document(id: "us-passport") }
 
     private static let verifiedDate: Date = makeDate(year: 2026, month: 10, day: 25)
 

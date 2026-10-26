@@ -30,17 +30,22 @@ struct UnlockView: View {
             .padding(.bottom, Theme.Spacing.xl)
         }
         .background(Theme.paper)
-        .navigationTitle("Export unlock")
+        .navigationTitle("Export access")
         .navigationBarTitleDisplayMode(.inline)
         .task { await entitlements.refresh() }
         .onChange(of: entitlements.isUnlocked) { _, unlocked in
             if unlocked && !entitlements.isPrototypeUnlock { dismiss() }
         }
+        .onChange(of: entitlements.exportCredits) { _, credits in
+            // A verified single-export purchase returns the customer straight
+            // to the export they were already preparing.
+            if credits > 0 { dismiss() }
+        }
     }
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            StudioEyebrow(title: "One-time export access")
+            StudioEyebrow(title: "Pay once · no subscription")
             HStack(alignment: .center, spacing: Theme.Spacing.s) {
                 Text("Your photo.\nYour finished file.")
                     .font(.system(.largeTitle, design: .serif))
@@ -57,6 +62,11 @@ struct UnlockView: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.Spacing.s) {
+                TrustChip(icon: "lock.shield", text: "On-device")
+                TrustChip(icon: "arrow.clockwise", text: "Unlimited retries")
+                TrustChip(icon: "creditcard", text: "Apple Pay")
+            }
         }
     }
 
@@ -106,19 +116,28 @@ struct UnlockView: View {
                     }
                 case .available:
                     VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                        Text("EXPORT ACCESS")
+                        Text("UNLIMITED EXPORTS")
                             .font(.caption2.weight(.semibold))
                             .tracking(1.2)
                             .foregroundStyle(Theme.accent)
-                        Text(price)
-                            .font(.system(.largeTitle, design: .monospaced, weight: .medium))
-                            .tracking(-0.7)
-                            .foregroundStyle(Theme.ink)
-                            .accessibilityIdentifier("unlock.price")
-                        Text("Pay once. No subscription.")
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(price)
+                                .font(.system(.largeTitle, design: .monospaced, weight: .medium))
+                                .tracking(-0.7)
+                                .foregroundStyle(Theme.ink)
+                                .accessibilityIdentifier("unlock.price")
+                            Text("once")
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.inkSecondary)
+                        }
+                        Text("Every document, every redo, on every device signed in to your Apple Account.")
                             .font(.subheadline)
                             .foregroundStyle(Theme.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         purchaseButtons.padding(.top, Theme.Spacing.s)
+                        if entitlements.exportCredits > 0 {
+                            CreditNotice(credits: entitlements.exportCredits)
+                        }
                     }
                 case .purchased:
                     unlockedBlock
@@ -168,12 +187,30 @@ struct UnlockView: View {
     private var purchaseButtons: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             PrimaryButton(
-                title: entitlements.isWorking ? "Contacting App Store…" : "Unlock for \(price)",
+                title: entitlements.isWorking ? "Contacting App Store…" : "Unlock everything for \(price)",
                 isEnabled: !entitlements.isWorking
             ) {
                 Task { await entitlements.purchase() }
             }
             .accessibilityIdentifier("unlock.purchase")
+
+            if entitlements.canBuySingleExport, let single = entitlements.singleExportPrice {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    PrimaryButton(
+                        title: entitlements.purchasingProduct == .singleExport ? "Contacting App Store…" : "One export for \(single)",
+                        emphasis: .outline,
+                        isEnabled: !entitlements.isWorking
+                    ) {
+                        Task { await entitlements.purchaseSingleExport() }
+                    }
+                    .accessibilityIdentifier("unlock.purchaseSingle")
+                    Text("One export credit for this device. It cannot be restored, and it does not expire.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             SecondaryAction(title: "Restore purchase", isEnabled: !entitlements.isWorking) {
                 Task { await entitlements.restore() }
             }
@@ -262,5 +299,41 @@ private struct BenefitRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+private struct TrustChip: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.caption2.weight(.semibold))
+            Text(text).font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(Theme.inkSecondary)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(Theme.paperRaised, in: Capsule())
+        .overlay(Capsule().stroke(Theme.rule, lineWidth: Theme.Stroke.hairline))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct CreditNotice: View {
+    let credits: Int
+
+    var body: some View {
+        Label(
+            credits == 1
+                ? "You have 1 export credit ready to use."
+                : "You have \(credits) export credits ready to use.",
+            systemImage: "checkmark.seal"
+        )
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(Theme.signalPass)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, Theme.Spacing.xs)
+        .accessibilityIdentifier("unlock.credits")
     }
 }

@@ -31,38 +31,12 @@ enum PrintSheetLayout: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .fourBySix: return "4 photos · borderless only"
-        case .fiveBySeven: return "6 photos · 0.5 in margins"
-        case .letter12: return "12 photos · cut marks"
-        case .letter20: return "20 photos · lowest cost per photo"
-        }
-    }
-
     /// 72 points per inch.
     var pageSizePoints: CGSize {
         switch self {
         case .fourBySix: return CGSize(width: 288, height: 432)      // 4 × 6 in
         case .fiveBySeven: return CGSize(width: 360, height: 504)    // 5 × 7 in
         case .letter12, .letter20: return CGSize(width: 612, height: 792) // 8.5 × 11 in
-        }
-    }
-
-    var columns: Int {
-        switch self {
-        case .fourBySix, .fiveBySeven: return 2
-        case .letter12: return 3
-        case .letter20: return 4
-        }
-    }
-
-    var rows: Int {
-        switch self {
-        case .fourBySix: return 2
-        case .fiveBySeven: return 3
-        case .letter12: return 4
-        case .letter20: return 5
         }
     }
 
@@ -118,6 +92,41 @@ enum PrintSheetLayout: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Plan
+
+/// How many true-size photos fit on one page.
+///
+/// The grid is derived from the document's physical size instead of being
+/// hardcoded per paper. Hardcoded counts only ever described a 2 × 2 in US
+/// passport photo, so a 35 × 45 mm or 50 × 70 mm document would either waste
+/// half the page or, worse, be scaled down to satisfy a pre-set column count.
+struct PrintPlan: Equatable, Sendable {
+    let layout: PrintSheetLayout
+    let columns: Int
+    let rows: Int
+    /// One photo at true printed size, in points at 72 dpi.
+    let photoSize: CGSize
+
+    var count: Int { columns * rows }
+
+    init(layout: PrintSheetLayout, spec: DocumentSpec) {
+        self.layout = layout
+        let page = layout.pageSizePoints
+        let photoWidth = max(CGFloat(spec.widthMM) * 72.0 / 25.4, 1)
+        let photoHeight = max(CGFloat(spec.heightMM) * 72.0 / 25.4, 1)
+        photoSize = CGSize(width: photoWidth, height: photoHeight)
+        let availableWidth = page.width - layout.sideMarginPoints * 2
+        let availableHeight = page.height - layout.verticalMarginPoints * 2
+        let columnGutter = layout.columnGutterPoints
+        let rowGutter = layout.rowGutterPoints
+
+        // Floor division on the pitch, so the last column or row is only counted
+        // when a full photo plus its gutter actually fits.
+        columns = max(1, Int(((availableWidth + columnGutter) / (photoWidth + columnGutter)).rounded(.down)))
+        rows = max(1, Int(((availableHeight + rowGutter) / (photoHeight + rowGutter)).rounded(.down)))
+    }
+}
+
 // MARK: - Renderer
 
 struct PrintSheetRenderer {
@@ -134,7 +143,8 @@ struct PrintSheetRenderer {
               page.width > 0,
               page.height > 0 else { return nil }
 
-        let metrics = SheetMetrics(layout: layout, spec: spec)
+        let plan = PrintPlan(layout: layout, spec: spec)
+        let metrics = SheetMetrics(layout: layout, plan: plan)
         guard metrics.cellSize.width > 1, metrics.cellSize.height > 1 else { return nil }
 
         let bounds = CGRect(origin: .zero, size: page)
@@ -148,8 +158,8 @@ struct PrintSheetRenderer {
             cg.setFillColor(UIColor.white.cgColor)
             cg.fill(bounds)
 
-            for row in 0..<layout.rows {
-                for column in 0..<layout.columns {
+            for row in 0..<plan.rows {
+                for column in 0..<plan.columns {
                     let cell = metrics.cellRect(row: row, column: column)
 
                     // `UIImage.draw(in:)` honours the UIKit flipped coordinate
@@ -164,7 +174,7 @@ struct PrintSheetRenderer {
             }
 
             if layout.supportsCutMarks {
-                drawCutMarks(in: cg, metrics: metrics, layout: layout)
+                drawCutMarks(in: cg, metrics: metrics, layout: layout, plan: plan)
             }
 
             drawFooter(metrics: metrics, layout: layout, spec: spec, bounds: bounds)
@@ -175,7 +185,7 @@ struct PrintSheetRenderer {
 
     /// One page, printed and measured with a ruler before the unlock is spent.
     /// Printing it costs nothing.
-    static func calibrationPDFData(layout: PrintSheetLayout) -> Data? {
+    static func calibrationPDFData(layout: PrintSheetLayout, spec: DocumentSpec? = nil) -> Data? {
         let page = layout.pageSizePoints
         guard page.width > 0, page.height > 0 else { return nil }
 
@@ -233,17 +243,23 @@ struct PrintSheetRenderer {
                 font: bodyFont
             )
 
-            // A 2 × 2 in square, the US cell.
-            let squareSide: CGFloat = 144
+            // One cell at the document's real size, so the check measures the
+            // geometry that will actually be printed rather than a fixed 2 in
+            // square that only applied to the US passport sheet.
+            let squareSide = CGFloat(spec?.widthMM ?? 50.8) * 72.0 / 25.4
+            let squareHeight = CGFloat(spec?.heightMM ?? 50.8) * 72.0 / 25.4
             let squareRect = CGRect(
                 x: (page.width - squareSide) / 2,
                 y: rulerOrigin.y + 48,
                 width: squareSide,
-                height: squareSide
+                height: squareHeight
             )
             cg.setLineWidth(0.75)
             cg.stroke(squareRect)
-            drawCentred("2.000 in / 50.8 mm", in: CGRect(x: squareRect.minX, y: squareRect.maxY + 6, width: squareSide, height: 10), font: labelFont)
+            let cellLabel = String(format: "%.3f × %.3f in / %.1f × %.1f mm",
+                                   squareSide / 72, squareHeight / 72,
+                                   squareSide * 25.4 / 72, squareHeight * 25.4 / 72)
+            drawCentred(cellLabel, in: CGRect(x: squareRect.minX, y: squareRect.maxY + 6, width: squareSide, height: 10), font: labelFont)
 
             drawCentred(instruction, in: CGRect(x: margin, y: page.height - margin - 14, width: contentWidth, height: 14), font: titleFont)
         }
@@ -251,7 +267,7 @@ struct PrintSheetRenderer {
 
     // MARK: - Drawing helpers
 
-    private static func drawCutMarks(in cg: CGContext, metrics: SheetMetrics, layout: PrintSheetLayout) {
+    private static func drawCutMarks(in cg: CGContext, metrics: SheetMetrics, layout: PrintSheetLayout, plan: PrintPlan) {
         let length: CGFloat = 7
         let inset: CGFloat = 3
         let minimumGutter: CGFloat = 10
@@ -259,16 +275,16 @@ struct PrintSheetRenderer {
         cg.setStrokeColor(UIColor.black.cgColor)
         cg.setLineWidth(0.5)
 
-        for row in 0..<layout.rows {
-            for column in 0..<layout.columns {
+        for row in 0..<plan.rows {
+            for column in 0..<plan.columns {
                 let cell = metrics.cellRect(row: row, column: column)
 
                 let spaceLeft = column == 0 ? cell.minX : layout.columnGutterPoints
-                let spaceRight = column == layout.columns - 1
+                let spaceRight = column == plan.columns - 1
                     ? metrics.pageSize.width - cell.maxX
                     : layout.columnGutterPoints
                 let spaceUp = row == 0 ? cell.minY : layout.rowGutterPoints
-                let spaceDown = row == layout.rows - 1
+                let spaceDown = row == plan.rows - 1
                     ? metrics.pageSize.height - cell.maxY
                     : layout.rowGutterPoints
 
@@ -377,24 +393,24 @@ private struct SheetMetrics {
     let columnGutter: CGFloat
     let rowGutter: CGFloat
 
-    init(layout: PrintSheetLayout, spec: DocumentSpec) {
+    init(layout: PrintSheetLayout, plan: PrintPlan) {
         let page = layout.pageSizePoints
         pageSize = page
         sideMargin = layout.sideMarginPoints
         columnGutter = layout.columnGutterPoints
         rowGutter = layout.rowGutterPoints
 
-        let columns = CGFloat(layout.columns)
-        let rows = CGFloat(layout.rows)
+        let columns = CGFloat(plan.columns)
+        let rows = CGFloat(plan.rows)
         let availableWidth = page.width - layout.sideMarginPoints * 2 - columnGutter * (columns - 1)
         let availableHeight = page.height - layout.verticalMarginPoints * 2 - rowGutter * (rows - 1)
 
-        let widthFromMillimetres = CGFloat(spec.widthMM) * 72.0 / 25.4
-        let heightFromMillimetres = CGFloat(spec.heightMM) * 72.0 / 25.4
-
+        // The cell is always the document's true physical size. `PrintPlan`
+        // floored the grid so a full photo fits; the available-space division
+        // is only a guard and must never grow the cell to fill spare paper.
         cellSize = CGSize(
-            width: min(widthFromMillimetres, availableWidth / columns),
-            height: min(heightFromMillimetres, availableHeight / rows)
+            width: min(plan.photoSize.width, availableWidth / columns),
+            height: min(plan.photoSize.height, availableHeight / rows)
         )
 
         let gridWidth = columns * cellSize.width + columnGutter * (columns - 1)

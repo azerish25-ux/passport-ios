@@ -93,7 +93,7 @@ struct DocumentLibraryView: View {
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            NavigationLink(value: AppRoute.capture(documentID: "us-passport")) {
+            NavigationLink(value: AppRoute.capture(documentID: DocumentCorpus.featured?.id ?? "us-passport")) {
                 HStack(spacing: Theme.Spacing.s) {
                     Text("Start US passport photo")
                     Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold))
@@ -124,18 +124,33 @@ struct DocumentLibraryView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Text("US · 3 options")
+                    Text("\(DocumentCorpus.countries.count) countries · \(DocumentCorpus.documents.count) workflows")
                         .font(.caption)
                         .foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            VStack(spacing: Theme.Spacing.s) {
-                ForEach(DocumentCorpus.documents) { spec in
-                    NavigationLink(value: AppRoute.documentDetail(documentID: spec.id)) {
-                        DocumentCard(spec: spec)
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                ForEach(DocumentCorpus.countries) { group in
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                            Text(group.name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Theme.inkSecondary)
+                            Theme.Rule()
+                            Text("\(group.documents.count)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(Theme.inkTertiary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        ForEach(group.documents) { spec in
+                            NavigationLink(value: AppRoute.documentDetail(documentID: spec.id)) {
+                                DocumentCard(spec: spec)
+                            }
+                            .buttonStyle(StudioDocumentButtonStyle())
+                            .accessibilityIdentifier("library.document.\(spec.id)")
+                        }
                     }
-                    .buttonStyle(StudioDocumentButtonStyle())
-                    .accessibilityIdentifier("library.document.\(spec.id)")
                 }
             }
         }
@@ -235,7 +250,9 @@ private struct DocumentCard: View {
 
     private var detail: String {
         if spec.supportsPrintSheet { return "Print at home or a photo shop" }
-        return spec.id == "us-visa" ? "For a US visa photo upload" : "For a Diversity Visa entry"
+        if spec.id == "us-visa" { return "For a US visa photo upload" }
+        if spec.id == "us-dv-lottery" { return "For a Diversity Visa entry" }
+        return "For your online application"
     }
 
     var body: some View {
@@ -265,7 +282,7 @@ private struct DocumentCard: View {
                     .font(.caption)
                     .foregroundStyle(Theme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(spec.supportsPrintSheet ? "2 × 2 in · 300 DPI" : "600 × 600 px · JPEG")
+                Text(spec.supportsPrintSheet ? "\(spec.printSizeLabel) · 300 DPI" : "\(spec.outputSummaryLabel) · JPEG")
                     .font(.system(.caption2, design: .monospaced))
                     .foregroundStyle(Theme.accent)
                     .fixedSize(horizontal: false, vertical: true)
