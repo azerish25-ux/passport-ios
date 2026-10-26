@@ -86,6 +86,7 @@ jobs:
           echo "Shared scheme present: $SCHEME_FILE"
 
       - name: Build for simulator
+        id: build_sim
         run: |
           set -o pipefail
           mkdir -p build
@@ -195,6 +196,7 @@ jobs:
           xcrun simctl addmedia "$UDID" build/PassportProof-QA-Portrait.jpg
 
       - name: Run unit tests
+        id: unit
         timeout-minutes: 15
         run: |
           # Unit and UI tests are separate steps so a simulator automation issue
@@ -273,6 +275,7 @@ jobs:
           retention-days: 14
 
       - name: Run UI tests
+        id: ui
         # Keep navigation/screenshot evidence available when a unit diagnostic
         # finds a defect, while preserving the unit step's failed conclusion.
         if: ${{ !cancelled() && steps.build_tests.outcome == 'success' }}
@@ -303,7 +306,22 @@ jobs:
 
           if [ "$STATUS" -ne 0 ]; then
             echo "::error::UI tests failed (exit $STATUS)"
-            grep -E "error:|failed|Assertion Failure" build/ui-test.log | head -80 || true
+            # An unsupported test case and a crashed runner both end in exit 65,
+            # so name the failing cases first and then whatever the runner
+            # said last. Both are workflow commands: without them the cause of
+            # a red UI leg exists only inside an artifact nobody downloads.
+            FAILED=$(grep -E "Test Case .*failed|Assertion Failure|error:" build/ui-test.log | head -20 || true)
+            if [ -z "$FAILED" ]; then
+              FAILED=$(grep -E "crash|Crash|Restarting after unexpected exit|Test runner exited|Lost connection|Failed to (launch|terminate)|EXC_|signal|Timed out|timed out" build/ui-test.log | head -20 || true)
+            fi
+            if [ -z "$FAILED" ]; then
+              FAILED=$(grep -E "Test Suite|Executed [0-9]+ test|exit status|xcodebuild" build/ui-test.log | tail -20 || true)
+            fi
+            if [ -n "$FAILED" ]; then
+              printf '%s\n' "$FAILED" | sed 's/%/%%/g' | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+            fi
             exit "$STATUS"
           fi
           if ! grep -q "Test Suite 'PassportProofUITests.xctest' passed" build/ui-test.log; then
@@ -363,10 +381,14 @@ jobs:
       - name: Publish failure annotations
         if: always()
         run: |
-          python3 Tools/ci_report.py --label simulator-build --log build/simulator-build.log || true
-          python3 Tools/ci_report.py --label test-bundles --log build/test-bundles.log || true
-          python3 Tools/ci_report.py --label unit --log build/unit-test.log || true
-          python3 Tools/ci_report.py --label ui --log build/ui-test.log || true
+          # Only parse the log of a step that actually failed. Annotating a
+          # passing log just buries the real failure under diagnostic chatter.
+          report() { python3 Tools/ci_report.py --label "$1" --log "$2" || true; }
+          if [ "${{ steps.build_sim.outcome }}" = "failure" ]; then report simulator-build build/simulator-build.log; fi
+          if [ "${{ steps.build_tests.outcome }}" = "failure" ]; then report test-bundles build/test-bundles.log; fi
+          if [ "${{ steps.unit.outcome }}" = "failure" ]; then report unit build/unit-test.log; fi
+          if [ "${{ steps.ui.outcome }}" = "failure" ]; then report ui build/ui-test.log; fi
+          exit 0
 
       - name: Upload build and test logs
         if: always()

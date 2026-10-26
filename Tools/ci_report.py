@@ -33,10 +33,14 @@ ERROR_RE = re.compile(
     r"(?P<severity>error|fatal error):\s*(?P<message>.*)$"
 )
 
-# Anything mentioning an error, used only when the structured patterns find
-# nothing. A build can fail without a single `file:line:` error (for example a
-# missing destination or a linker failure), and that must still be visible.
-FALLBACK_RE = re.compile(r"\berror\b[:;]?\s|\bBUILD FAILED\b|The following build commands failed", re.IGNORECASE)
+# A test runner that dies (signal, lost connection, watchdog) produces no
+# `file:line:` error and no failing test case, only these lines. Without them a
+# crashed gate looks like an unexplained exit code.
+CRASH_RE = re.compile(
+    r"Restarting after unexpected exit|crash|Crash|fatal error|Fatal error|"
+    r"Test runner exited|Lost connection|EXC_|signal |Segmentation fault|"
+    r"BUILD FAILED|The following build commands failed|\*\* TEST EXECUTE FAILED|✗",
+)
 
 # `Test Case '-[Suite testName]' failed (0.12 seconds).`
 FAILED_CASE_RE = re.compile(r"Test Case '-\[(?P<suite>[^\]]+)\]' failed \((?P<seconds>[0-9.]+) seconds\)")
@@ -129,15 +133,18 @@ def main() -> int:
 
     errors, failed_cases, failed_suites = parse(args.log)
 
+    fallback: list[str] = []
     if not errors and not failed_cases:
-        # Fall back to raw lines that look like a failure, so an unparseable log
-        # still names something instead of reporting a clean run.
+        # Nothing structured matched. A crashed runner produces no assertion and
+        # no compiler line, so surface the evidence that does exist: first any
+        # crash marker, otherwise the tail of the log.
         with args.log.open("r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                if FALLBACK_RE.search(line):
-                    errors.append({"file": "", "line": 0, "message": clean(line)})
-                    if len(errors) >= 40:
-                        break
+            lines = [line.rstrip() for line in handle if line.strip()]
+        crash_lines = [line for line in lines if CRASH_RE.search(line)]
+        fallback = crash_lines[-15:] if crash_lines else lines[-20:]
+        label = "crash" if crash_lines else "tail"
+        for line in fallback:
+            annotate("error", f"{label}: {clean(line)}")
 
     total = len(errors)
 
@@ -157,7 +164,12 @@ def main() -> int:
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     digest_lines = [f"## {args.label.capitalize()} failure digest", ""]
     if not errors and not failed_cases and not failed_suites:
-        digest_lines.append("No compiler errors or XCTest failures were found in the log.")
+        digest_lines.append("No compiler error or failed test case was found.")
+        if fallback:
+            digest_lines.append("")
+            digest_lines.append("```text")
+            digest_lines.extend(fallback)
+            digest_lines.append("```")
     if failed_suites:
         digest_lines.append(f"**Failed suites:** {', '.join(sorted(set(failed_suites)))}")
         digest_lines.append("")
