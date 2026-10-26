@@ -2,7 +2,7 @@
 
 [![iOS Build](https://github.com/azerish25-ux/passport-ios/actions/workflows/ios-build.yml/badge.svg)](https://github.com/azerish25-ux/passport-ios/actions/workflows/ios-build.yml)
 
-PassportProof is a native SwiftUI photo workflow for US passport, visa and DV Lottery applications. It guides capture, checks the prepared photograph where reliable measurements are available, asks for visual review, and formats the exact reviewed crop as a print sheet or JPEG. A separately labelled manual-framing path is available when automatic face measurements are unavailable.
+PassportProof is a native SwiftUI photo workflow for US passport, visa and DV Lottery, Canadian passport and German Schengen visa applications. It guides capture, checks the prepared photograph where reliable measurements are available, asks for visual review, and formats the exact reviewed crop as a print sheet or JPEG. A separately labelled manual-framing path is available when automatic face measurements are unavailable.
 
 Analysis and export happen on device. There is no account, analytics SDK, application backend or photo upload.
 
@@ -53,7 +53,7 @@ PassportProof/
   App/          entry point, routing, session state, privacy cover, shared components
   Core/
     Models/     document, finding, visual-review vocabulary
-    Corpus/     three verified US workflows with dated provenance
+    Corpus/     five verified workflows with dated provenance
     Imaging/    one crop transform shared by editor and outputs
     Validation/ face geometry, background analysis, rule engine, live capture gate
     Print/      physical layouts and PDF rendering

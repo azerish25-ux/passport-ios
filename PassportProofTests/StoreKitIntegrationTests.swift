@@ -28,27 +28,42 @@ final class StoreKitIntegrationTests: XCTestCase {
         // machine with no Apple Account instead of consuming the suite's time
         // allowance; the production value is exercised by the app, not here.
         let previousTimeout = EntitlementStore.restoreTimeout
+        let previousEntitlementTimeout = EntitlementStore.entitlementsTimeout
         EntitlementStore.restoreTimeout = .seconds(5)
+        EntitlementStore.entitlementsTimeout = .seconds(4)
         defer {
             EntitlementStore.restoreTimeout = previousTimeout
+            EntitlementStore.entitlementsTimeout = previousEntitlementTimeout
             environment.clearTransactions()
             environment.resetToDefaultState()
         }
         let store = EntitlementStore()
+        // Named steps: this test hung inside one of these calls twice, and a
+        // bare timeout says nothing about which store operation stopped
+        // answering. The prefixes are greppable in the CI log.
+        print("STOREKIT-TRACE refresh")
         await store.refresh()
         XCTAssertEqual(store.state, .available)
         XCTAssertFalse(store.isUnlocked)
+        print("STOREKIT-TRACE purchase")
         await store.purchase()
         XCTAssertTrue(store.isUnlocked, "The production purchase method must unlock from a verified transaction.")
         XCTAssertFalse(store.isPrototypeUnlock)
         XCTAssertEqual(store.state, .purchased)
 
+        print("STOREKIT-TRACE relaunch")
         let relaunchedStore = EntitlementStore()
+        print("STOREKIT-TRACE restore")
         await relaunchedStore.restore()
+        print("STOREKIT-TRACE restored")
         XCTAssertTrue(relaunchedStore.isUnlocked, "A fresh store must recover the purchase without purchasing again.")
+        print("STOREKIT-TRACE read-transactions")
         let transaction = try XCTUnwrap(environment.allTransactions().last)
+        print("STOREKIT-TRACE refund")
         try environment.refundTransaction(identifier: transaction.identifier)
+        print("STOREKIT-TRACE wait-for-revocation")
         try await eventually { !store.isUnlocked }
+        print("STOREKIT-TRACE refresh-after-refund")
         await relaunchedStore.refresh()
         XCTAssertFalse(relaunchedStore.isUnlocked, "A revoked non-consumable must not keep export unlocked.")
     }

@@ -416,15 +416,18 @@ final class EntitlementStore: ObservableObject {
 
     // MARK: - Entitlements
 
+    /// `Transaction.currentEntitlements` is also driven by storekitd and can
+    /// stop yielding without finishing. Run 48's local store logged two failed
+    /// finishes and then never returned from the entitlement scan, which hung
+    /// the test's relaunch path for its whole allowance. A store that does not
+    /// answer is not evidence that a purchase disappeared, so a timed-out scan
+    /// keeps the last known state instead of downgrading a paying customer.
+    static var entitlementsTimeout: Duration = .seconds(12)
+
     @discardableResult
     private func refreshEntitlements() async -> Bool {
-        var entitled = false
-        for await result in Transaction.currentEntitlements {
-            guard case .verified(let transaction) = result else { continue }
-            if transaction.productID == Self.productIdentifier,
-               transaction.revocationDate == nil {
-                entitled = true
-            }
+        guard let entitled = await Self.scanCurrentEntitlements(timeout: Self.entitlementsTimeout) else {
+            return isUnlocked
         }
 
         #if DEBUG
@@ -433,6 +436,35 @@ final class EntitlementStore: ObservableObject {
         isUnlocked = entitled
         #endif
         return entitled
+    }
+
+    /// Returns nil when the store did not answer in time.
+    nonisolated private static func scanCurrentEntitlements(timeout: Duration) async -> Bool? {
+        let scan = Task.detached(priority: .userInitiated) { () -> Bool in
+            var entitled = false
+            for await result in Transaction.currentEntitlements {
+                guard case .verified(let transaction) = result else { continue }
+                if transaction.productID == ExportProduct.unlimited.productIdentifier,
+                   transaction.revocationDate == nil {
+                    entitled = true
+                }
+            }
+            return entitled
+        }
+        return await withCheckedContinuation { continuation in
+            let gate = ContinuationGate()
+            Task {
+                let value = await scan.value
+                if gate.claim() { continuation.resume(returning: value) }
+            }
+            Task {
+                try? await Task.sleep(for: timeout)
+                if gate.claim() {
+                    scan.cancel()
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
     }
 
     private func grantConsumable(_ transaction: Transaction) {

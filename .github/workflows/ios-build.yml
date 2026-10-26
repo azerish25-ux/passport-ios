@@ -196,6 +196,13 @@ jobs:
           xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
           cp PassportProofTests/AssessmentAssets.xcassets/FullResolutionPortrait.imageset/full-resolution-portrait.jpg build/PassportProof-QA-Portrait.jpg
           xcrun simctl addmedia "$UDID" build/PassportProof-QA-Portrait.jpg
+          # A freshly erased simulator can present Apple's picker as
+          # PUPickerUnavailableView until the photo-library service has started
+          # once. Opening and closing Photos here initializes it; the UI test
+          # still reports a skip (never a false pass) if it stays unavailable.
+          xcrun simctl launch "$UDID" com.apple.mobileslideshow >/dev/null 2>&1 || true
+          sleep 5
+          xcrun simctl terminate "$UDID" com.apple.mobileslideshow >/dev/null 2>&1 || true
 
       - name: Run unit tests
         id: unit

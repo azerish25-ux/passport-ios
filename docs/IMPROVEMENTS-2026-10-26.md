@@ -223,6 +223,34 @@ now bounded at 8 s. Nothing is lost by abandoning a late acknowledgement: the
 entitlement comes from the verified transaction, and a redelivered consumable
 is deduplicated by transaction ID.
 
+## 10. Run 48: one cause fixed, two replaced with honest ones
+
+Run 48 proved the print-layout fix: the 4 × 6 and 5 × 7 journeys with PDF
+export passed, and the purchase/relaunch/restore journey still passed. Two new
+facts came out of it.
+
+### Apple's picker can be unavailable on a hosted simulator
+
+The import test waited for a `Photos` navigation bar. The runner showed
+`PUPickerUnavailableView` instead: the sheet had opened, but Apple's picker
+reported its own library as unavailable. The test then tried to dismiss using a
+navigation-bar Cancel button that does not exist in that state and failed on
+the app's own import button, which was still covered by the sheet. The test now
+asserts presentation from either state, drags the sheet down from its top edge
+when no Cancel exists, and — if Apple's unavailable view remains — reports a
+visible `XCTSkip` rather than a false pass. CI also starts the Photos library
+service once after seeding media, which is the documented workaround.
+
+### The second hang was not `finish()`
+
+With finishing bounded at 8 s, the store logged two failed finishes and still
+timed out. The remaining unbounded wait is the entitlement scan:
+`Transaction.currentEntitlements` is storekitd-driven and can stop without
+finishing. It is now raced against a 12 s deadline; a timed-out scan keeps the
+last known entitlement instead of downgrading a paying customer. The StoreKit
+test now prints named step markers, so a future hang names the store operation
+instead of costing another diagnostic cycle.
+
 ### What this pass still does not prove
 
 - Print scaling on a real printer.

@@ -12,8 +12,8 @@ accepted App Store submission.
 | Launch experience | `UILaunchScreen` on `LaunchBackground` with `LaunchSymbol` 1x/2x/3x | plist validation, compiled launch image audit |
 | Camera purpose string | `NSCameraUsageDescription` | unit test and Release bundle audit |
 | Photo-picker purpose string | `NSPhotoLibraryUsageDescription` | unit test and Release bundle audit |
-| Privacy manifest | `PrivacyInfo.xcprivacy`: no tracking, no collected data, no required-reason API access | unit test and Release bundle audit |
-| Export compliance | `ITSAppUsesNonExistentEncryption = false` | checked-in plist |
+| Privacy manifest | `PrivacyInfo.xcprivacy`: no tracking, no collected data, `UserDefaults` declared with reason `CA92.1` | unit test and Release bundle audit |
+| Export compliance | `ITSAppUsesNonExemptEncryption = false` | checked-in plist |
 | Version | Marketing `1.1.0`, build `2` | release-version test |
 | Purchases | Non-consumable `com.passportproof.app.unlock` (unlimited, restorable) and consumable `com.passportproof.app.single-export` (one credit); no subscription | `StoreKit/PassportProof.storekit`, StoreKit tests/manual sandbox QA |
 | Release safety | Debug demonstration unlock is under `#if DEBUG` | Release binary string audit in CI |
@@ -153,9 +153,10 @@ runner, none of them reachable from application code:
 
 1. clearing a simulated error inside a session kills the server (`ASDErrorDomain`
    1054) and takes the test process with it;
-2. a purchase or restore can wait indefinitely and trip the three-minute
+2. a purchase or restore can wait indefinitely and trip XCTest's execution
    allowance, which also kills the process and discards every other suite's
-   result;
+   result; `Transaction.finish()` has the same open-ended wait and is now
+   bounded in the store;
 3. a failed purchase still creates a transaction record (run 44: zero before,
    one after), so Apple's own documented contract is not observable there.
 
@@ -168,3 +169,14 @@ A red gating job now means an application defect, not a known-broken build
 machine. Failures are published as workflow annotations by `Tools/ci_report.py`,
 so a failing run names the test and the assertion without downloading the
 `.xcresult`.
+
+### Why the photo-picker test can report a skip
+
+The app opens Apple's system photo picker, not app UI. On a freshly erased
+hosted simulator that picker has been observed to show `PUPickerUnavailableView`
+even after media is seeded. CI now starts the Photos library service once before
+testing. If Apple's picker still reports itself unavailable, the test asserts
+that the sheet was presented, records a screenshot, and throws `XCTSkip` with
+that reason instead of pretending import worked or failing on Apple's UI. A
+skipped test is visible in the run summary and is never counted as a pass.
+Device QA remains the evidence for a working photo import.
