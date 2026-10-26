@@ -19,8 +19,10 @@ concurrency:
   group: ios-build-${{ github.ref }}
   cancel-in-progress: true
 
+# Write access is needed only so a failed run can publish its own digest to a
+# diagnostics branch; nothing is ever pushed to main.
 permissions:
-  contents: read
+  contents: write
 
 env:
   PROJECT: PassportProof.xcodeproj
@@ -333,6 +335,29 @@ jobs:
             exit 1
           fi
 
+      - name: Report simulator crashes
+        # A crashed app or test runner exits the step with 65 and prints no
+        # failing test case, so without this a red UI leg has no named cause.
+        if: always()
+        run: |
+          mkdir -p build/diagnostics
+          CRASH_DIR="$HOME/Library/Logs/DiagnosticReports"
+          FOUND=0
+          if [ -d "$CRASH_DIR" ]; then
+            while IFS= read -r report; do
+              [ -n "$report" ] || continue
+              FOUND=1
+              cp "$report" build/diagnostics/ || true
+              echo "::error::Crash report: $(basename "$report")"
+              grep -m 6 -E "Exception Type|Exception Codes|Termination Reason|Triggered by Thread|^[0-9]+ +PassportProof" "$report" | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+            done <<< "$(ls -1 "$CRASH_DIR"/*PassportProof* 2>/dev/null || true)"
+          fi
+          if [ "$FOUND" -eq 0 ]; then
+            echo "No PassportProof crash report was written."
+          fi
+
       - name: Export simulator screenshots
         if: always()
         run: |
@@ -395,9 +420,45 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
-          path: build/*.log
+          path: |
+            build/*.log
+            build/diagnostics/*
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Publish failure digest to a diagnostics branch
+        # Artifacts and annotations both need an authenticated client. A failed
+        # run therefore used to be unreadable from an unattended session, which
+        # is exactly how the same failure could survive several commits. The
+        # digest is a plain file on `ci-diagnostics` and never touches main.
+        if: failure() || cancelled()
+        continue-on-error: true
+        run: |
+          set +e
+          {
+            echo "# CI diagnostics — run ${{ github.run_number }}"
+            echo
+            echo "Commit: \`${{ github.sha }}\`"
+            echo "Event: ${{ github.event_name }}"
+            echo
+            for f in build/simulator-build.log build/test-bundles.log build/unit-test.log build/ui-test.log; do
+              [ -f "$f" ] || continue
+              echo "## $f"
+              echo '```text'
+              grep -nE "Test Case .*failed|Test Suite .*(passed|failed)|Executed [0-9]+ test|error:|Assertion Failure|Restarting after unexpected exit|Failed to launch|Failed to terminate|Testing failed|Unable to boot|BUILD FAILED|command returned" "$f" | tail -60
+              echo '--- last 40 lines ---'
+              tail -40 "$f"
+              echo '```'
+              echo
+            done
+          } > ci-failure.md
+          wc -l ci-failure.md
+          git config user.email "ci-diagnostics@users.noreply.github.com"
+          git config user.name "CI diagnostics"
+          git checkout -B ci-diagnostics
+          git add -f ci-failure.md
+          git commit -m "CI diagnostics for run ${{ github.run_number }}" || exit 0
+          git push --force origin ci-diagnostics
 
   # Proves the same sources compile for arm64 device against the iOS SDK. This
   # catches simulator-only API misuse and any missing framework link that the

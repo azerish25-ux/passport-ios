@@ -364,7 +364,7 @@ final class PassportProofUITests: XCTestCase {
         }
         if !element.isHittable {
             capture(app, named: "unreachable-\(element.identifier.isEmpty ? "element" : element.identifier)")
-            XCTFail("Element never became hittable: \(element)")
+            XCTFail("Element never became hittable: \(element) after \(attempts) drags. On screen: \(visibleIdentifiers(app))")
         }
     }
 
@@ -388,7 +388,25 @@ final class PassportProofUITests: XCTestCase {
             add(attachment)
             print("UI DIAGNOSTIC hierarchy\n\(app.debugDescription)")
         }
-        XCTAssertTrue(element.exists, "Required UI is missing: \(element)")
+        // The failure message travels into the CI annotation, where the
+        // screenshot and hierarchy in the artifact cannot be read. Naming the
+        // identifiers that were on screen distinguishes "wrong screen" from
+        // "right screen, element not built yet" without another run.
+        XCTAssertTrue(element.exists, "Required UI is missing: \(element). On screen: \(visibleIdentifiers(app))")
+    }
+
+    /// Identifiers of the elements present right now, bounded so a failure
+    /// message stays readable in an annotation.
+    @MainActor
+    private func visibleIdentifiers(_ app: XCUIApplication) -> String {
+        let identifiers = app.descendants(matching: .any).allElementsBoundByIndex
+            .map(\.identifier)
+            .filter { !$0.isEmpty }
+        var seen = Set<String>()
+        let unique = identifiers.filter { seen.insert($0).inserted }
+        if unique.isEmpty { return "(no identifiers)" }
+        return unique.prefix(25).joined(separator: ", ")
+    }
     }
 
     @MainActor
@@ -402,7 +420,7 @@ final class PassportProofUITests: XCTestCase {
             add(attachment)
             print("UI DIAGNOSTIC hierarchy at timeout\n\(app.debugDescription)")
         }
-        XCTAssertTrue(completed, description)
+        XCTAssertTrue(completed, "\(description). On screen: \(visibleIdentifiers(app))")
     }
 
     @MainActor
