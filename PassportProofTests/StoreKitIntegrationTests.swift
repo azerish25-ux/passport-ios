@@ -18,6 +18,12 @@ final class StoreKitIntegrationTests: XCTestCase {
 
     func testPurchaseRestoreAndRefundUpdateVerifiedEntitlement() async throws {
         let environment = try environment()
+        // Start from a store with no transaction of its own. A purchase that
+        // another test left behind makes `refresh()` legitimately report
+        // `.purchased`, which looks like this test's entitlement leaking rather
+        // than an environment that was never reset.
+        environment.clearTransactions()
+        environment.resetToDefaultState()
         defer { environment.clearTransactions(); environment.resetToDefaultState() }
         let store = EntitlementStore()
         await store.refresh()

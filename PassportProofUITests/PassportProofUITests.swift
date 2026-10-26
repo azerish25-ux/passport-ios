@@ -274,13 +274,7 @@ final class PassportProofUITests: XCTestCase {
             "manual.review.guides", "manual.review.face",
             "manual.review.background", "manual.review.limitations"
         ] {
-            let toggle = app.switches[identifier]
-            scrollTo(toggle, in: app)
-            XCTAssertEqual(toggle.value as? String, "0")
-            toggle.tap()
-            waitUntil(in: app, description: "Manual attestation must persist: \(identifier)", timeout: 6) {
-                toggle.value as? String == "1"
-            }
+            switchOn(identifier, in: app, description: "Manual attestation must persist")
         }
         waitUntil(in: app, description: "All four attestations must enable saving", timeout: 8) {
             save.isEnabled
@@ -293,14 +287,39 @@ final class PassportProofUITests: XCTestCase {
     @MainActor
     private func confirmVisualReview(in app: XCUIApplication) {
         for identifier in ["review.expression", "review.glasses", "review.recent", "review.original"] {
-            let toggle = app.switches[identifier]
-            scrollTo(toggle, in: app)
-            XCTAssertEqual(toggle.value as? String, "0")
-            toggle.tap()
-            waitUntil(in: app, description: "The visual confirmation must persist: \(identifier)", timeout: 6) {
-                toggle.value as? String == "1"
-            }
+            switchOn(identifier, in: app, description: "The visual confirmation must persist")
         }
+    }
+
+    /// Switches one confirmation on and insists that it stayed on.
+    ///
+    /// A single `tap()` right after a drag is sometimes swallowed by the
+    /// scroll view while momentum settles, which reads as "the app lost my
+    /// confirmation" when nothing was ever delivered. Retrying the tap keeps
+    /// the assertion honest: the switch still has to end up on.
+    @MainActor
+    private func switchOn(_ identifier: String, in app: XCUIApplication, description: String) {
+        let toggle = app.switches[identifier]
+        scrollTo(toggle, in: app)
+        XCTAssertEqual(toggle.value as? String, "0", "\(identifier) must start switched off")
+        for _ in 0..<3 {
+            if !toggle.isHittable { scrollTo(toggle, in: app) }
+            toggle.tap()
+            if waitForSwitch(toggle, on: true, timeout: 4) { return }
+        }
+        capture(app, named: "switch-\(identifier)")
+        XCTFail("\(description): \(identifier). On screen: \(visibleIdentifiers(app))")
+    }
+
+    @MainActor
+    private func waitForSwitch(_ toggle: XCUIElement, on: Bool, timeout: TimeInterval) -> Bool {
+        let expected = on ? "1" : "0"
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if (toggle.value as? String) == expected { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return (toggle.value as? String) == expected
     }
 
     @MainActor
@@ -377,6 +396,9 @@ final class PassportProofUITests: XCTestCase {
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: gutter, dy: towardTop ? lower : upper))
         start.press(forDuration: 0.05, thenDragTo: end,
                     withVelocity: XCUIGestureVelocity(300), thenHoldForDuration: 0.1)
+        // Let the scroll view settle before anything taps inside it; a tap
+        // delivered mid-momentum is consumed by the scroll.
+        Thread.sleep(forTimeInterval: 0.2)
     }
 
     @MainActor
