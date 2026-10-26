@@ -465,21 +465,4 @@ private struct CountPill: View {
         .background(Theme.paperRaised, in: Capsule())
     }
 }
-private struct ConfirmationRow: View {
-    let title: String
-    let detail: String
-    @Binding var isOn: Bool
-    let identifier: String
-    var body: some View {
-        Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
-                Text(detail).font(.footnote).foregroundStyle(Theme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .tint(Theme.accent).padding(14).frame(minHeight: 64)
-        .accessibilityIdentifier(identifier)
-        .accessibilityHint(isOn ? "Confirmed for this photo" : "Confirm after checking the original photo")
-    }
-}
+

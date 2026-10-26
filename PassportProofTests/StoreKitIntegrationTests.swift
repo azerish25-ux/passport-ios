@@ -24,7 +24,16 @@ final class StoreKitIntegrationTests: XCTestCase {
         // than an environment that was never reset.
         environment.clearTransactions()
         environment.resetToDefaultState()
-        defer { environment.clearTransactions(); environment.resetToDefaultState() }
+        // A restore that waits on an account sync must fail fast on a build
+        // machine with no Apple Account instead of consuming the suite's time
+        // allowance; the production value is exercised by the app, not here.
+        let previousTimeout = EntitlementStore.restoreTimeout
+        EntitlementStore.restoreTimeout = .seconds(5)
+        defer {
+            EntitlementStore.restoreTimeout = previousTimeout
+            environment.clearTransactions()
+            environment.resetToDefaultState()
+        }
         let store = EntitlementStore()
         await store.refresh()
         XCTAssertEqual(store.state, .available)
@@ -73,6 +82,9 @@ final class StoreKitIntegrationTests: XCTestCase {
         let store = EntitlementStore()
         await store.refresh()
         XCTAssertEqual(store.state, .available)
+        // Counted before the attempt: a transaction another test left in this
+        // simulated store says nothing about what this purchase did.
+        let transactionCountBefore = environment.allTransactions().count
         try await environment.setSimulatedError(.generic(.notAvailableInStorefront), forAPI: .purchase)
         let configuredFailure = await environment.simulatedError(forAPI: .purchase)
         XCTAssertEqual(configuredFailure, .generic(.notAvailableInStorefront))
@@ -100,7 +112,8 @@ final class StoreKitIntegrationTests: XCTestCase {
         XCTAssertEqual(store.state, .available, "A failed attempt must return to a retryable store state")
         XCTAssertFalse(store.isUnlocked, "Refreshing after failure must not grant an entitlement")
         XCTAssertFalse(store.isWorking)
-        XCTAssertTrue(environment.allTransactions().isEmpty, "A failed purchase must not create a transaction")
+        XCTAssertEqual(environment.allTransactions().count, transactionCountBefore,
+                       "A failed purchase must not create a transaction")
     }
 
 

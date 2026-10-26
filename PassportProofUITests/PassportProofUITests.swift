@@ -291,37 +291,35 @@ final class PassportProofUITests: XCTestCase {
         }
     }
 
-    /// Switches one confirmation on and insists that it stayed on.
+    /// Confirms one statement and insists that the app recorded it.
     ///
-    /// A SwiftUI `Toggle` reports its whole row as one element, so `tap()` aims
-    /// at the middle of a two-line label — which does not move the switch. The
-    /// tap is therefore aimed at the control at the trailing edge, and retried,
-    /// because a tap delivered while the scroll view is still decelerating is
-    /// consumed by the scroll. The assertion is unchanged: the switch has to
-    /// end up on.
+    /// Each statement is a full-width button that exposes the `.isSelected`
+    /// accessibility trait, so the tap can land anywhere on the row and the
+    /// assertion reads exactly the state VoiceOver announces. The tap is
+    /// retried because one delivered while a scroll is still decelerating is
+    /// consumed by the scroll view; the assertion itself never relaxes.
     @MainActor
     private func switchOn(_ identifier: String, in app: XCUIApplication, description: String) {
-        let toggle = app.switches[identifier]
-        scrollTo(toggle, in: app)
-        XCTAssertEqual(toggle.value as? String, "0", "\(identifier) must start switched off")
+        let row = app.buttons[identifier]
+        scrollTo(row, in: app)
+        XCTAssertFalse(row.isSelected, "\(identifier) must start unconfirmed")
         for _ in 0..<3 {
-            if !toggle.isHittable { scrollTo(toggle, in: app) }
-            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-            if waitForSwitch(toggle, on: true, timeout: 4) { return }
+            if !row.isHittable { scrollTo(row, in: app) }
+            row.tap()
+            if waitForSwitch(row, on: true, timeout: 4) { return }
         }
-        capture(app, named: "switch-\(identifier)")
+        capture(app, named: "confirm-\(identifier)")
         XCTFail("\(description): \(identifier). On screen: \(visibleIdentifiers(app))")
     }
 
     @MainActor
-    private func waitForSwitch(_ toggle: XCUIElement, on: Bool, timeout: TimeInterval) -> Bool {
-        let expected = on ? "1" : "0"
+    private func waitForSwitch(_ row: XCUIElement, on: Bool, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if (toggle.value as? String) == expected { return true }
+            if row.isSelected == on { return true }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
-        return (toggle.value as? String) == expected
+        return row.isSelected == on
     }
 
     @MainActor

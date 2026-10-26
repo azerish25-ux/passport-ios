@@ -226,33 +226,20 @@ struct ManualFramingView: View {
                 .fixedSize(horizontal: false, vertical: true)
             StudioCard(padding: 4) {
                 VStack(spacing: 0) {
-                    manualConfirmation("I placed every guide", detail: "The guides match the head, chin, eyes and center of this photo. Suggested starting positions alone are not a review.",
-                                       isOn: $review.guidesConfirmed, identifier: "manual.review.guides")
+                    ConfirmationRow(title: "I placed every guide", detail: "The guides match the head, chin, eyes and center of this photo. Suggested starting positions alone are not a review.",
+                                    isOn: $review.guidesConfirmed, identifier: "manual.review.guides")
                     Theme.Rule().padding(.horizontal, 12)
-                    manualConfirmation("One face, looking straight ahead", detail: "One person is visible, with the full head and face shown, eyes open and head level.",
-                                       isOn: $review.singleFaceAndPoseConfirmed, identifier: "manual.review.face")
+                    ConfirmationRow(title: "One face, looking straight ahead", detail: "One person is visible, with the full head and face shown, eyes open and head level.",
+                                    isOn: $review.singleFaceAndPoseConfirmed, identifier: "manual.review.face")
                     Theme.Rule().padding(.horizontal, 12)
-                    manualConfirmation("I checked the background and light", detail: "The background is plain white or off-white. Lighting is even, with no shadows on the face or background.",
-                                       isOn: $review.backgroundAndLightingConfirmed, identifier: "manual.review.background")
+                    ConfirmationRow(title: "I checked the background and light", detail: "The background is plain white or off-white. Lighting is even, with no shadows on the face or background.",
+                                    isOn: $review.backgroundAndLightingConfirmed, identifier: "manual.review.background")
                     Theme.Rule().padding(.horizontal, 12)
-                    manualConfirmation("I understand the limits", detail: "Manual guides do not verify this photo. Export formats it; the issuing authority decides whether to accept it.",
-                                       isOn: $review.limitationsAccepted, identifier: "manual.review.limitations")
+                    ConfirmationRow(title: "I understand the limits", detail: "Manual guides do not verify this photo. Export formats it; the issuing authority decides whether to accept it.",
+                                    isOn: $review.limitationsAccepted, identifier: "manual.review.limitations")
                 }
             }
         }
-    }
-
-    private func manualConfirmation(_ title: String, detail: String,
-                                    isOn: Binding<Bool>, identifier: String) -> some View {
-        Toggle(isOn: isOn) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
-                Text(detail).font(.footnote).foregroundStyle(Theme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(14).frame(minHeight: 64)
-        .accessibilityIdentifier(identifier)
     }
 
     private var saveBar: some View {

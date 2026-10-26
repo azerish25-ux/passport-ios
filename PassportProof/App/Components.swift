@@ -243,6 +243,59 @@ struct StudioCard<Content: View>: View {
     }
 }
 
+/// A statement the customer confirms about their own photo.
+///
+/// A switch reads as a setting that persists from visit to visit; a
+/// confirmation is a one-off decision, so this is a full-width tap target with
+/// an explicit checkmark. That also fixes a real usability problem: a two-line
+/// label beside a switch leaves most of the row inert, so the only reliable hit
+/// area is a 44 pt control at the trailing edge. VoiceOver announces the state
+/// as "Selected" rather than a numeric switch value.
+struct ConfirmationRow: View {
+    let title: String
+    let detail: String
+    @Binding var isOn: Bool
+    let identifier: String
+    var hintOn: String = "Confirmed. Double-tap to remove the confirmation."
+    var hintOff: String = "Double-tap to confirm."
+
+    var body: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.16)) { isOn.toggle() }
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle().fill(isOn ? Theme.signalPass.opacity(0.14) : .clear)
+                    Circle().stroke(isOn ? Theme.signalPass : Theme.rule, lineWidth: 1.4)
+                    if isOn {
+                        Image(systemName: "checkmark")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(Theme.signalPass)
+                    }
+                }
+                .frame(width: 26, height: 26)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(detail).font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .frame(minHeight: 64)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityAddTraits(isOn ? AccessibilityTraits.isSelected : AccessibilityTraits())
+        .accessibilityValue(isOn ? "Confirmed" : "Not confirmed")
+        .accessibilityHint(isOn ? hintOn : hintOff)
+    }
+}
+
 struct StudioEyebrow: View {
     let title: String
 

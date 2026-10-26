@@ -282,6 +282,15 @@ final class EntitlementStore: ObservableObject {
 
     // MARK: - Restore
 
+    /// `AppStore.sync()` keeps waiting on the App Store account with no deadline
+    /// of its own and does not honour cancellation. On a device with no
+    /// signed-in account, or during an App Store outage, it can wait for
+    /// minutes: the paywall's restore button stays disabled behind "Contacting
+    /// App Store…" and the customer is left with no way forward. The wait is
+    /// bounded so the screen can always reach a retryable state. Shortened in
+    /// tests.
+    static var restoreTimeout: Duration = .seconds(25)
+
     func restore() async {
         guard !isWorking else { return }
         isWorking = true
@@ -292,17 +301,45 @@ final class EntitlementStore: ObservableObject {
             return
         }
 
-        do {
-            try await AppStore.sync()
-        } catch {
+        switch await Self.syncAppStoreAccount(timeout: Self.restoreTimeout) {
+        case .success:
+            if await refreshEntitlements() {
+                state = .purchased
+            } else {
+                state = .failed("No previous PassportProof purchase was found for this Apple Account.")
+            }
+        case .failure(.timedOut):
+            state = .failed("The App Store did not respond in time. Check your connection, then try again.")
+        case .failure(.thrown(let error)):
             state = .failed(Self.message(for: error))
-            return
         }
+    }
 
-        if await refreshEntitlements() {
-            state = .purchased
-        } else {
-            state = .failed("No previous PassportProof purchase was found for this Apple Account.")
+    /// Races the account sync against a deadline. The losing side is abandoned
+    /// rather than awaited: awaiting a cancelled `AppStore.sync()` call would
+    /// reintroduce the unbounded wait this exists to remove.
+    nonisolated private static func syncAppStoreAccount(timeout: Duration) async -> Result<Void, AccountSyncOutcome> {
+        let sync = Task.detached(priority: .userInitiated) { () -> Result<Void, AccountSyncOutcome> in
+            do {
+                try await AppStore.sync()
+                return .success(())
+            } catch {
+                return .failure(.thrown(error))
+            }
+        }
+        return await withCheckedContinuation { continuation in
+            let gate = ContinuationGate()
+            Task {
+                let outcome = await sync.value
+                if gate.claim() { continuation.resume(returning: outcome) }
+            }
+            Task {
+                try? await Task.sleep(for: timeout)
+                if gate.claim() {
+                    sync.cancel()
+                    continuation.resume(returning: .failure(.timedOut))
+                }
+            }
         }
     }
 
@@ -420,5 +457,25 @@ final class EntitlementStore: ObservableObject {
             return "The App Store could not complete that request. Check your connection and try again."
         }
         return "The App Store is unavailable right now. Try again shortly."
+    }
+}
+
+enum AccountSyncOutcome: Error {
+    case timedOut
+    case thrown(Error)
+}
+
+/// Lets exactly one of two racing tasks resume a continuation. Without it the
+/// late finisher would resume an already-resumed continuation and trap.
+private final class ContinuationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if claimed { return false }
+        claimed = true
+        return true
     }
 }
