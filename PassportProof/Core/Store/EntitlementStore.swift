@@ -107,10 +107,10 @@ final class EntitlementStore: ObservableObject {
                     if entitled { self.state = .purchased }
                     else if self.unlimitedProduct != nil { self.state = .available }
                     else { self.state = .unavailable("The store is unavailable. Refresh to try again.") }
-                    await transaction.finish()
+                    await Self.acknowledge(transaction)
                 case Self.singleExportIdentifier:
                     self.grantConsumable(transaction)
-                    await transaction.finish()
+                    await Self.acknowledge(transaction)
                 default:
                     continue
                 }
@@ -210,7 +210,7 @@ final class EntitlementStore: ObservableObject {
                     isUnlocked = true
                     isPrototypeUnlock = false
                     state = .purchased
-                    await transaction.finish()
+                    await Self.acknowledge(transaction)
                 case .unverified(_, _):
                     state = .failed("The purchase could not be verified on this device. Nothing was unlocked.")
                 }
@@ -257,7 +257,7 @@ final class EntitlementStore: ObservableObject {
                 switch verification {
                 case .verified(let transaction):
                     grantConsumable(transaction)
-                    await transaction.finish()
+                    await Self.acknowledge(transaction)
                     // The customer stays in the store view only if the credit
                     // could not be granted; the view dismisses on credit change.
                     if state != .purchased { state = .available }
@@ -346,6 +346,34 @@ final class EntitlementStore: ObservableObject {
             state = .failed("The App Store did not respond in time. Check your connection, then try again.")
         case .failure(.thrown(let error)):
             state = .failed(Self.message(for: error))
+        }
+    }
+
+    /// `Transaction.finish()` has no deadline either. Run 47's local store
+    /// answered a purchase with `storekitd RequestError Code=1` and then never
+    /// returned from `finish()`, leaving the purchase screen busy for the rest
+    /// of the test allowance (and, on a device, until the app was killed). The
+    /// entitlement is already computed from the verified transaction before
+    /// this call, and a redelivered consumable is deduplicated by transaction
+    /// ID, so acknowledging with a deadline loses nothing.
+    static var finishTimeout: Duration = .seconds(8)
+
+    /// Acknowledges delivery without letting a wedged store block the screen.
+    nonisolated static func acknowledge(_ transaction: Transaction) async {
+        let finish = Task { await transaction.finish() }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let gate = ContinuationGate()
+            Task {
+                _ = await finish.value
+                if gate.claim() { continuation.resume() }
+            }
+            Task {
+                try? await Task.sleep(for: Self.finishTimeout)
+                if gate.claim() {
+                    finish.cancel()
+                    continuation.resume()
+                }
+            }
         }
     }
 

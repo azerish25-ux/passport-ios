@@ -415,13 +415,16 @@ final class PassportProofUITests: XCTestCase {
     /// attestations became unreachable in the previous run.
     @MainActor
     private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, towardTop: Bool = false) {
-        require(element, in: app)
+        // Do not require existence up front. Rows inside a LazyVGrid are not in
+        // the hierarchy until the grid approaches the viewport, so waiting for
+        // one before scrolling asks for an element the app has correctly not
+        // built yet. Drag until it exists and can be tapped, then report.
         var attempts = 0
-        while !(element.exists && element.isHittable) && attempts < 10 {
+        while !(element.exists && element.isHittable) && attempts < 12 {
             dragInGutter(in: app, towardTop: towardTop)
             attempts += 1
         }
-        if !element.isHittable {
+        if !(element.exists && element.isHittable) {
             capture(app, named: "unreachable-\(describe(element))")
             XCTFail("Element never became hittable: \(describe(element)) after \(attempts) drags. On screen: \(visibleIdentifiers(app))")
         }
@@ -463,9 +466,13 @@ final class PassportProofUITests: XCTestCase {
     }
 
     /// Names an element without resolving a snapshot, which throws when the
-    /// element matches nothing.
+    /// element matches nothing. `identifier` itself resolves that snapshot, so
+    /// a genuinely missing element must be reported before it is read; reading
+    /// it inside the failure message replaced the explanation with XCTest's
+    /// "Failed to get matching snapshot" and hid the real cause for two runs.
     private func describe(_ element: XCUIElement) -> String {
-        element.identifier.isEmpty ? "unnamed \(element.elementType.rawValue) element" : element.identifier
+        guard element.exists else { return "no element matching that query" }
+        return element.identifier.isEmpty ? "unnamed \(element.elementType.rawValue) element" : element.identifier
     }
 
     /// Identifiers of the elements present right now, bounded so a failure

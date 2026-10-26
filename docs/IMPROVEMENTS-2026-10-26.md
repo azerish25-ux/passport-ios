@@ -196,6 +196,33 @@ fast with a short test-only timeout.
 
 Both files are validated by parsing them, not by inspection.
 
+## 9. Run 47: the two failures that survived the harness rewrite
+
+The run proved the previous fixes: 75 unit tests passed and the unlimited
+purchase, relaunch and restore UI journey passed on the simulator. Two causes
+remained, both diagnosed from the runner's logs rather than guessed.
+
+### A lazy grid row cannot be waited for before scrolling
+
+The print-layout test waited 15 s for `layout.fourBySix` before scrolling. The
+rows live in a `LazyVGrid`, so a row below the viewport is correctly absent from
+the accessibility hierarchy until the grid approaches it. The harness asked for
+the element first and only then scrolled, which can never succeed. `scrollTo`
+now drags until the element exists and is hittable, then reports. It also names
+missing elements without reading `identifier`, which resolves a snapshot and
+throws, replacing the real assertion message with XCTest's "Failed to get
+matching snapshot": that is why two runs reported a symptom instead of a cause.
+
+### `Transaction.finish()` can hang forever
+
+Run 47's local store logged `storekitd RequestError Code=1` on `finish()` and
+then never returned. The purchase method had already computed the entitlement
+and set `.purchased`, but the paywall stayed busy for the rest of the test
+allowance — on a device, until the app was killed. Acknowledging delivery is
+now bounded at 8 s. Nothing is lost by abandoning a late acknowledgement: the
+entitlement comes from the verified transaction, and a redelivered consumable
+is deduplicated by transaction ID.
+
 ### What this pass still does not prove
 
 - Print scaling on a real printer.
