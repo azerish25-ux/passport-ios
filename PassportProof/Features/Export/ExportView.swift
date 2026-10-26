@@ -9,6 +9,9 @@
 import SwiftUI
 import UIKit
 import CoreGraphics
+// `EnvironmentValues.requestReview` is declared in SwiftUI's StoreKit
+// integration, so the key path does not resolve without this import.
+import StoreKit
 
 @MainActor
 struct ExportView: View {
