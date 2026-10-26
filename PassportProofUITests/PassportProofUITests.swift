@@ -293,10 +293,12 @@ final class PassportProofUITests: XCTestCase {
 
     /// Switches one confirmation on and insists that it stayed on.
     ///
-    /// A single `tap()` right after a drag is sometimes swallowed by the
-    /// scroll view while momentum settles, which reads as "the app lost my
-    /// confirmation" when nothing was ever delivered. Retrying the tap keeps
-    /// the assertion honest: the switch still has to end up on.
+    /// A SwiftUI `Toggle` reports its whole row as one element, so `tap()` aims
+    /// at the middle of a two-line label — which does not move the switch. The
+    /// tap is therefore aimed at the control at the trailing edge, and retried,
+    /// because a tap delivered while the scroll view is still decelerating is
+    /// consumed by the scroll. The assertion is unchanged: the switch has to
+    /// end up on.
     @MainActor
     private func switchOn(_ identifier: String, in app: XCUIApplication, description: String) {
         let toggle = app.switches[identifier]
@@ -304,7 +306,7 @@ final class PassportProofUITests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, "0", "\(identifier) must start switched off")
         for _ in 0..<3 {
             if !toggle.isHittable { scrollTo(toggle, in: app) }
-            toggle.tap()
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
             if waitForSwitch(toggle, on: true, timeout: 4) { return }
         }
         capture(app, named: "switch-\(identifier)")
