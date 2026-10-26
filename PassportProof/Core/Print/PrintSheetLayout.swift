@@ -121,9 +121,12 @@ struct PrintPlan: Equatable, Sendable {
         let rowGutter = layout.rowGutterPoints
 
         // Floor division on the pitch, so the last column or row is only counted
-        // when a full photo plus its gutter actually fits.
-        columns = max(1, Int(((availableWidth + columnGutter) / (photoWidth + columnGutter)).rounded(.down)))
-        rows = max(1, Int(((availableHeight + rowGutter) / (photoHeight + rowGutter)).rounded(.down)))
+        // when a full photo plus its gutter actually fits. The epsilon absorbs
+        // binary rounding: 50.8 mm is exactly two inches on paper, but the
+        // division must not floor 2.0000000001 down to 1 and halve a sheet.
+        let epsilon = 1e-9
+        columns = max(1, Int((((availableWidth + columnGutter) / (photoWidth + columnGutter)) + epsilon).rounded(.down)))
+        rows = max(1, Int((((availableHeight + rowGutter) / (photoHeight + rowGutter)) + epsilon).rounded(.down)))
     }
 }
 

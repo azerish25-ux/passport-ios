@@ -425,7 +425,6 @@ struct ExportView: View {
                 return
             }
             if stage(data, name: "\(spec.id)-\(layout.rawValue)", fileExtension: "pdf") {
-                entitlements.consumeExportCredit()
                 didProduceExport = true
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 preparedSummary = "\(layout.title) PDF prepared · \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))"
@@ -461,7 +460,6 @@ struct ExportView: View {
             }
             let size = ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
             if stage(data, name: spec.id, fileExtension: "jpg") {
-                entitlements.consumeExportCredit()
                 didProduceExport = true
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 preparedSummary = "\(spec.widthPixels) × \(spec.heightPixels) JPEG prepared · \(size)"
@@ -501,13 +499,16 @@ struct ExportView: View {
         ExportStaging.remove(url)
         if stagedURL == url { stagedURL = nil }
         if share?.url == url { share = nil }
+        guard completed, didProduceExport else { return }
+        didProduceExport = false
+        // Spend a single-export credit only once the customer actually saved or
+        // sent the file. Charging at staging time would take the credit when the
+        // share sheet is dismissed without doing anything.
+        entitlements.consumeExportCredit()
         // Ask for a rating only after a completed, paid export. iOS itself
         // rate-limits the prompt, and this keeps it away from failures and the
         // free calibration page.
-        if completed, didProduceExport {
-            didProduceExport = false
-            requestReview()
-        }
+        requestReview()
     }
 
     private func cleanStaging() {

@@ -94,8 +94,8 @@ struct UnlockView: View {
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Theme.ink)
                 .padding(.top, Theme.Spacing.xs)
-            BenefitRow(icon: "printer", title: "Print sheets, made to measure", detail: "PDF layouts for the supported US passport workflow. Choose your paper size and print at actual size.")
-            BenefitRow(icon: "arrow.up.doc", title: "Digital files with the right format", detail: "600 × 600 pixel JPEGs with file-size checks for US visa and DV Lottery photos.")
+            BenefitRow(icon: "printer", title: "Print sheets, made to measure", detail: "True-size PDF layouts for every supported print workflow — US, Canadian and German — with the number of copies that actually fit your paper.")
+            BenefitRow(icon: "arrow.up.doc", title: "Digital files with the right format", detail: "Exact pixel dimensions and a file-size limit checked on the encoded file, for every supported upload workflow.")
             BenefitRow(icon: "infinity", title: "Unlimited supported exports", detail: "One purchase for your Apple Account. Restore it on another device using the same account.")
             BenefitRow(icon: "lock", title: "Processing stays on your device", detail: "No photo upload, account or tracking. Apple handles the purchase.")
         }

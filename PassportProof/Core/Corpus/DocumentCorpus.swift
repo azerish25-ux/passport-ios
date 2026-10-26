@@ -2,8 +2,8 @@
 //  DocumentCorpus.swift
 //  PassportProof
 //
-//  Three complete US workflows. No empty catalogue slots and no output that
-//  contradicts the issuer's printed-versus-digital guidance.
+//  Five complete workflows across three countries. No empty catalogue slots and
+//  no output that contradicts the issuer's printed-versus-digital guidance.
 //
 
 import Foundation
