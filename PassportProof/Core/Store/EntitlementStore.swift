@@ -130,6 +130,15 @@ final class EntitlementStore: ObservableObject {
         defer { isWorking = false }
         state = .loading
 
+        // The watchdog only releases the screen; a slow product load still
+        // finishes and replaces this sentence with the real state.
+        let watchdog = Task { [weak self] in
+            try? await Task.sleep(for: Self.refreshTimeout)
+            guard !Task.isCancelled, let self, self.state == .loading else { return }
+            self.state = .failed("The App Store did not answer in time. Check your connection, then try again.")
+        }
+        defer { watchdog.cancel() }
+
         // Local verified entitlements work offline. Check them before asking the
         // network for product metadata so a purchased user is never downgraded
         // by a connection failure.
@@ -299,6 +308,11 @@ final class EntitlementStore: ObservableObject {
     /// answers, the paywall's button was disabled forever with no explanation.
     /// A watchdog releases the screen; a late success still unlocks normally.
     static var purchaseTimeout: Duration = .seconds(30)
+
+    /// `Product.products(for:)` is a network call with no deadline either. A
+    /// wedged connection left the paywall on `.loading` with no price and no
+    /// action at all.
+    static var refreshTimeout: Duration = .seconds(20)
 
     @MainActor
     private func startPurchaseWatchdog() -> Task<Void, Never> {

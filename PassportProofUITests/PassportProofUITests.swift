@@ -314,12 +314,38 @@ final class PassportProofUITests: XCTestCase {
         XCTAssertEqual(row.value as? String, "Not confirmed", "\(identifier) must start unconfirmed")
         for _ in 0..<3 {
             if !row.isHittable { scrollTo(row, in: app) }
+            revealClearOfBars(row, in: app)
             row.tap()
             if waitForSwitch(row, on: true, timeout: 4) { return }
         }
         capture(app, named: "confirm-\(identifier)")
-        XCTFail("\(description): \(identifier) still reads \(row.value as? String ?? "no value"). "
+        XCTFail("\(description): \(identifier) still reads \(row.value as? String ?? "no value") "
+                + "at \(row.frame) in \(app.windows.firstMatch.frame). "
                 + "On screen: \(visibleIdentifiers(app))")
+    }
+
+    /// Scrolls until the row is clear of the navigation bar and the pinned
+    /// action bar.
+    ///
+    /// `isHittable` means a hit point can be computed for the element, not that
+    /// nothing covers it. A row sitting under the editor's pinned save bar
+    /// reports hittable while every tap lands on the bar, which is how the
+    /// attestations were being lost.
+    @MainActor
+    private func revealClearOfBars(_ element: XCUIElement, in app: XCUIApplication) {
+        let window = app.windows.firstMatch.frame
+        let topClearance: CGFloat = 90
+        let bottomClearance: CGFloat = 170
+        for _ in 0..<5 {
+            let frame = element.frame
+            if frame.maxY > window.maxY - bottomClearance {
+                dragInGutter(in: app, towardTop: false)
+            } else if frame.minY < window.minY + topClearance {
+                dragInGutter(in: app, towardTop: true)
+            } else {
+                return
+            }
+        }
     }
 
     /// Reads the state VoiceOver reads. The `Selected` trait is applied for
