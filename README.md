@@ -140,3 +140,9 @@ The measurement engine labels app-selected thresholds separately from issuer rul
 The baseline gap analysis that drove this pass is in [`docs/PRODUCTION-AUDIT.md`](docs/PRODUCTION-AUDIT.md). `docs/SPEC.md` and `docs/BUILD-CONTRACT.md` are retained as historical research artifacts; the current scope is defined by this README and the corpus.
 
 The October 25 repair and design changes are recorded in [`docs/IMPROVEMENTS-2026-10-25.md`](docs/IMPROVEMENTS-2026-10-25.md).
+
+The October 26 pass — diagnosable CI, application-contract tests, two new
+workflows, true-size print grids, the two-tier price and the shortened path to
+framing guides — is recorded in
+[`docs/IMPROVEMENTS-2026-10-26.md`](docs/IMPROVEMENTS-2026-10-26.md), including
+what it does **not** prove.
