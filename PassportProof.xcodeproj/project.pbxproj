@@ -50,6 +50,7 @@
 		F9D83C9671EFDC7CC182057F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDAC857F76ADA2D887487466 /* Assets.xcassets */; };
 		425163FA0A6768D22FF0264E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CEE758DCE401EC8FFA4892D6 /* PrivacyInfo.xcprivacy */; };
 		40EF49084A84A0F14DC69064 /* AssessmentDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */; };
+		C65C88AA8376D15B913527AE /* CatalogueContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E721AB2F8E5D38F0D5B6717F /* CatalogueContractTests.swift */; };
 		CE992BE5DFA1400ADAAF1D56 /* CoreRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523FDE8AA4667380EBDBA5A1 /* CoreRegressionTests.swift */; };
 		5C812E09B777C674D5BE057F /* ExportStagingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6AEE0F4A67A9DD6C90359F /* ExportStagingTests.swift */; };
 		A213ED968F564CA4A318378F /* ManualFramingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 278C30E0B1EE502B43038192 /* ManualFramingTests.swift */; };
@@ -125,6 +126,7 @@
 		27551D16EC8BBB5BE88CE871 /* DocumentLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentLibraryView.swift; sourceTree = "<group>"; };
 		37951F874C6AA74E5CDE2DD9 /* UnlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockView.swift; sourceTree = "<group>"; };
 		2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssessmentDiagnosticsTests.swift; sourceTree = "<group>"; };
+		E721AB2F8E5D38F0D5B6717F /* CatalogueContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogueContractTests.swift; sourceTree = "<group>"; };
 		523FDE8AA4667380EBDBA5A1 /* CoreRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreRegressionTests.swift; sourceTree = "<group>"; };
 		4E6AEE0F4A67A9DD6C90359F /* ExportStagingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportStagingTests.swift; sourceTree = "<group>"; };
 		278C30E0B1EE502B43038192 /* ManualFramingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualFramingTests.swift; sourceTree = "<group>"; };
@@ -375,6 +377,7 @@
 			children = (
 				E863363863A0B658325A5728 /* AssessmentAssets.xcassets */,
 				2DBAD623B540F4BE4BFB99F8 /* AssessmentDiagnosticsTests.swift */,
+				E721AB2F8E5D38F0D5B6717F /* CatalogueContractTests.swift */,
 				523FDE8AA4667380EBDBA5A1 /* CoreRegressionTests.swift */,
 				4E6AEE0F4A67A9DD6C90359F /* ExportStagingTests.swift */,
 				278C30E0B1EE502B43038192 /* ManualFramingTests.swift */,
@@ -585,6 +588,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				40EF49084A84A0F14DC69064 /* AssessmentDiagnosticsTests.swift in Sources */,
+				C65C88AA8376D15B913527AE /* CatalogueContractTests.swift in Sources */,
 				CE992BE5DFA1400ADAAF1D56 /* CoreRegressionTests.swift in Sources */,
 				5C812E09B777C674D5BE057F /* ExportStagingTests.swift in Sources */,
 				A213ED968F564CA4A318378F /* ManualFramingTests.swift in Sources */,
@@ -746,7 +750,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "PassportProof/Resources/Info.plist";
@@ -755,7 +759,7 @@
 									"$(inherited)",
 									"@executable_path/Frameworks",
 								);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -769,7 +773,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "PassportProof/Resources/Info.plist";
@@ -778,7 +782,7 @@
 									"$(inherited)",
 									"@executable_path/Frameworks",
 								);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -791,10 +795,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -808,10 +812,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -824,10 +828,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -840,10 +844,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.passportproof.app.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

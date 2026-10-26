@@ -23,10 +23,20 @@ import re
 import sys
 from pathlib import Path
 
-# `path:line: error: message` — compiler errors and XCTest assertion failures.
-# Xcode emits assertion failures in the same shape, with the test name inside
-# the message, which is what makes them useful on their own.
-ERROR_RE = re.compile(r"^(?P<file>[^:\n]+):(?P<line>\d+):\s*(?P<severity>error|fatal error):\s*(?P<message>.*)$")
+# `path:line:column: error: message` and `path:line: error: message`.
+# The column is optional: clang and swiftc both emit it, while XCTest assertion
+# failures usually omit it. Matching only the two-field form silently produced
+# "no failure detail" for every compiler error, which is exactly the blindness
+# this script exists to remove.
+ERROR_RE = re.compile(
+    r"^\s*(?P<file>[^:\n]+):(?P<line>\d+)(?::(?P<column>\d+))?:\s*"
+    r"(?P<severity>error|fatal error):\s*(?P<message>.*)$"
+)
+
+# Anything mentioning an error, used only when the structured patterns find
+# nothing. A build can fail without a single `file:line:` error (for example a
+# missing destination or a linker failure), and that must still be visible.
+FALLBACK_RE = re.compile(r"\berror\b[:;]?\s|\bBUILD FAILED\b|The following build commands failed", re.IGNORECASE)
 
 # `Test Case '-[Suite testName]' failed (0.12 seconds).`
 FAILED_CASE_RE = re.compile(r"Test Case '-\[(?P<suite>[^\]]+)\]' failed \((?P<seconds>[0-9.]+) seconds\)")
@@ -118,6 +128,17 @@ def main() -> int:
         return 0
 
     errors, failed_cases, failed_suites = parse(args.log)
+
+    if not errors and not failed_cases:
+        # Fall back to raw lines that look like a failure, so an unparseable log
+        # still names something instead of reporting a clean run.
+        with args.log.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if FALLBACK_RE.search(line):
+                    errors.append({"file": "", "line": 0, "message": clean(line)})
+                    if len(errors) >= 40:
+                        break
+
     total = len(errors)
 
     for entry in errors[: args.limit]:

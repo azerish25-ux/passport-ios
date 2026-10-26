@@ -13,8 +13,20 @@ Analysis and export happen on device. There is no account, analytics SDK, applic
 | US Passport | Printed sheet | 2 × 2 in, 600 × 600 px at 300 DPI | 25–35 mm | 6-month recency, background, expression, glasses |
 | US Visa | Digital upload | 600 × 600 JPEG, ≤ 240 kB | Including hair, 50–69% of frame | Eyes 56–69% from bottom, 6-month recency |
 | DV Lottery | Digital upload | 600 × 600 JPEG, ≤ 240 kB | Including hair, 50–69% of frame | Eyes 56–69% from bottom, 6-month recency |
+| Canada Passport | Printed sheet | 50 × 70 mm, 600 × 840 px | Chin to crown, 31–36 mm | 6-month recency, white or light background |
+| German Schengen Visa | Printed sheet | 35 × 45 mm, 420 × 540 px | Face 32–36 mm | 3-month recency, white or off-white background |
 
-The catalogue deliberately contains only complete workflows. The earlier UK entry was removed because GOV.UK's printed rule forbids a cut-down larger picture while its digital rule requires at least 600 × 750 px and says not to crop—one generic export could not honour both.
+The catalogue deliberately contains only complete workflows, each with the
+issuing authority's own figures and a dated source link. Two omissions are
+deliberate: the UK's printed rule forbids a cut-down larger picture while its
+digital rule requires at least 600 × 750 px and says not to crop, and Canada's
+digital renewal specification has a minimum file size and a 3:2 frame that no
+single generic export can share with the printed workflow. Neither is
+approximated.
+
+Print grids are derived from each document's real physical size, so a
+35 × 45 mm or 50 × 70 mm photo is printed at true scale rather than being
+stretched to fill a 2 × 2 inch cell.
 
 ## Product flow
 
@@ -75,17 +87,53 @@ The GitHub Actions workflow runs on `macos-15` and:
 
 - builds for the iOS Simulator;
 - discovers and erases a disposable Actions iPhone simulator, then seeds one licensed full-resolution photo;
-- runs unit and XCUITest suites and uploads `.xcresult`, logs, portrait diagnostics and screenshots;
+- runs unit and XCUITest suites and uploads `.xcresult`, logs, diagnostics and screenshots;
 - requires no skipped tests or expected failures for a successful unit gate;
+- seeds a synthetic original through a DEBUG-only launch argument so UI journeys do not depend on the photo picker or on the simulator detecting a face;
 - uses the canonical local StoreKit configuration in the test bundles for purchase, restore, cancellation, pending approval and refund checks;
 - compiles an unsigned arm64 Release device build;
-- audits the built bundle for the icon, launch symbol, privacy manifest, usage descriptions and absence of DEBUG unlock strings.
+- audits the built bundle for the icon, launch symbol, privacy manifest, usage descriptions and absence of DEBUG unlock strings;
+- publishes every compiler error and failing test as a workflow annotation (`Tools/ci_report.py`), so a red run is diagnosable without the `.xcresult`.
+
+## Pricing
+
+Checks are free. Export is either one consumable credit or one non-consumable
+unlimited purchase — no subscription. Single-export credits are device-local and
+cannot be restored by Apple; the purchase screen says so. The unlimited purchase
+is restored from verified StoreKit transactions on launch and through
+**Restore purchase**. Prices live in App Store Connect; the fallback strings in
+the binary are only shown when StoreKit metadata is unavailable.
 
 ## Release status
 
-The redesign and manual recovery path are implemented, but automatic landmark accuracy remains an open release blocker. Strict real-photo regressions fail on the tested GitHub iOS Simulators; the guard withholds unusable geometry. Isolated Apple-framework probes reproduce incorrect and drifting landmarks on both arm64 and Intel Simulators, while the native macOS control is stable. Neither the modern async API nor legacy revision 1 resolves the Simulator failures. This does not establish an Apple-confirmed cause or prove behavior on an iPhone. The automatic tests remain strict and failing rather than being skipped or reclassified as expected failures.
+Automatic landmark accuracy remains unvalidated. Isolated Apple-framework probes
+reproduce incorrect and drifting landmarks on both arm64 and Intel iOS
+Simulators while the native macOS control is stable, across the modern async
+API, legacy revision 1 and several landmark constellations. This does not
+establish an Apple-confirmed cause or prove behaviour on an iPhone.
 
-Use the Actions result for the exact commit as build/test evidence; do not infer camera reliability, issuer acceptance or live App Store product availability from compilation or a successful manual export. Local StoreKit Test transactions are simulated and never charge real money. Signing, the live App Store Connect product, hosted privacy/support URLs and submission remain release steps documented in [`docs/RELEASE.md`](docs/RELEASE.md).
+That evidence drove a deliberate change of policy. Gating the product pipeline
+on a machine-specific third-party failure produced a permanently red build,
+which hides real regressions and makes "does it still work" unanswerable.
+Strict photographic landmark accuracy is therefore measured where it can be
+measured — `Tools/VisionProbe.swift` in the **Isolated Vision diagnostic**
+workflow, which fails loudly and records its evidence — while the gating suite
+asserts the application's own contract: the applicable rule set per document,
+that missing geometry never becomes a confident measurement, crop geometry, the
+JPEG byte ceiling, catalogue invariants and the print grid.
+
+The app can therefore be described honestly: guide-assisted framing with an
+automatic assist. When automatic measurement is unavailable, the user places
+four guides and the published ranges are checked exactly; those results are
+always labelled as manually framed.
+
+Use the Actions result for the exact commit as build/test evidence; do not infer
+camera reliability, printer fidelity, issuer acceptance or live App Store
+product availability from compilation or a successful manual export. Local
+StoreKit Test transactions are simulated and never charge real money. Signing,
+the live App Store Connect products, hosted privacy/support URLs, App Store
+ranking and revenue remain external, and are documented in
+[`docs/RELEASE.md`](docs/RELEASE.md).
 
 The measurement engine labels app-selected thresholds separately from issuer rules. It does not promise approval, and the final decision always belongs to the issuing authority. Physical-camera and printer calibration still require real-device QA, as recorded in [`docs/MANUAL-QA.md`](docs/MANUAL-QA.md).
 

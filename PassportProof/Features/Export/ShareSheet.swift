@@ -17,19 +17,22 @@ struct ShareItem: Identifiable {
 @MainActor
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    var onComplete: () -> Void = {}
+    /// Reports whether the customer actually completed an activity. Dismissing
+    /// the sheet without saving is not a successful export, so the caller can
+    /// avoid celebrating (or asking for a rating) when nothing happened.
+    var onComplete: (Bool) -> Void = { _ in }
 
     @MainActor
     final class Coordinator {
-        var onComplete: () -> Void
+        var onComplete: (Bool) -> Void
         private var didComplete = false
 
-        init(onComplete: @escaping () -> Void) { self.onComplete = onComplete }
+        init(onComplete: @escaping (Bool) -> Void) { self.onComplete = onComplete }
 
-        func complete() {
+        func complete(completed: Bool) {
             guard !didComplete else { return }
             didComplete = true
-            onComplete()
+            onComplete(completed)
         }
     }
 
@@ -38,8 +41,8 @@ struct ShareSheet: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
         let coordinator = context.coordinator
-        controller.completionWithItemsHandler = { [weak coordinator] _, _, _, _ in
-            DispatchQueue.main.async { coordinator?.complete() }
+        controller.completionWithItemsHandler = { [weak coordinator] _, completed, _, _ in
+            DispatchQueue.main.async { coordinator?.complete(completed: completed) }
         }
         anchorPopover(controller)
         return controller

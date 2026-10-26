@@ -175,15 +175,20 @@ struct AnalysisView: View {
         }
     }
     @ViewBuilder private func photoGuideButton(_ analysis: PhotoAnalysis) -> some View {
+        // When automatic measurement is unavailable the framing action lives in
+        // the pinned footer, where it is always reachable. Repeating the same
+        // primary action twice on one screen was the old behaviour.
         if analysis.geometry == nil && analysis.failures.isEmpty {
-            Button(action: openManualFraming) {
-                Label(manualRecord == nil ? "Place guides" : "Review guides", systemImage: "slider.horizontal.3")
-                    .font(.subheadline.weight(.semibold))
+            Button {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { showMeasurements.toggle() }
+            } label: {
+                Label(showMeasurements ? "Hide guides" : "Show guides", systemImage: "viewfinder")
+                    .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.accent)
+            .buttonStyle(.plain).foregroundStyle(Theme.inkSecondary)
             .disabled(isMeasuring)
-            .accessibilityIdentifier("analysis.manualFraming")
+            .accessibilityIdentifier("analysis.guides")
         } else {
             measurementsButton
         }
@@ -332,10 +337,11 @@ struct AnalysisView: View {
                     VStack(spacing: 8) { correctionActions }
                 }
             } else if !isMeasuring, let analysis = result, analysis.geometry == nil, manualRecord == nil {
-                PrimaryButton(title: "Set framing manually", action: openManualFraming)
+                PrimaryButton(title: "Place framing guides", action: openManualFraming)
                     .accessibilityIdentifier("analysis.manualStart")
-                Text("Place your own guides, or edit the crop above.")
+                Text("Four guides on your photo. Takes about 15 seconds.")
                     .font(.caption).foregroundStyle(Theme.inkSecondary)
+                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 PrimaryButton(title: "Continue to export", isEnabled: !isMeasuring && session.canExport(for: spec)) {
@@ -423,11 +429,11 @@ private struct VerdictPresentation {
             return
         }
         guard hasFaceMeasurements else {
-            title = isManuallyFramed ? "Your guides set the framing" : "Measurements unavailable"
+            title = isManuallyFramed ? "Your guides set the framing" : "Check the framing yourself"
             message = isManuallyFramed
                 ? "You confirmed the guide positions. Automatic face measurements remain unavailable, and the unresolved checks below still need your judgment."
-                : "This crop couldn’t be measured reliably. Place the framing guides yourself, adjust the crop, or choose a clearer, front-facing original. Export requires confirmed manual framing when automatic measurements are unavailable."
-            icon = "exclamationmark.circle.fill"; tint = Theme.signalVerify
+                : "Automatic face measurement isn’t reliable for this photo. Place four guides on your photo instead — the same published ranges are checked exactly — or reframe and try again."
+            icon = "slider.horizontal.3"; tint = Theme.signalVerify
             return
         }
         switch status {

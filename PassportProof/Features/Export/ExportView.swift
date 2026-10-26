@@ -18,6 +18,7 @@ struct ExportView: View {
     @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.requestReview) private var requestReview
 
     @State private var share: ShareItem?
     @State private var stagedURL: URL?
@@ -28,6 +29,9 @@ struct ExportView: View {
     @State private var goToUnlock = false
     @State private var sheetPreview: UIImage?
     @State private var isPreparingPreview = false
+    /// Set only when a real export (not the calibration page) is staged, so a
+    /// rating prompt never follows a free action or a failed one.
+    @State private var didProduceExport = false
 
     private var layout: PrintSheetLayout { session.layout }
     private var plan: PrintPlan { PrintPlan(layout: layout, spec: spec) }
@@ -58,7 +62,9 @@ struct ExportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) { exportBar }
         .sheet(item: $share, onDismiss: { cleanStaging() }) { item in
-            ShareSheet(items: [item.url]) { finishSharing(item.url) }
+            ShareSheet(items: [item.url]) { completed in
+                finishSharing(item.url, completed: completed)
+            }
         }
         .navigationDestination(isPresented: $goToUnlock) { UnlockView() }
         .task(id: previewKey) { await preparePreview() }
@@ -216,7 +222,7 @@ struct ExportView: View {
                       ? [GridItem(.flexible())]
                       : [GridItem(.flexible()), GridItem(.flexible())], spacing: Theme.Spacing.s) {
                 ForEach(PrintSheetLayout.allCases) { item in
-                    LayoutRow(item: item, isSelected: layout == item) {
+                    LayoutRow(item: item, spec: spec, isSelected: layout == item) {
                         session.layout = item
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
@@ -371,6 +377,7 @@ struct ExportView: View {
         isExporting = true
         failure = nil
         preparedSummary = nil
+        didProduceExport = false
         let layout = self.layout
         exportTask = Task {
             let data = await Task.detached(priority: .userInitiated) {
@@ -395,6 +402,7 @@ struct ExportView: View {
         isExporting = true
         failure = nil
         preparedSummary = nil
+        didProduceExport = false
         let revision = session.revision
         let layout = self.layout
         let spec = self.spec
@@ -418,6 +426,8 @@ struct ExportView: View {
             }
             if stage(data, name: "\(spec.id)-\(layout.rawValue)", fileExtension: "pdf") {
                 entitlements.consumeExportCredit()
+                didProduceExport = true
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 preparedSummary = "\(layout.title) PDF prepared · \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))"
             }
         }
@@ -429,6 +439,7 @@ struct ExportView: View {
         isExporting = true
         failure = nil
         preparedSummary = nil
+        didProduceExport = false
         let revision = session.revision
         let spec = self.spec
         let unlimited = entitlements.isUnlocked
@@ -451,6 +462,8 @@ struct ExportView: View {
             let size = ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
             if stage(data, name: spec.id, fileExtension: "jpg") {
                 entitlements.consumeExportCredit()
+                didProduceExport = true
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 preparedSummary = "\(spec.widthPixels) × \(spec.heightPixels) JPEG prepared · \(size)"
             }
         }
@@ -483,11 +496,18 @@ struct ExportView: View {
         }
     }
 
-    private func finishSharing(_ url: URL) {
+    private func finishSharing(_ url: URL, completed: Bool) {
         // Own the URL captured by this activity, not a later export's file.
         ExportStaging.remove(url)
         if stagedURL == url { stagedURL = nil }
         if share?.url == url { share = nil }
+        // Ask for a rating only after a completed, paid export. iOS itself
+        // rate-limits the prompt, and this keeps it away from failures and the
+        // free calibration page.
+        if completed, didProduceExport {
+            didProduceExport = false
+            requestReview()
+        }
     }
 
     private func cleanStaging() {
@@ -501,8 +521,15 @@ struct ExportView: View {
 
 private struct LayoutRow: View {
     let item: PrintSheetLayout
+    let spec: DocumentSpec
     let isSelected: Bool
     let onSelect: () -> Void
+
+    private var detail: String {
+        let plan = PrintPlan(layout: item, spec: spec)
+        let size = spec.printSizeLabel
+        return plan.count == 1 ? "1 photo · \(size)" : "\(plan.count) photos · \(size)"
+    }
 
     var body: some View {
         Button(action: onSelect) {
@@ -517,7 +544,7 @@ private struct LayoutRow: View {
                         .font(.body)
                         .foregroundStyle(isSelected ? Theme.accent : Theme.ruleStrong)
                 }
-                Text(item.subtitle)
+                Text(detail)
                     .font(.caption)
                     .foregroundStyle(Theme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -253,9 +253,8 @@ final class PassportProofUITests: XCTestCase {
 
     @MainActor
     private func completeManualFraming(in app: XCUIApplication, evidencePrefix: String) {
-        let entry = app.buttons["analysis.manualFraming"]
+        let entry = app.buttons["analysis.manualStart"]
         require(entry, in: app, timeout: 20)
-        scrollTo(entry, in: app)
         entry.tap()
         require(app.images["manual.preview"], in: app, timeout: 20)
 

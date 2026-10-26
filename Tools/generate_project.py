@@ -29,8 +29,8 @@ UI_TEST_DIR = "PassportProofUITests"
 BUNDLE_ID = "com.passportproof.app"
 DEPLOYMENT_TARGET = "17.0"
 SWIFT_VERSION = "5.0"
-MARKETING_VERSION = "1.0.0"
-BUILD_NUMBER = "1"
+MARKETING_VERSION = "1.1.0"
+BUILD_NUMBER = "2"
 
 TAB = "\t"
 

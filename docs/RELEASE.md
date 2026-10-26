@@ -14,8 +14,8 @@ accepted App Store submission.
 | Photo-picker purpose string | `NSPhotoLibraryUsageDescription` | unit test and Release bundle audit |
 | Privacy manifest | `PrivacyInfo.xcprivacy`: no tracking, no collected data, no required-reason API access | unit test and Release bundle audit |
 | Export compliance | `ITSAppUsesNonExistentEncryption = false` | checked-in plist |
-| Version | Marketing `1.0.0`, build `1` | release-version test |
-| Single purchase | StoreKit non-consumable `com.passportproof.app.unlock`; no subscription | `StoreKit/PassportProof.storekit`, StoreKit tests/manual sandbox QA |
+| Version | Marketing `1.1.0`, build `2` | release-version test |
+| Purchases | Non-consumable `com.passportproof.app.unlock` (unlimited, restorable) and consumable `com.passportproof.app.single-export` (one credit); no subscription | `StoreKit/PassportProof.storekit`, StoreKit tests/manual sandbox QA |
 | Release safety | Debug demonstration unlock is under `#if DEBUG` | Release binary string audit in CI |
 | No promise words | compiled Info.plist audit | unit test |
 | Unit tests | corpus, crop, rules, visual review, export byte limits, PDFs, EXIF, bundle readiness | `PassportProofTests` |
@@ -36,15 +36,20 @@ accepted App Store submission.
 
 ### In-app purchase
 
-1. Create one **non-consumable** product with identifier
-   `com.passportproof.app.unlock`.
-2. Add the localized display name and description. Set the price to the product
-   decision (the repository's StoreKit test configuration uses US `$17.99`).
-3. Attach the purchase to the first submitted app version.
-4. Test on a sandbox Apple Account: purchase, cancellation, pending/Ask to Buy,
-   restore, offline launch after purchase and revocation handling.
-5. Do not submit while Release still displays a Store unavailable state because
-   the product has not propagated.
+1. Create the **non-consumable** `com.passportproof.app.unlock` (unlimited) and
+   the **consumable** `com.passportproof.app.single-export` (one credit).
+2. Add localized display names and descriptions. The repository's StoreKit test
+   configuration uses US `$7.99` and `$3.99`; set final prices in App Store
+   Connect and make sure they match the metadata copy.
+3. Attach both products to the first submitted app version.
+4. Test on a sandbox Apple Account: unlimited purchase, consumable purchase,
+   cancellation, pending/Ask to Buy, restore, offline launch after purchase and
+   revocation handling.
+5. Verify the consumable grants exactly one credit per payment. A double credit
+   is the most likely StoreKit defect in this design, because Apple can deliver
+   the same finished transaction through `Transaction.updates`.
+6. Do not submit while Release still displays a Store unavailable state because
+   the products have not propagated.
 
 ### App Store Connect metadata
 
@@ -57,8 +62,8 @@ accepted App Store submission.
   manifest and the StoreKit-only network surface.
 - **Screenshots:** capture marketing images from the current build. CI's
   `simulator-screenshots` artifact supplies evidence, not necessarily final
-  marketing composition. Include Library, document detail, capture sources,
-  a real diagnosis and export.
+  marketing composition. The suggested capture list is in
+  [`APP-STORE-METADATA.md`](APP-STORE-METADATA.md).
 - **Review notes:** explain that analysis is informational, the issuer makes the
   final decision, photos are processed on device, and the simulator has no
   camera. Provide reviewer steps using a portrait selected through the system
@@ -103,11 +108,12 @@ for review.
 
 ## 4. Honest open limitations
 
-- Automatic face measurements are not validated for release. Strict real-photo
-  tests currently fail on the tested iOS Simulators; isolated native macOS
-  controls pass, but that does not prove physical iPhone behavior. Resolve the
-  measurement defect or validate the actual device path before representing
-  automatic checking as reliable. Manual-framing success is separate evidence.
+- Automatic face measurements are not validated for release. Landmark accuracy
+  reproduces as unreliable on the iOS Simulators tested and is stable in the
+  native macOS control, so it is measured by the separate Isolated Vision
+  diagnostic workflow rather than gating the app build. This does not prove
+  physical iPhone behaviour. The app must be represented as guide-assisted
+  framing with an automatic assist, not as certified automatic compliance.
 - Manual framing calculates dimensions from user-placed guides and retains all
   unavailable automatic findings. Its explicit review and revision checks do
   not establish issuer acceptance or a population accuracy result.
@@ -117,7 +123,29 @@ for review.
   confirmation; they are not classifiers.
 - Background, shadow, centring and crown-contrast tolerances are app-selected
   thresholds, labelled as such, not issuer-published numbers.
-- Only three US workflows are supported. No UK output is offered because a
-  single crop/export cannot satisfy both its printed and digital rules.
+- Five workflows are supported: three US, one Canadian and one German Schengen.
+  The Canadian digital renewal specifications and the UK's printed-versus-
+  digital conflict are deliberately not offered rather than approximated.
+- The German figures come from the German Foreign Office guidance and are not
+  claimed to be identical in every Schengen state.
 - A hosted privacy policy and support page do not exist in this repository.
 - Signing, TestFlight acceptance and App Review are external and unproven here.
+- Revenue is not a function of this repository. Price, conversion and ranking
+  depend on App Store Connect, reviews and marketing, none of which CI can
+  establish.
+
+## 5. What CI now proves, and what it deliberately does not
+
+| Gate | Status |
+|---|---|
+| Simulator build, test bundles, unsigned Release device build | gating |
+| Application contract tests (rules, geometry, export ceiling, catalogue invariants, print grids) | gating |
+| UI journey tests on a seeded original and real local StoreKit transactions | gating |
+| Release bundle audit (icon, launch symbol, privacy manifest, no DEBUG unlock) | gating |
+| Vision landmark accuracy on Simulator | diagnostic job, not gating |
+| Camera behaviour, printer scaling, App Store acceptance | external |
+
+A red gating job now means an application defect, not a known-broken build
+machine. Failures are published as workflow annotations by `Tools/ci_report.py`,
+so a failing run names the test and the assertion without downloading the
+`.xcresult`.
